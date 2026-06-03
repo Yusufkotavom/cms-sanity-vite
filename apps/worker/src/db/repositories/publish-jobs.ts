@@ -7,6 +7,7 @@ export type PublishJobRecord = {
   id: string;
   note_id: string;
   run_at: string;
+  updated_at: string;
 };
 
 function toPublishJobRecord(job: typeof publishJobs.$inferSelect): PublishJobRecord {
@@ -14,7 +15,26 @@ function toPublishJobRecord(job: typeof publishJobs.$inferSelect): PublishJobRec
     id: job.id,
     note_id: job.noteId,
     run_at: job.runAt,
+    updated_at: job.updatedAt,
   };
+}
+
+export async function listTimedOutProcessingPublishJobs(
+  db: D1Database,
+  input: {
+    staleProcessingBefore: string;
+    limit?: number;
+  }
+) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb
+    .select()
+    .from(publishJobs)
+    .where(and(eq(publishJobs.status, "processing"), lte(publishJobs.updatedAt, input.staleProcessingBefore)))
+    .orderBy(asc(publishJobs.runAt))
+    .limit(input.limit ?? 25);
+
+  return rows.map(toPublishJobRecord);
 }
 
 export async function deleteJobsByNoteId(db: D1Database, noteId: string) {
@@ -68,14 +88,20 @@ export async function markJobsFailed(db: D1Database, input: {
     .where(eq(publishJobs.noteId, input.noteId));
 }
 
-export async function listReadyScheduledJobs(db: D1Database, now: string, limit = 25) {
+export async function listRunnablePublishJobs(
+  db: D1Database,
+  input: {
+    now: string;
+    limit?: number;
+  }
+) {
   const drizzleDb = getDb(db);
   const rows = await drizzleDb
     .select()
     .from(publishJobs)
-    .where(and(eq(publishJobs.status, "scheduled"), lte(publishJobs.runAt, now)))
+    .where(and(eq(publishJobs.status, "scheduled"), lte(publishJobs.runAt, input.now)))
     .orderBy(asc(publishJobs.runAt))
-    .limit(limit);
+    .limit(input.limit ?? 25);
 
   return rows.map(toPublishJobRecord);
 }
@@ -86,6 +112,7 @@ export async function markJobProcessing(db: D1Database, input: { jobId: string; 
     .update(publishJobs)
     .set({
       status: "processing",
+      message: `Processing publish job since ${input.updatedAt}`,
       updatedAt: input.updatedAt,
     })
     .where(eq(publishJobs.id, input.jobId));

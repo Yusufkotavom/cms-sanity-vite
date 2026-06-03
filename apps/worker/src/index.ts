@@ -40,7 +40,8 @@ import {
 import {
   createScheduledJob,
   deleteJobsByNoteId,
-  listReadyScheduledJobs,
+  listTimedOutProcessingPublishJobs,
+  listRunnablePublishJobs,
   markJobProcessing,
   markJobsFailed,
   markJobsPublished,
@@ -57,6 +58,12 @@ import {
 import { generateAndUploadOgImage, type OgBranding } from "./services/og-image";
 import { processAiBatchWork } from "./services/ai-batch";
 import { aiAssistRequestSchema, requestAiSuggestion } from "./services/ai";
+import {
+  createAuthToken,
+  getBearerToken,
+  isAuthConfigured,
+  verifyAuthToken,
+} from "./services/auth";
 
 const noteSchema = z.object({
   title: z.string().min(1),
@@ -88,6 +95,9 @@ const ogBrandingSettingsSchema = z.object({
   workflowLabel: z.string().default(""),
   footerText: z.string().default(""),
 });
+
+const PUBLISH_PROCESSING_TIMEOUT_MS = 10 * 60 * 1000;
+const PUBLISH_TIMEOUT_MESSAGE = "Publish job timed out while processing. Rerun manually or reschedule the note.";
 
 const sanitySettingsSchema = z.object({
   projectId: z.string().trim().default(""),
@@ -127,12 +137,22 @@ const aiBatchProcessSchema = z.object({
   limit: z.number().int().min(1).max(5).optional(),
 });
 
+const authLoginSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(1),
+});
+
 export interface Env {
   DB: D1Database;
   SANITY_PROJECT_ID?: string;
   SANITY_DATASET?: string;
   SANITY_API_VERSION?: string;
   SANITY_WRITE_TOKEN?: string;
+  AUTH_ADMIN_EMAIL?: string;
+  AUTH_ADMIN_PASSWORD?: string;
+  AUTH_TOKEN_SECRET?: string;
+  AUTH_SESSION_TTL_HOURS?: string;
+  AUTH_INTEGRATION_TOKEN?: string;
 }
 
 const AI_SETTING_KEYS = [
@@ -225,15 +245,134 @@ async function resolveOgBranding(db: D1Database, fetchImpl: typeof fetch = fetch
   };
 }
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{
+  Bindings: Env;
+  Variables: {
+    authEmail: string;
+    authExpiresAt: string;
+  };
+}>();
 
-app.use("/api/*", cors());
+app.use(
+  "/api/*",
+  cors({
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  })
+);
 app.use("/api/*", async (c, next) => {
   await ensureSchema(c.env.DB);
   await next();
 });
+app.use("/api/*", async (c, next) => {
+  if (c.req.method === "OPTIONS") {
+    await next();
+    return;
+  }
+
+  const path = c.req.path;
+  const isPublicPath = path === "/api/health" || path === "/api/auth/status" || path === "/api/auth/login";
+
+  if (!isAuthConfigured(c.env)) {
+    if (isPublicPath) {
+      await next();
+      return;
+    }
+
+    return c.json({ message: "Auth is not configured on this worker" }, 503);
+  }
+
+  if (isPublicPath) {
+    await next();
+    return;
+  }
+
+  const token = getBearerToken(c.req.header("Authorization") ?? null);
+  if (!token) {
+    return c.json({ message: "Unauthorized" }, 401);
+  }
+
+  if (c.env.AUTH_INTEGRATION_TOKEN && token === c.env.AUTH_INTEGRATION_TOKEN) {
+    c.set("authEmail", "integration-token");
+    c.set("authExpiresAt", "static");
+    await next();
+    return;
+  }
+
+  const payload = await verifyAuthToken(token, c.env.AUTH_TOKEN_SECRET!);
+  if (!payload) {
+    return c.json({ message: "Unauthorized" }, 401);
+  }
+
+  c.set("authEmail", payload.email);
+  c.set("authExpiresAt", new Date(payload.exp * 1000).toISOString());
+  await next();
+});
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+app.get("/api/auth/status", (c) => {
+  return c.json({
+    configured: isAuthConfigured(c.env),
+  });
+});
+
+app.post("/api/auth/login", async (c) => {
+  if (!isAuthConfigured(c.env)) {
+    return c.json({ message: "Auth is not configured on this worker" }, 503);
+  }
+
+  const payload = authLoginSchema.parse(await c.req.json());
+  const expectedEmail = c.env.AUTH_ADMIN_EMAIL!.trim().toLowerCase();
+  const expectedPassword = c.env.AUTH_ADMIN_PASSWORD!;
+
+  if (payload.email.trim().toLowerCase() !== expectedEmail || payload.password !== expectedPassword) {
+    return c.json({ message: "Email atau password salah" }, 401);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const sessionTtlHours = Math.max(1, Number.parseInt(c.env.AUTH_SESSION_TTL_HOURS ?? "24", 10) || 24);
+  const exp = now + sessionTtlHours * 60 * 60;
+  const token = await createAuthToken(
+    {
+      sub: expectedEmail,
+      email: expectedEmail,
+      iat: now,
+      exp,
+    },
+    c.env.AUTH_TOKEN_SECRET!
+  );
+
+  return c.json({
+    token,
+    user: {
+      email: expectedEmail,
+    },
+    expiresAt: new Date(exp * 1000).toISOString(),
+  });
+});
+
+app.get("/api/auth/me", (c) => {
+  return c.json({
+    user: {
+      email: c.get("authEmail"),
+    },
+    expiresAt: c.get("authExpiresAt"),
+  });
+});
+
+app.get("/api/settings/auth", (c) => {
+  if (!isAuthConfigured(c.env)) {
+    return c.json({ message: "Auth is not configured on this worker" }, 503);
+  }
+
+  return c.json({
+    adminEmail: c.env.AUTH_ADMIN_EMAIL ?? "",
+    sessionTtlHours: Math.max(1, Number.parseInt(c.env.AUTH_SESSION_TTL_HOURS ?? "24", 10) || 24),
+    hasIntegrationToken: Boolean(c.env.AUTH_INTEGRATION_TOKEN),
+    integrationToken: c.env.AUTH_INTEGRATION_TOKEN ?? "",
+  });
+});
 
 app.get("/api/config", async (c) => {
   const aiSettings = await getAiSettings(c.env.DB);
@@ -706,6 +845,27 @@ app.post("/api/notes/:id/publish", async (c) => {
   return c.json(result.note);
 });
 
+app.post("/api/notes/:id/retry-publish", async (c) => {
+  const id = c.req.param("id");
+  const note = await findNoteById(c.env.DB, id);
+
+  if (!note) {
+    return c.json({ message: "Note not found" }, 404);
+  }
+
+  if (note.status !== "failed") {
+    return c.json({ message: "Only failed notes can be retried" }, 409);
+  }
+
+  const result = await publishNoteById(c.env, id);
+
+  if (!result.ok) {
+    return c.json({ message: result.message }, 400);
+  }
+
+  return c.json(result.note);
+});
+
 app.post("/api/notes/:id/generate-og", async (c) => {
   const id = c.req.param("id");
   const note = await findNoteById(c.env.DB, id);
@@ -989,11 +1149,48 @@ function handleDbError(error: unknown) {
 
 async function runScheduledPublishes(env: Env) {
   const now = new Date().toISOString();
-  const jobs = await listReadyScheduledJobs(env.DB, now);
+  const staleProcessingBefore = new Date(Date.now() - PUBLISH_PROCESSING_TIMEOUT_MS).toISOString();
+  const timedOutJobs = await listTimedOutProcessingPublishJobs(env.DB, {
+    staleProcessingBefore,
+  });
+
+  for (const job of timedOutJobs) {
+    await markNoteFailed(env.DB, {
+      noteId: job.note_id,
+      message: PUBLISH_TIMEOUT_MESSAGE,
+      updatedAt: now,
+    });
+    await markJobsFailed(env.DB, {
+      noteId: job.note_id,
+      message: PUBLISH_TIMEOUT_MESSAGE,
+      updatedAt: now,
+    });
+    console.warn("Publish job timed out", {
+      jobId: job.id,
+      noteId: job.note_id,
+      runAt: job.run_at,
+      processingSince: job.updated_at,
+    });
+  }
+
+  const jobs = await listRunnablePublishJobs(env.DB, { now });
 
   for (const job of jobs) {
     await markJobProcessing(env.DB, { jobId: job.id, updatedAt: now });
-    await publishNoteById(env, job.note_id);
+    console.info("Running scheduled publish job", {
+      jobId: job.id,
+      noteId: job.note_id,
+      runAt: job.run_at,
+    });
+    const result = await publishNoteById(env, job.note_id);
+
+    if (!result.ok) {
+      console.warn("Scheduled publish failed", {
+        jobId: job.id,
+        noteId: job.note_id,
+        message: result.message,
+      });
+    }
   }
 }
 

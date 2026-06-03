@@ -6,6 +6,9 @@
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "AUTH_SESSION_TTL_HOURS": "24"
+  },
   "triggers": {
     "crons": ["*/15 * * * *"]
   },

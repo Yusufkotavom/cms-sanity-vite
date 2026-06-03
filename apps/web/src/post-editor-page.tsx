@@ -70,6 +70,7 @@ type PostEditorPageProps = {
   saveDraft: () => Promise<ApiNote | undefined>;
   scheduleDraft: () => Promise<void>;
   publishDraft: () => Promise<void>;
+  retryPublishDraft: () => Promise<void>;
   updateTitle: (value: string) => void;
   updateDraft: (patch: Partial<ApiNote>) => void;
   formatRelativeDate: (value: string | null) => string;
@@ -104,6 +105,7 @@ export function PostEditorPage({
   saveDraft,
   scheduleDraft,
   publishDraft,
+  retryPublishDraft,
   updateTitle,
   updateDraft,
   formatRelativeDate,
@@ -276,13 +278,16 @@ export function PostEditorPage({
                 )}
                 Schedule
               </Button>
-              <Button onClick={() => void publishDraft()} disabled={isSaving || isPublishing}>
+              <Button
+                onClick={() => void (draft.status === "failed" ? retryPublishDraft() : publishDraft())}
+                disabled={isSaving || isPublishing}
+              >
                 {isPublishing ? (
                   <Loader2Icon data-icon="inline-start" className="animate-spin" />
                 ) : (
                   <SendIcon data-icon="inline-start" />
                 )}
-                Publish
+                {draft.status === "failed" ? "Retry Publish" : "Publish"}
               </Button>
             </div>
           </div>

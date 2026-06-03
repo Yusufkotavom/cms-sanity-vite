@@ -1,8 +1,19 @@
 import type { NoteInput } from "@repo/shared";
 
 const API_BASE_OVERRIDE_STORAGE_KEY = "cms-sanity-vite.api-base-url";
+const API_AUTH_TOKEN_STORAGE_KEY = "cms-sanity-vite.auth-token";
 const LOCAL_API_BASE_URL = "http://127.0.0.1:8787";
 const DEFAULT_PRODUCTION_API_BASE_URL = "";
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 export type ApiNote = {
   id: string;
@@ -100,6 +111,24 @@ export type OgBrandingSettings = {
   logoUrl: string;
   workflowLabel: string;
   footerText: string;
+};
+
+export type AuthStatus = {
+  configured: boolean;
+};
+
+export type AuthSettings = {
+  adminEmail: string;
+  sessionTtlHours: number;
+  hasIntegrationToken: boolean;
+  integrationToken: string;
+};
+
+export type AuthSession = {
+  user: {
+    email: string;
+  };
+  expiresAt: string;
 };
 
 export type AiPromptTemplate = {
@@ -210,6 +239,37 @@ export function clearStoredApiBaseUrlOverride() {
   window.localStorage.removeItem(API_BASE_OVERRIDE_STORAGE_KEY);
 }
 
+export function getStoredAuthToken() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const value = window.localStorage.getItem(API_AUTH_TOKEN_STORAGE_KEY)?.trim();
+  return value || null;
+}
+
+export function setStoredAuthToken(value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    window.localStorage.removeItem(API_AUTH_TOKEN_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(API_AUTH_TOKEN_STORAGE_KEY, normalized);
+}
+
+export function clearStoredAuthToken() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(API_AUTH_TOKEN_STORAGE_KEY);
+}
+
 export function getApiBaseUrl() {
   return resolveApiBaseUrl();
 }
@@ -227,10 +287,12 @@ export function getDefaultApiBaseUrl() {
   return DEFAULT_PRODUCTION_API_BASE_URL;
 }
 
-async function request<T>(path: string, init?: RequestInit) {
+async function request<T>(path: string, init?: RequestInit, options?: { skipAuth?: boolean }) {
+  const token = options?.skipAuth ? null : getStoredAuthToken();
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers || {}),
     },
     ...init,
@@ -239,11 +301,35 @@ async function request<T>(path: string, init?: RequestInit) {
   const json = (await response.json().catch(() => null)) as T | { message?: string } | null;
 
   if (!response.ok) {
-    throw new Error((json as { message?: string } | null)?.message || `API request failed (${response.status})`);
+    const message = (json as { message?: string } | null)?.message || `API request failed (${response.status})`;
+
+    if (response.status === 401) {
+      clearStoredAuthToken();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+      }
+    }
+
+    throw new ApiError(message, response.status);
   }
 
   return json as T;
 }
+
+export const authApi = {
+  status: () => request<AuthStatus>("/api/auth/status", undefined, { skipAuth: true }),
+  login: (payload: { email: string; password: string }) =>
+    request<AuthSession & { token: string }>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      { skipAuth: true }
+    ),
+  me: () => request<AuthSession>("/api/auth/me"),
+  settings: () => request<AuthSettings>("/api/settings/auth"),
+};
 
 export const notesApi = {
   config: () => request<ApiConfig>("/api/config"),
@@ -271,6 +357,10 @@ export const notesApi = {
     }),
   publish: (id: string) =>
     request<ApiNote>(`/api/notes/${id}/publish`, {
+      method: "POST",
+    }),
+  retryPublish: (id: string) =>
+    request<ApiNote>(`/api/notes/${id}/retry-publish`, {
       method: "POST",
     }),
   generateOg: (id: string) =>

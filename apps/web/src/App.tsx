@@ -3,21 +3,29 @@ import {
   CalendarClockIcon,
   CircleAlertIcon,
   FileTextIcon,
+  Loader2Icon,
   SendIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  ApiError,
+  authApi,
+  clearStoredAuthToken,
   clearStoredApiBaseUrlOverride,
   getApiBaseUrl,
   getDefaultApiBaseUrl,
+  getStoredAuthToken,
   getStoredApiBaseUrlOverride,
   notesApi,
+  setStoredAuthToken,
   setStoredApiBaseUrlOverride,
   type AiSettings,
   type ApiCategory,
   type ApiConfig,
   type ApiNote,
+  type AuthSettings,
+  type AuthStatus,
   type OgBrandingSettings,
   type SanitySettings,
 } from "@/lib/api";
@@ -52,6 +60,7 @@ const AiBatchPage = lazy(async () => {
 });
 
 type Note = ApiNote;
+type LoginState = "checking" | "authenticated" | "unauthenticated";
 type AppRoute =
   | "dashboard"
   | "posts"
@@ -274,14 +283,23 @@ function App() {
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [apiBaseUrl, setApiBaseUrl] = useState(() => getApiBaseUrl());
   const [apiBaseUrlInput, setApiBaseUrlInput] = useState(() => getStoredApiBaseUrlOverride() ?? "");
+  const [authStatus, setAuthStatus] = useState<LoginState>("checking");
+  const [authSettings, setAuthSettings] = useState<AuthStatus | null>(null);
+  const [authConfig, setAuthConfig] = useState<AuthSettings | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [retryingNoteId, setRetryingNoteId] = useState<string | null>(null);
   const [isAiRunning, setIsAiRunning] = useState<null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only">(null);
   const [isGeneratingOg, setIsGeneratingOg] = useState(false);
   const [isTestingSanity, setIsTestingSanity] = useState(false);
   const [isSavingSanity, setIsSavingSanity] = useState(false);
+  const [isCopyingToken, setIsCopyingToken] = useState<null | "session" | "integration">(null);
 
   const stats = useMemo(
     () => ({
@@ -347,15 +365,43 @@ function App() {
   }, []);
 
   useEffect(() => {
+    function handleUnauthorized() {
+      setAuthEmail("");
+      setAuthStatus("unauthenticated");
+      setDraft(null);
+      setSavedDraft(null);
+      setNotes([]);
+      setConfig(null);
+      setAuthConfig(null);
+    }
+
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", handleUnauthorized);
+  }, []);
+
+  useEffect(() => {
+    void bootstrapAuth();
+  }, []);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") {
+      return;
+    }
+
     void loadConfig();
     void loadSanitySettings();
     void loadAiSettings();
     void loadOgBrandingSettings();
+    void loadAuthConfig();
     void loadCategories();
     void loadNotes();
-  }, []);
+  }, [authStatus]);
 
   useEffect(() => {
+    if (authStatus !== "authenticated") {
+      return;
+    }
+
     if (!selectedId || !isEditorRoute) {
       setDraft(null);
       setSavedDraft(null);
@@ -364,7 +410,7 @@ function App() {
     }
 
     void loadNote(selectedId);
-  }, [isEditorRoute, selectedId]);
+  }, [authStatus, isEditorRoute, selectedId]);
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -402,6 +448,92 @@ function App() {
     }
 
     window.location.hash = nextUrl;
+  }
+
+  async function bootstrapAuth() {
+    try {
+      const status = await authApi.status();
+      setAuthSettings(status);
+
+      if (!status.configured) {
+        setAuthStatus("unauthenticated");
+        return;
+      }
+
+      const existingToken = getStoredAuthToken();
+      if (!existingToken) {
+        setAuthStatus("unauthenticated");
+        return;
+      }
+
+      const session = await authApi.me();
+      setAuthEmail(session.user.email);
+      setLoginEmail(session.user.email);
+      setAuthStatus("authenticated");
+    } catch (error) {
+      clearStoredAuthToken();
+      setAuthStatus("unauthenticated");
+      if (!(error instanceof ApiError && error.status === 401)) {
+        toast.error(error instanceof Error ? error.message : "Failed to initialize auth");
+      }
+    }
+  }
+
+  async function signIn() {
+    if (!loginEmail.trim() || !loginPassword) {
+      toast.error("Email dan password wajib diisi");
+      return;
+    }
+
+    setIsSigningIn(true);
+
+    try {
+      const session = await authApi.login({
+        email: loginEmail.trim(),
+        password: loginPassword,
+      });
+      setStoredAuthToken(session.token);
+      setAuthEmail(session.user.email);
+      setLoginPassword("");
+      setAuthStatus("authenticated");
+      toast.success("Login berhasil");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Login gagal");
+    } finally {
+      setIsSigningIn(false);
+    }
+  }
+
+  function logout() {
+    clearStoredAuthToken();
+    setAuthEmail("");
+    setDraft(null);
+    setSavedDraft(null);
+    setSelectedId("");
+    setNotes([]);
+    setConfig(null);
+    setAuthConfig(null);
+    setAuthStatus("unauthenticated");
+    setLoginPassword("");
+    toast.success("Logged out");
+  }
+
+  async function copyToken(kind: "session" | "integration", value: string) {
+    if (!value) {
+      toast.error("Token belum tersedia");
+      return;
+    }
+
+    setIsCopyingToken(kind);
+
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(kind === "session" ? "Session token copied" : "Integration token copied");
+    } catch {
+      toast.error("Failed to copy token");
+    } finally {
+      setIsCopyingToken(null);
+    }
   }
 
   useEffect(() => {
@@ -465,6 +597,15 @@ function App() {
       setOgBrandingSettings(nextSettings);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load OG branding settings");
+    }
+  }
+
+  async function loadAuthConfig() {
+    try {
+      const nextSettings = await authApi.settings();
+      setAuthConfig(nextSettings);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load auth settings");
     }
   }
 
@@ -712,6 +853,69 @@ function App() {
     }
   }
 
+  async function retryPublishDraft() {
+    if (!draft) return;
+
+    if (!config?.sanityConfigured) {
+      toast.error("Publish belum aktif karena Sanity settings belum diisi");
+      return;
+    }
+
+    const persistedDraft = await saveDraft(false);
+    if (!persistedDraft) {
+      return;
+    }
+
+    setIsPublishing(true);
+
+    try {
+      const updated = await notesApi.retryPublish(draft.id);
+      setDraft(updated);
+      setSavedDraft(updated);
+      setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setScheduleAt(toJakartaScheduleValue(updated.publishAt));
+      navigate("#/sanity-sync");
+      toast.success("Retry publish berhasil");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to retry publish");
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
+  async function retryPublishNote(noteId: string) {
+    if (!config?.sanityConfigured) {
+      toast.error("Publish belum aktif karena Sanity settings belum diisi");
+      return;
+    }
+
+    if (draft?.id === noteId && isDirty) {
+      const persistedDraft = await saveDraft(false);
+      if (!persistedDraft) {
+        return;
+      }
+    }
+
+    setRetryingNoteId(noteId);
+
+    try {
+      const updated = await notesApi.retryPublish(noteId);
+      setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+
+      if (draft?.id === updated.id) {
+        setDraft(updated);
+        setSavedDraft(updated);
+        setScheduleAt(toJakartaScheduleValue(updated.publishAt));
+      }
+
+      toast.success(`Retry publish berhasil untuk ${updated.title}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to retry publish");
+    } finally {
+      setRetryingNoteId(null);
+    }
+  }
+
   async function runAiAssist(mode: "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only") {
     if (!draft) return;
     if (!config?.aiConfigured) {
@@ -801,6 +1005,7 @@ function App() {
     void loadSanitySettings();
     void loadAiSettings();
     void loadOgBrandingSettings();
+    void loadAuthConfig();
     void loadCategories();
     void loadNotes(selectedId || undefined);
   }
@@ -815,6 +1020,7 @@ function App() {
     void loadSanitySettings();
     void loadAiSettings();
     void loadOgBrandingSettings();
+    void loadAuthConfig();
     void loadCategories();
     void loadNotes(selectedId || undefined);
   }
@@ -911,7 +1117,77 @@ function App() {
     );
   }
 
-  function renderNotesTable(items: Note[], emptyLabel: string) {
+  function renderLoginScreen() {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-6">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-2">
+            <CardTitle>Login CMS</CardTitle>
+            <CardDescription>
+              Masuk untuk mengakses worker dan dashboard CMS. API publish tidak lagi dibuka ke publik.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium" htmlFor="login-email">
+                Email
+              </label>
+              <Input
+                id="login-email"
+                type="email"
+                autoComplete="username"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                placeholder="admin@example.com"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium" htmlFor="login-password">
+                Password
+              </label>
+              <Input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void signIn();
+                  }
+                }}
+                placeholder="Masukkan password admin"
+              />
+            </div>
+            <Button onClick={() => void signIn()} disabled={isSigningIn || authSettings?.configured === false}>
+              {isSigningIn ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+              {isSigningIn ? "Signing in..." : "Sign in"}
+            </Button>
+            <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+              <div className="grid gap-2">
+                <span>API base: <code>{apiBaseUrl}</code></span>
+                <span>Auth configured: {authSettings?.configured ? "yes" : "no"}</span>
+                {authSettings?.configured === false ? (
+                  <span>Set `AUTH_ADMIN_EMAIL`, `AUTH_ADMIN_PASSWORD`, dan `AUTH_TOKEN_SECRET` di Worker secrets dulu.</span>
+                ) : null}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  function renderNotesTable(
+    items: Note[],
+    emptyLabel: string,
+    options?: {
+      showRetryAction?: boolean;
+    }
+  ) {
+    const showRetryAction = options?.showRetryAction ?? false;
+
     return (
       <Table>
         <TableHeader>
@@ -919,18 +1195,19 @@ function App() {
             <TableHead>Title</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Updated</TableHead>
+            {showRetryAction ? <TableHead className="text-right">Action</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
           {isLoading ? (
             <TableRow>
-              <TableCell colSpan={3} className="text-center text-muted-foreground">
+              <TableCell colSpan={showRetryAction ? 4 : 3} className="text-center text-muted-foreground">
                 Loading notes...
               </TableCell>
             </TableRow>
           ) : items.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={3} className="text-center text-muted-foreground">
+              <TableCell colSpan={showRetryAction ? 4 : 3} className="text-center text-muted-foreground">
                 {emptyLabel}
               </TableCell>
             </TableRow>
@@ -956,6 +1233,24 @@ function App() {
                   <TableCell className="text-muted-foreground">
                     {formatRelativeDate(note.updatedAt)}
                   </TableCell>
+                  {showRetryAction ? (
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void retryPublishNote(note.id);
+                        }}
+                        disabled={retryingNoteId === note.id}
+                      >
+                        {retryingNoteId === note.id ? (
+                          <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                        ) : null}
+                        Retry
+                      </Button>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               );
             })
@@ -1016,6 +1311,7 @@ function App() {
           saveDraft={saveDraft}
           scheduleDraft={scheduleDraft}
           publishDraft={publishDraft}
+          retryPublishDraft={retryPublishDraft}
           updateTitle={updateTitle}
           updateDraft={updateDraft}
           formatRelativeDate={formatRelativeDate}
@@ -1140,7 +1436,9 @@ function App() {
             </div>
             <div className="flex flex-col gap-3">
               <h3 className="text-sm font-medium">Failed</h3>
-              {renderNotesTable(failedNotes, "Belum ada note yang gagal publish.")}
+              {renderNotesTable(failedNotes, "Belum ada note yang gagal publish.", {
+                showRetryAction: true,
+              })}
             </div>
           </CardContent>
         </Card>
@@ -1259,6 +1557,67 @@ function App() {
             ) : (
               <span>Loading Sanity settings...</span>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Auth & API Token</CardTitle>
+            <CardDescription>
+              Gunakan integration token untuk AI atau app lain. Semua endpoint API menerima token ini melalui header `Authorization`.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
+            <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-4">
+              <span>
+                Admin email: <code>{authConfig?.adminEmail ?? authEmail}</code>
+              </span>
+              <span>Session TTL: {authConfig?.sessionTtlHours ?? "-"} jam</span>
+              <span>Integration token: {authConfig?.hasIntegrationToken ? "configured" : "not configured"}</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-foreground" htmlFor="session-token">
+                Current session token
+              </label>
+              <Textarea
+                id="session-token"
+                readOnly
+                value={getStoredAuthToken() ?? ""}
+                placeholder="Login dulu untuk melihat session token browser"
+                className="min-h-24 font-mono text-xs"
+              />
+              <Button
+                variant="outline"
+                onClick={() => void copyToken("session", getStoredAuthToken() ?? "")}
+                disabled={isCopyingToken !== null || !getStoredAuthToken()}
+              >
+                {isCopyingToken === "session" ? "Copying..." : "Copy session token"}
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-foreground" htmlFor="integration-token">
+                Static integration token
+              </label>
+              <Textarea
+                id="integration-token"
+                readOnly
+                value={authConfig?.integrationToken ?? ""}
+                placeholder="Set AUTH_INTEGRATION_TOKEN di Worker env agar token muncul di sini"
+                className="min-h-24 font-mono text-xs"
+              />
+              <Button
+                variant="outline"
+                onClick={() => void copyToken("integration", authConfig?.integrationToken ?? "")}
+                disabled={isCopyingToken !== null || !authConfig?.integrationToken}
+              >
+                {isCopyingToken === "integration" ? "Copying..." : "Copy integration token"}
+              </Button>
+              <span>
+                Header contoh: <code>Authorization: Bearer {authConfig?.integrationToken || "<your-token>"}</code>
+              </span>
+            </div>
           </CardContent>
         </Card>
 
@@ -1456,12 +1815,29 @@ function App() {
 
   const header = routeMeta[route];
 
+  if (authStatus === "checking") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-6 text-sm text-muted-foreground">
+        <div className="flex items-center gap-3">
+          <Loader2Icon className="size-4 animate-spin" />
+          Checking session...
+        </div>
+      </main>
+    );
+  }
+
+  if (authStatus !== "authenticated") {
+    return renderLoginScreen();
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar
         currentUrl={`#/${route}`}
         onNavigate={navigate}
         onCreate={() => void createNote()}
+        userEmail={authEmail}
+        onLogout={logout}
       />
       <SidebarInset>
         <SiteHeader title={header.title} description={header.description} />

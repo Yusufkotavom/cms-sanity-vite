@@ -28,11 +28,6 @@ import {
 } from "lucide-react";
 
 const data = {
-  user: {
-    name: "KOTACOM Editor",
-    email: "editor@kotacom.id",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     {
       title: "Dashboard",
@@ -105,11 +100,15 @@ export function AppSidebar({
   currentUrl,
   onNavigate,
   onCreate,
+  userEmail,
+  onLogout,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   currentUrl: string;
   onNavigate: (url: string) => void;
   onCreate: () => void;
+  userEmail: string;
+  onLogout: () => void;
 }) {
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -154,7 +153,14 @@ export function AppSidebar({
         />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser
+          user={{
+            name: "CMS Admin",
+            email: userEmail,
+            avatar: "/avatars/shadcn.jpg",
+          }}
+          onLogout={onLogout}
+        />
       </SidebarFooter>
     </Sidebar>
   );

@@ -78,6 +78,46 @@ Endpoint terkait:
 - schedule ulang juga tetap akan publish ke dokumen yang sama
 - tombol `Schedule` dan `Publish` sekarang otomatis melakukan `Save` dulu agar edit terbaru tidak hilang
 
+## Auth Model
+
+API worker sekarang dilindungi login admin sederhana yang ramah Worker free tier.
+
+Karakteristiknya:
+
+- tidak memakai auth provider eksternal
+- tidak butuh Durable Object, KV, atau service session tambahan
+- token login ditandatangani HMAC native Web Crypto
+- frontend mengirim token lewat header `Authorization: Bearer <token>`
+- opsional ada `integration token` statis untuk AI/app eksternal
+- endpoint publik yang tersisa hanya:
+  - `GET /api/health`
+  - `GET /api/auth/status`
+  - `POST /api/auth/login`
+
+Endpoint auth:
+
+- `GET /api/auth/status`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET /api/settings/auth`
+
+Catatan:
+
+- model ini cocok untuk single admin atau tim kecil
+- ini memang belum multi-user penuh
+- pendekatan ini sengaja dipilih agar tidak menambah biaya dan tetap aman untuk menutup API publik
+
+Integration token:
+
+- jika `AUTH_INTEGRATION_TOKEN` di-set, token ini diterima di **semua endpoint API yang terproteksi**
+- token ini cocok untuk diberikan ke AI agent, automation, atau app lain
+- token bisa dilihat dan di-copy dari menu `Settings > Auth & API Token`
+- format pemakaian:
+
+```http
+Authorization: Bearer <AUTH_INTEGRATION_TOKEN>
+```
+
 ## Markdown Support
 
 Worker mengubah markdown ke Portable Text Sanity, bukan menyimpan raw markdown di `post.body`.
@@ -165,6 +205,14 @@ Env Sanity yang dipakai Worker:
 - `SANITY_API_VERSION`
 - `SANITY_WRITE_TOKEN`
 
+Env auth yang dipakai Worker:
+
+- `AUTH_ADMIN_EMAIL`
+- `AUTH_ADMIN_PASSWORD`
+- `AUTH_TOKEN_SECRET`
+- `AUTH_INTEGRATION_TOKEN`
+- `AUTH_SESSION_TTL_HOURS`
+
 Default template:
 
 - dataset target: `development`
@@ -187,7 +235,28 @@ pnpm --filter worker exec wrangler secret put SANITY_PROJECT_ID
 pnpm --filter worker exec wrangler secret put SANITY_DATASET
 pnpm --filter worker exec wrangler secret put SANITY_API_VERSION
 pnpm --filter worker exec wrangler secret put SANITY_WRITE_TOKEN
+pnpm --filter worker exec wrangler secret put AUTH_ADMIN_EMAIL
+pnpm --filter worker exec wrangler secret put AUTH_ADMIN_PASSWORD
+pnpm --filter worker exec wrangler secret put AUTH_TOKEN_SECRET
+pnpm --filter worker exec wrangler secret put AUTH_INTEGRATION_TOKEN
 ```
+
+Untuk TTL session, bisa pakai env biasa di `wrangler.jsonc` atau secret juga bila diinginkan:
+
+```json
+{
+  "vars": {
+    "AUTH_SESSION_TTL_HOURS": "24"
+  }
+}
+```
+
+Rekomendasi praktis:
+
+- pakai email admin tunggal dulu
+- pakai password panjang acak
+- pakai `AUTH_TOKEN_SECRET` acak panjang minimal 32 karakter
+- pakai `AUTH_INTEGRATION_TOKEN` acak panjang jika ingin akses API dari AI/app luar
 
 ### Production Cloudflare Pages
 
