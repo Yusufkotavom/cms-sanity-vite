@@ -1,0 +1,205 @@
+import { z } from "zod";
+
+const aiKeywordSchema = z
+  .union([z.string(), z.array(z.string())])
+  .transform((value) =>
+    Array.isArray(value)
+      ? value.map((item) => item.trim()).filter(Boolean).join(", ")
+      : value
+  );
+
+const aiNoteSchema = z.object({
+  title: z.string().default(""),
+  slug: z.string().default(""),
+  excerpt: z.string().default(""),
+  seoTitle: z.string().default(""),
+  seoDescription: z.string().default(""),
+  seoKeywords: z.string().default(""),
+  ogTitle: z.string().default(""),
+  ogDescription: z.string().default(""),
+  outlineMd: z.string().default(""),
+  contentMd: z.string().default(""),
+});
+
+export const aiAssistModeSchema = z.enum(["metadata", "draft", "outline", "outline_to_post", "seo_only"]);
+
+export const aiAssistRequestSchema = z.object({
+  mode: aiAssistModeSchema,
+  note: aiNoteSchema,
+});
+
+const aiSuggestionSchema = z.object({
+  title: z.string().optional(),
+  slug: z.string().optional(),
+  excerpt: z.string().optional(),
+  outlineMd: z.string().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
+  seoKeywords: aiKeywordSchema.optional(),
+  ogTitle: z.string().optional(),
+  ogDescription: z.string().optional(),
+  contentMd: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export type AiAssistRequest = z.infer<typeof aiAssistRequestSchema>;
+
+export type AiConfig = {
+  apiBaseUrl: string;
+  apiKey: string;
+  model: string;
+  systemPrompt?: string;
+  metadataPrompt?: string;
+  draftPrompt?: string;
+  outlinePrompt?: string;
+  outlineToPostPrompt?: string;
+};
+
+function stripCodeFence(value: string) {
+  const trimmed = value.trim();
+  const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fencedMatch ? fencedMatch[1].trim() : trimmed;
+}
+
+function extractJsonObject(value: string) {
+  const normalized = stripCodeFence(value);
+  const firstBrace = normalized.indexOf("{");
+  const lastBrace = normalized.lastIndexOf("}");
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    throw new Error("AI response did not contain a JSON object");
+  }
+
+  return normalized.slice(firstBrace, lastBrace + 1);
+}
+
+function buildSystemPrompt(mode: AiAssistRequest["mode"], config: AiConfig) {
+  const basePrompt =
+    mode === "metadata"
+      ? [
+          "You are an editorial assistant for a markdown CMS.",
+          "Return only valid JSON.",
+          "Improve title, slug, excerpt, seoTitle, seoDescription, seoKeywords, ogTitle, and ogDescription based on the note content.",
+          "Keep the same language as the input note.",
+          "Do not invent categories or unsupported fields.",
+          'Respond with keys: "title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription", optional "notes".',
+        ]
+      : mode === "draft"
+        ? [
+          "You are an editorial assistant for a markdown CMS.",
+          "Return only valid JSON.",
+          "Improve the markdown draft while preserving intent and facts.",
+          "Keep markdown structure intact and keep the same language as the input note.",
+          'Respond with keys: "contentMd", optional "title", optional "excerpt", optional "seoTitle", optional "seoDescription", optional "seoKeywords", optional "ogTitle", optional "ogDescription", optional "notes".',
+        ]
+        : mode === "outline"
+          ? [
+              "You are an editorial strategist for a markdown CMS.",
+              "Return only valid JSON.",
+              "Generate a structured markdown outline for the requested post.",
+              "The outline must be practical, publishable, and aligned with the current title or topic.",
+              'Respond with keys: "outlineMd", optional "title", optional "slug", optional "excerpt", optional "seoTitle", optional "seoDescription", optional "seoKeywords", optional "ogTitle", optional "ogDescription", optional "notes".',
+            ]
+          : mode === "outline_to_post"
+            ? [
+              "You are an editorial writer for a markdown CMS.",
+              "Return only valid JSON.",
+              "Convert the provided outline into a complete markdown post.",
+              "Fill all important metadata and SEO fields coherently.",
+              "Preserve facts, avoid fluff, and keep the same language as the input note.",
+              'Respond with keys: "contentMd", "title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription", optional "notes".',
+            ]
+            : [
+                "You are an SEO editor for a markdown CMS.",
+                "Return only valid JSON.",
+                "Generate or improve SEO metadata from the current note, outline, and draft.",
+                "Keep the same language as the note.",
+                'Respond with keys: "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription", optional "title", optional "excerpt", optional "notes".',
+              ];
+
+  const modePrompt =
+    mode === "metadata"
+      ? config.metadataPrompt
+      : mode === "draft"
+        ? config.draftPrompt
+        : mode === "outline"
+          ? config.outlinePrompt
+          : mode === "outline_to_post"
+            ? config.outlineToPostPrompt
+            : config.metadataPrompt;
+
+  const mergedPrompt = [basePrompt.join(" "), config.systemPrompt?.trim(), modePrompt?.trim()]
+    .filter(Boolean)
+    .join(" ");
+
+  return mergedPrompt;
+}
+
+function buildUserPrompt(input: AiAssistRequest) {
+  const requestedFields =
+    input.mode === "metadata"
+      ? ["title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"]
+      : input.mode === "seo_only"
+        ? ["seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription", "title", "excerpt"]
+      : input.mode === "outline"
+        ? ["outlineMd", "title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"]
+        : input.mode === "outline_to_post"
+          ? ["contentMd", "title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"]
+      : ["contentMd", "title", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"];
+
+  return JSON.stringify(
+    {
+      task: input.mode,
+      requestedFields,
+      note: input.note,
+    },
+    null,
+    2
+  );
+}
+
+export async function requestAiSuggestion(
+  input: AiAssistRequest,
+  config: AiConfig,
+  fetchImpl: typeof fetch = fetch
+) {
+  const baseUrl = config.apiBaseUrl.replace(/\/+$/, "");
+  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: config.model,
+      temperature: input.mode === "metadata" ? 0.4 : 0.7,
+      messages: [
+        {
+          role: "system",
+          content: buildSystemPrompt(input.mode, config),
+        },
+        {
+          role: "user",
+          content: buildUserPrompt(input),
+        },
+      ],
+    }),
+  });
+
+  const json = (await response.json().catch(() => ({}))) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    error?: { message?: string };
+  };
+
+  if (!response.ok) {
+    throw new Error(json.error?.message || `AI request failed (${response.status})`);
+  }
+
+  const content = json.choices?.[0]?.message?.content?.trim();
+  if (!content) {
+    throw new Error("AI response was empty");
+  }
+
+  const parsed = JSON.parse(extractJsonObject(content)) as unknown;
+  return aiSuggestionSchema.parse(parsed);
+}

@@ -1,0 +1,1095 @@
+openapi: 3.1.0
+info:
+  title: CMS Sanity Vite Worker API
+  version: 2026-06-03
+  summary: API for notes, scheduling, Sanity publishing, OG image generation, AI settings, and AI batches.
+servers:
+  - url: https://cms-sanity-vite-worker.{subdomain}.workers.dev
+    description: Production example
+    variables:
+      subdomain:
+        default: your-subdomain
+  - url: http://127.0.0.1:8787
+    description: Local Wrangler dev
+tags:
+  - name: Health
+  - name: Config
+  - name: Sanity
+  - name: Notes
+  - name: Settings
+  - name: AI
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Worker is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/config:
+    get:
+      tags: [Config]
+      summary: Get worker runtime config summary
+      operationId: getConfig
+      responses:
+        "200":
+          description: Runtime config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigResponse"
+  /api/sanity/categories:
+    get:
+      tags: [Sanity]
+      summary: List Sanity categories for CMS selection
+      operationId: listSanityCategories
+      responses:
+        "200":
+          description: Category list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryListResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/sanity/status:
+    get:
+      tags: [Sanity]
+      summary: Get active Sanity connectivity status
+      operationId: getSanityStatus
+      responses:
+        "200":
+          description: Sanity secret status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SanityStatusResponse"
+  /api/sanity/test:
+    post:
+      tags: [Sanity]
+      summary: Test Sanity connectivity
+      operationId: testSanityConnection
+      responses:
+        "200":
+          description: Connectivity test succeeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SanityTestResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/sanity/publish:
+    post:
+      tags: [Sanity]
+      summary: Publish note to Sanity by note ID
+      operationId: publishNoteToSanityByPayload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SanityPublishRequest"
+      responses:
+        "200":
+          description: Published note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/notes:
+    get:
+      tags: [Notes]
+      summary: List notes
+      operationId: listNotes
+      responses:
+        "200":
+          description: Note summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteListResponse"
+    post:
+      tags: [Notes]
+      summary: Create note
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteCreateRequest"
+      responses:
+        "201":
+          description: Created note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/notes/{id}:
+    get:
+      tags: [Notes]
+      summary: Get note detail
+      operationId: getNote
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Note detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    patch:
+      tags: [Notes]
+      summary: Update note draft
+      operationId: updateNote
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteUpdateRequest"
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [Notes]
+      summary: Delete note and related publish jobs
+      operationId: deleteNote
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+  /api/notes/{id}/schedule:
+    post:
+      tags: [Notes]
+      summary: Schedule note publish
+      operationId: scheduleNote
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleRequest"
+      responses:
+        "200":
+          description: Scheduled note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/notes/{id}/publish:
+    post:
+      tags: [Notes]
+      summary: Publish note immediately
+      operationId: publishNote
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Published note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/notes/{id}/generate-og:
+    post:
+      tags: [Notes]
+      summary: Generate and upload OG image for note
+      operationId: generateNoteOg
+      parameters:
+        - $ref: "#/components/parameters/NoteId"
+      responses:
+        "200":
+          description: Note updated with generated OG asset ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/settings/ai:
+    get:
+      tags: [Settings]
+      summary: Get AI settings
+      operationId: getAiSettings
+      responses:
+        "200":
+          description: AI settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSettingsResponse"
+    put:
+      tags: [Settings]
+      summary: Save AI settings
+      operationId: saveAiSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiSettingsRequest"
+      responses:
+        "200":
+          description: Saved AI settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSettingsResponse"
+  /api/settings/og-branding:
+    get:
+      tags: [Settings]
+      summary: Get OG branding settings
+      operationId: getOgBrandingSettings
+      responses:
+        "200":
+          description: OG branding settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgBrandingSettings"
+    put:
+      tags: [Settings]
+      summary: Save OG branding settings
+      operationId: saveOgBrandingSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OgBrandingSettings"
+      responses:
+        "200":
+          description: Saved OG branding settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OgBrandingSettings"
+  /api/ai/assist:
+    post:
+      tags: [AI]
+      summary: Request AI suggestion for note fields
+      operationId: aiAssist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiAssistRequest"
+      responses:
+        "200":
+          description: AI suggestion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiAssistResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/ai/batches/templates:
+    get:
+      tags: [AI]
+      summary: List AI prompt templates
+      operationId: listAiPromptTemplates
+      responses:
+        "200":
+          description: Template list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiPromptTemplateListResponse"
+    post:
+      tags: [AI]
+      summary: Create AI prompt template
+      operationId: createAiPromptTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiPromptTemplateUpsertRequest"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiPromptTemplate"
+  /api/ai/batches/templates/{id}:
+    patch:
+      tags: [AI]
+      summary: Update AI prompt template
+      operationId: updateAiPromptTemplate
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiPromptTemplateUpsertRequest"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiPromptTemplate"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/ai/batches:
+    get:
+      tags: [AI]
+      summary: List AI batches
+      operationId: listAiBatches
+      responses:
+        "200":
+          description: Batch list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiBatchSummaryListResponse"
+    post:
+      tags: [AI]
+      summary: Create AI batch
+      operationId: createAiBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiBatchCreateRequest"
+      responses:
+        "201":
+          description: Created batch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiBatchDetail"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/ai/batches/{id}:
+    get:
+      tags: [AI]
+      summary: Get AI batch detail
+      operationId: getAiBatch
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "200":
+          description: Batch detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiBatchDetail"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+  /api/ai/batches/process:
+    post:
+      tags: [AI]
+      summary: Process queued AI batch items
+      operationId: processAiBatches
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiBatchProcessRequest"
+      responses:
+        "200":
+          description: Process summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiBatchProcessResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+components:
+  parameters:
+    NoteId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UuidId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ErrorResponse:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          const: true
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          const: true
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+    ConfigResponse:
+      type: object
+      required:
+        - sanityConfigured
+        - sanityProjectId
+        - sanityDataset
+        - aiConfigured
+        - aiBaseUrl
+        - aiModel
+        - cron
+        - aiBatchMaxItemsPerRun
+        - d1Binding
+      properties:
+        sanityConfigured:
+          type: boolean
+        sanityProjectId:
+          type:
+            - string
+            - "null"
+        sanityDataset:
+          type:
+            - string
+            - "null"
+        aiConfigured:
+          type: boolean
+        aiBaseUrl:
+          type:
+            - string
+            - "null"
+        aiModel:
+          type:
+            - string
+            - "null"
+        cron:
+          type: string
+        aiBatchMaxItemsPerRun:
+          type: integer
+        d1Binding:
+          type: string
+    Category:
+      type: object
+      required: [id, title, slug]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        slug:
+          type:
+            - string
+            - "null"
+    CategoryListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+    SanityStatusResponse:
+      type: object
+      required: [configured, projectId, dataset, apiVersion, hasWriteToken]
+      properties:
+        configured:
+          type: boolean
+        projectId:
+          type:
+            - string
+            - "null"
+        dataset:
+          type:
+            - string
+            - "null"
+        apiVersion:
+          type:
+            - string
+            - "null"
+        hasWriteToken:
+          type: boolean
+    SanityTestResponse:
+      type: object
+      required: [ok, categoryCount, sample]
+      properties:
+        ok:
+          type: boolean
+        categoryCount:
+          type: integer
+        sample:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+    SanityPublishRequest:
+      type: object
+      required: [noteId]
+      properties:
+        noteId:
+          type: string
+          format: uuid
+    NoteStatus:
+      type: string
+      enum: [draft, scheduled, published, failed]
+    NoteBase:
+      type: object
+      required:
+        - title
+        - slug
+        - contentMd
+        - outlineMd
+        - excerpt
+        - seoTitle
+        - seoDescription
+        - seoKeywords
+        - ogTitle
+        - ogDescription
+        - categoryIds
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        contentMd:
+          type: string
+        outlineMd:
+          type: string
+        excerpt:
+          type: string
+        seoTitle:
+          type: string
+        seoDescription:
+          type: string
+        seoKeywords:
+          type: string
+        ogTitle:
+          type: string
+        ogDescription:
+          type: string
+        categoryIds:
+          type: array
+          items:
+            type: string
+    NoteCreateRequest:
+      allOf:
+        - $ref: "#/components/schemas/NoteBase"
+    NoteUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        contentMd:
+          type: string
+        outlineMd:
+          type: string
+        excerpt:
+          type: string
+        seoTitle:
+          type: string
+        seoDescription:
+          type: string
+        seoKeywords:
+          type: string
+        ogTitle:
+          type: string
+        ogDescription:
+          type: string
+        categoryIds:
+          type: array
+          items:
+            type: string
+    Note:
+      allOf:
+        - $ref: "#/components/schemas/NoteBase"
+        - type: object
+          required:
+            - id
+            - ogImageAssetId
+            - status
+            - publishAt
+            - sanityDocumentId
+            - lastError
+            - createdAt
+            - updatedAt
+          properties:
+            id:
+              type: string
+              format: uuid
+            ogImageAssetId:
+              type:
+                - string
+                - "null"
+            status:
+              $ref: "#/components/schemas/NoteStatus"
+            publishAt:
+              type:
+                - string
+                - "null"
+              format: date-time
+            sanityDocumentId:
+              type:
+                - string
+                - "null"
+            lastError:
+              type:
+                - string
+                - "null"
+            createdAt:
+              type:
+                - string
+                - "null"
+              format: date-time
+            updatedAt:
+              type:
+                - string
+                - "null"
+              format: date-time
+    NoteListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Note"
+    ScheduleRequest:
+      type: object
+      required: [publishAt]
+      properties:
+        publishAt:
+          type: string
+          format: date-time
+    AiSettingsRequest:
+      type: object
+      required:
+        - apiBaseUrl
+        - apiKey
+        - model
+        - systemPrompt
+        - metadataPrompt
+        - draftPrompt
+        - outlinePrompt
+        - outlineToPostPrompt
+      properties:
+        apiBaseUrl:
+          type: string
+        apiKey:
+          type: string
+        model:
+          type: string
+        systemPrompt:
+          type: string
+        metadataPrompt:
+          type: string
+        draftPrompt:
+          type: string
+        outlinePrompt:
+          type: string
+        outlineToPostPrompt:
+          type: string
+    AiSettingsResponse:
+      allOf:
+        - $ref: "#/components/schemas/AiSettingsRequest"
+        - type: object
+          required: [hasApiKey]
+          properties:
+            hasApiKey:
+              type: boolean
+    OgBrandingSettings:
+      type: object
+      required: [logoUrl, workflowLabel, footerText]
+      properties:
+        logoUrl:
+          type: string
+        workflowLabel:
+          type: string
+        footerText:
+          type: string
+    AiAssistMode:
+      type: string
+      enum: [metadata, draft, outline, outline_to_post, seo_only]
+    AiAssistNotePayload:
+      type: object
+      required:
+        - title
+        - slug
+        - excerpt
+        - seoTitle
+        - seoDescription
+        - seoKeywords
+        - ogTitle
+        - ogDescription
+        - outlineMd
+        - contentMd
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+        seoTitle:
+          type: string
+        seoDescription:
+          type: string
+        seoKeywords:
+          type: string
+        ogTitle:
+          type: string
+        ogDescription:
+          type: string
+        outlineMd:
+          type: string
+        contentMd:
+          type: string
+    AiAssistRequest:
+      type: object
+      required: [mode, note]
+      properties:
+        mode:
+          $ref: "#/components/schemas/AiAssistMode"
+        note:
+          $ref: "#/components/schemas/AiAssistNotePayload"
+    AiAssistSuggestion:
+      type: object
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+        seoTitle:
+          type: string
+        seoDescription:
+          type: string
+        seoKeywords:
+          type: string
+        ogTitle:
+          type: string
+        ogDescription:
+          type: string
+        outlineMd:
+          type: string
+        contentMd:
+          type: string
+        notes:
+          type: string
+      additionalProperties: false
+    AiAssistResponse:
+      type: object
+      required: [suggestion, provider, model]
+      properties:
+        suggestion:
+          $ref: "#/components/schemas/AiAssistSuggestion"
+        provider:
+          type: string
+        model:
+          type: string
+    AiPromptTemplateUpsertRequest:
+      type: object
+      required: [name, description, outlinePrompt, contentPrompt]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        outlinePrompt:
+          type: string
+        contentPrompt:
+          type: string
+    AiPromptTemplate:
+      allOf:
+        - $ref: "#/components/schemas/AiPromptTemplateUpsertRequest"
+        - type: object
+          required: [id, createdAt, updatedAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    AiPromptTemplateListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiPromptTemplate"
+    AiBatchMode:
+      type: string
+      enum: [outline_only, outline_then_content]
+    AiBatchStatus:
+      type: string
+      enum: [queued, processing, completed, failed]
+    AiBatchItemStatus:
+      type: string
+      enum: [pending, outline_done, processing, completed, failed]
+    AiBatchCreateItem:
+      type: object
+      required: [keyword, description]
+      properties:
+        keyword:
+          type: string
+        description:
+          type: string
+    AiBatchCreateRequest:
+      type: object
+      required: [name, mode, templateId, items]
+      properties:
+        name:
+          type: string
+        mode:
+          $ref: "#/components/schemas/AiBatchMode"
+        templateId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/AiBatchCreateItem"
+    AiBatchSummary:
+      type: object
+      required:
+        - id
+        - name
+        - mode
+        - status
+        - templateId
+        - templateName
+        - totalItems
+        - completedItems
+        - failedItems
+        - pendingItems
+        - outlineReadyItems
+        - processingItems
+        - lastError
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        mode:
+          $ref: "#/components/schemas/AiBatchMode"
+        status:
+          $ref: "#/components/schemas/AiBatchStatus"
+        templateId:
+          type: string
+          format: uuid
+        templateName:
+          type: string
+        totalItems:
+          type: integer
+        completedItems:
+          type: integer
+        failedItems:
+          type: integer
+        pendingItems:
+          type: integer
+        outlineReadyItems:
+          type: integer
+        processingItems:
+          type: integer
+        lastError:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AiBatchItem:
+      type: object
+      required:
+        - id
+        - keyword
+        - description
+        - status
+        - attempts
+        - title
+        - slug
+        - outlineMd
+        - contentMd
+        - excerpt
+        - seoTitle
+        - seoDescription
+        - seoKeywords
+        - ogTitle
+        - ogDescription
+        - noteId
+        - lastError
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        keyword:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: "#/components/schemas/AiBatchItemStatus"
+        attempts:
+          type: integer
+        title:
+          type:
+            - string
+            - "null"
+        slug:
+          type:
+            - string
+            - "null"
+        outlineMd:
+          type:
+            - string
+            - "null"
+        contentMd:
+          type:
+            - string
+            - "null"
+        excerpt:
+          type:
+            - string
+            - "null"
+        seoTitle:
+          type:
+            - string
+            - "null"
+        seoDescription:
+          type:
+            - string
+            - "null"
+        seoKeywords:
+          type:
+            - string
+            - "null"
+        ogTitle:
+          type:
+            - string
+            - "null"
+        ogDescription:
+          type:
+            - string
+            - "null"
+        noteId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        lastError:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AiBatchDetail:
+      allOf:
+        - $ref: "#/components/schemas/AiBatchSummary"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AiBatchItem"
+    AiBatchSummaryListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiBatchSummary"
+    AiBatchProcessRequest:
+      type: object
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 5
+    AiBatchProcessResponse:
+      type: object
+      additionalProperties: true

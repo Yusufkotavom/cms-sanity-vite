@@ -1,0 +1,19 @@
+{
+  "name": "cms-sanity-vite",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter web --filter worker dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:worker": "pnpm --filter worker dev",
+    "build:web:prod": "VITE_API_BASE_URL=${VITE_API_BASE_URL:?VITE_API_BASE_URL is required} pnpm --filter web build",
+    "db:generate": "pnpm --filter worker db:generate",
+    "db:apply:local": "pnpm --filter worker db:apply:local",
+    "db:apply:remote": "pnpm --filter worker db:apply:remote",
+    "deploy:web": "pnpm --filter web run deploy",
+    "deploy:worker": "pnpm --filter worker run deploy",
+    "cf:whoami": "pnpm --filter worker whoami",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

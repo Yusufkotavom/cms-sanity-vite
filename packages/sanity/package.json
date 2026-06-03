@@ -1,0 +1,11 @@
+{
+  "name": "@repo/sanity",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sanity/client": "^7.20.0"
+  }
+}

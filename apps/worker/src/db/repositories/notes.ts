@@ -1,0 +1,263 @@
+import { desc, eq, inArray } from "drizzle-orm";
+
+import { getDb } from "../client";
+import { noteCategories, notes } from "../schema";
+
+export type NoteRecord = {
+  id: string;
+  title: string;
+  slug: string;
+  content_md: string;
+  outline_md: string;
+  excerpt: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  og_title: string | null;
+  og_description: string | null;
+  og_image_asset_id: string | null;
+  status: string;
+  publish_at: string | null;
+  sanity_document_id: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function toNoteRecord(note: typeof notes.$inferSelect): NoteRecord {
+  return {
+    id: note.id,
+    title: note.title,
+    slug: note.slug,
+    content_md: note.contentMd,
+    outline_md: note.outlineMd,
+    excerpt: note.excerpt,
+    seo_title: note.seoTitle,
+    seo_description: note.seoDescription,
+    seo_keywords: note.seoKeywords,
+    og_title: note.ogTitle,
+    og_description: note.ogDescription,
+    og_image_asset_id: note.ogImageAssetId,
+    status: note.status,
+    publish_at: note.publishAt,
+    sanity_document_id: note.sanityDocumentId,
+    last_error: note.lastError,
+    created_at: note.createdAt,
+    updated_at: note.updatedAt,
+  };
+}
+
+export async function listNotes(db: D1Database) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb.select().from(notes).orderBy(desc(notes.updatedAt));
+  return rows.map(toNoteRecord);
+}
+
+export async function findNoteById(db: D1Database, id: string) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb.select().from(notes).where(eq(notes.id, id)).limit(1);
+  const note = rows[0];
+  return note ? toNoteRecord(note) : null;
+}
+
+export async function findNoteBySlug(db: D1Database, slug: string) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb.select().from(notes).where(eq(notes.slug, slug)).limit(1);
+  const note = rows[0];
+  return note ? toNoteRecord(note) : null;
+}
+
+export async function createNote(db: D1Database, input: {
+  id: string;
+  title: string;
+  slug: string;
+  contentMd: string;
+  outlineMd: string;
+  excerpt: string;
+  seoTitle: string;
+  seoDescription: string;
+  seoKeywords: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImageAssetId?: string;
+  createdAt: string;
+}) {
+  const drizzleDb = getDb(db);
+  await drizzleDb.insert(notes).values({
+    id: input.id,
+    title: input.title,
+    slug: input.slug,
+    contentMd: input.contentMd,
+    outlineMd: input.outlineMd,
+    excerpt: input.excerpt,
+    seoTitle: input.seoTitle,
+    seoDescription: input.seoDescription,
+    seoKeywords: input.seoKeywords,
+    ogTitle: input.ogTitle,
+    ogDescription: input.ogDescription,
+    ogImageAssetId: input.ogImageAssetId ?? null,
+    status: "draft",
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+  });
+}
+
+export async function updateNoteDraft(db: D1Database, input: {
+  id: string;
+  title: string;
+  slug: string;
+  contentMd: string;
+  outlineMd: string;
+  excerpt: string;
+  seoTitle: string;
+  seoDescription: string;
+  seoKeywords: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImageAssetId?: string | null;
+  currentStatus: string;
+  updatedAt: string;
+}) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      title: input.title,
+      slug: input.slug,
+      contentMd: input.contentMd,
+      outlineMd: input.outlineMd,
+      excerpt: input.excerpt,
+      seoTitle: input.seoTitle,
+      seoDescription: input.seoDescription,
+      seoKeywords: input.seoKeywords,
+      ogTitle: input.ogTitle,
+      ogDescription: input.ogDescription,
+      ...(input.ogImageAssetId !== undefined ? { ogImageAssetId: input.ogImageAssetId } : {}),
+      status: input.currentStatus === "failed" ? "draft" : input.currentStatus,
+      lastError: null,
+      updatedAt: input.updatedAt,
+    })
+    .where(eq(notes.id, input.id));
+}
+
+export async function deleteNote(db: D1Database, noteId: string) {
+  const drizzleDb = getDb(db);
+  await drizzleDb.delete(noteCategories).where(eq(noteCategories.noteId, noteId));
+  await drizzleDb.delete(notes).where(eq(notes.id, noteId));
+}
+
+export async function getNoteCategoryIds(db: D1Database, noteId: string) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb
+    .select({ categoryId: noteCategories.categoryId })
+    .from(noteCategories)
+    .where(eq(noteCategories.noteId, noteId))
+    .orderBy(noteCategories.categoryId);
+
+  return rows.map((item) => item.categoryId);
+}
+
+export async function getCategoryIdsByNoteIds(db: D1Database, noteIds: string[]) {
+  if (noteIds.length === 0) {
+    return new Map<string, string[]>();
+  }
+
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb
+    .select({ noteId: noteCategories.noteId, categoryId: noteCategories.categoryId })
+    .from(noteCategories)
+    .where(inArray(noteCategories.noteId, noteIds))
+    .orderBy(noteCategories.noteId, noteCategories.categoryId);
+
+  const result = new Map<string, string[]>();
+  for (const row of rows) {
+    const existing = result.get(row.noteId) ?? [];
+    existing.push(row.categoryId);
+    result.set(row.noteId, existing);
+  }
+
+  return result;
+}
+
+export async function replaceNoteCategories(db: D1Database, noteId: string, categoryIds: string[]) {
+  const drizzleDb = getDb(db);
+  await drizzleDb.delete(noteCategories).where(eq(noteCategories.noteId, noteId));
+
+  const uniqueCategoryIds = [...new Set(categoryIds.map((item) => item.trim()).filter(Boolean))];
+  if (uniqueCategoryIds.length === 0) {
+    return;
+  }
+
+  await drizzleDb.insert(noteCategories).values(
+    uniqueCategoryIds.map((categoryId) => ({
+      noteId,
+      categoryId,
+    }))
+  );
+}
+
+export async function markNoteScheduled(db: D1Database, input: {
+  noteId: string;
+  publishAt: string;
+  updatedAt: string;
+}) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      status: "scheduled",
+      publishAt: input.publishAt,
+      lastError: null,
+      updatedAt: input.updatedAt,
+    })
+    .where(eq(notes.id, input.noteId));
+}
+
+export async function markNotePublished(db: D1Database, input: {
+  noteId: string;
+  publishedAt: string;
+  sanityDocumentId: string;
+}) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      status: "published",
+      publishAt: input.publishedAt,
+      sanityDocumentId: input.sanityDocumentId,
+      lastError: null,
+      updatedAt: input.publishedAt,
+    })
+    .where(eq(notes.id, input.noteId));
+}
+
+export async function markNoteFailed(db: D1Database, input: {
+  noteId: string;
+  message: string;
+  updatedAt: string;
+}) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      status: "failed",
+      lastError: input.message,
+      updatedAt: input.updatedAt,
+    })
+    .where(eq(notes.id, input.noteId));
+}
+
+export async function setNoteOgImageAssetId(db: D1Database, input: {
+  noteId: string;
+  ogImageAssetId: string;
+  updatedAt: string;
+}) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      ogImageAssetId: input.ogImageAssetId,
+      updatedAt: input.updatedAt,
+    })
+    .where(eq(notes.id, input.noteId));
+}
