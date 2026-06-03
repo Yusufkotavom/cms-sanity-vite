@@ -19,6 +19,7 @@ import {
   type ApiConfig,
   type ApiNote,
   type OgBrandingSettings,
+  type SanitySettings,
 } from "@/lib/api";
 import { AppSidebar } from "@/components/app-sidebar";
 import { PostEditorPage } from "./post-editor-page";
@@ -266,6 +267,7 @@ function App() {
   const [editorSectionTab, setEditorSectionTab] = useState<"overview" | "seo-og" | "outline" | "content">("overview");
   const [contentTab, setContentTab] = useState<"editor" | "preview">("editor");
   const [config, setConfig] = useState<ApiConfig | null>(null);
+  const [sanitySettings, setSanitySettings] = useState<SanitySettings | null>(null);
   const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
   const [ogBrandingSettings, setOgBrandingSettings] = useState<OgBrandingSettings | null>(null);
   const [categoryOptions, setCategoryOptions] = useState<ApiCategory[]>([]);
@@ -278,6 +280,8 @@ function App() {
   const [isScheduling, setIsScheduling] = useState(false);
   const [isAiRunning, setIsAiRunning] = useState<null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only">(null);
   const [isGeneratingOg, setIsGeneratingOg] = useState(false);
+  const [isTestingSanity, setIsTestingSanity] = useState(false);
+  const [isSavingSanity, setIsSavingSanity] = useState(false);
 
   const stats = useMemo(
     () => ({
@@ -344,6 +348,7 @@ function App() {
 
   useEffect(() => {
     void loadConfig();
+    void loadSanitySettings();
     void loadAiSettings();
     void loadOgBrandingSettings();
     void loadCategories();
@@ -442,6 +447,15 @@ function App() {
       setAiSettings(nextSettings);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load AI settings");
+    }
+  }
+
+  async function loadSanitySettings() {
+    try {
+      const nextSettings = await notesApi.getSanitySettings();
+      setSanitySettings(nextSettings);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load Sanity settings");
     }
   }
 
@@ -636,7 +650,7 @@ function App() {
     if (!draft) return;
 
     if (!config?.sanityConfigured) {
-      toast.error("Schedule belum aktif karena secret Sanity di Worker belum diisi");
+      toast.error("Schedule belum aktif karena Sanity settings belum diisi");
       return;
     }
 
@@ -672,7 +686,7 @@ function App() {
     if (!draft) return;
 
     if (!config?.sanityConfigured) {
-      toast.error("Publish belum aktif karena secret Sanity di Worker belum diisi");
+      toast.error("Publish belum aktif karena Sanity settings belum diisi");
       return;
     }
 
@@ -784,6 +798,7 @@ function App() {
     setApiBaseUrl(nextApiBaseUrl);
     toast.success(`API base updated to ${nextApiBaseUrl}`);
     void loadConfig();
+    void loadSanitySettings();
     void loadAiSettings();
     void loadOgBrandingSettings();
     void loadCategories();
@@ -797,10 +812,42 @@ function App() {
     setApiBaseUrl(nextApiBaseUrl);
     toast.success("API base reset to default");
     void loadConfig();
+    void loadSanitySettings();
     void loadAiSettings();
     void loadOgBrandingSettings();
     void loadCategories();
     void loadNotes(selectedId || undefined);
+  }
+
+  async function testSanitySettings() {
+    if (!sanitySettings) return;
+
+    setIsTestingSanity(true);
+    try {
+      const result = await notesApi.testSanitySettings(sanitySettings);
+      toast.success(`Sanity connected. ${result.categoryCount} categories found.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Sanity test failed");
+    } finally {
+      setIsTestingSanity(false);
+    }
+  }
+
+  async function saveSanitySettings() {
+    if (!sanitySettings) return;
+
+    setIsSavingSanity(true);
+    try {
+      const saved = await notesApi.saveSanitySettings(sanitySettings);
+      setSanitySettings(saved);
+      toast.success("Sanity settings saved");
+      void loadConfig();
+      void loadCategories();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save Sanity settings");
+    } finally {
+      setIsSavingSanity(false);
+    }
   }
 
   async function saveAiSettings() {
@@ -1107,7 +1154,7 @@ function App() {
             <div className="flex items-center justify-between">
               <span>Config</span>
               <Badge variant="outline">
-                {config?.sanityConfigured ? "Ready" : "Missing secrets"}
+                {config?.sanityConfigured ? "Ready" : "Not configured"}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
@@ -1160,6 +1207,58 @@ function App() {
             </span>
             <span>Routing sekarang dipisah per hash route agar aman di Cloudflare Pages.</span>
             <span>Halaman editor utama ada di route `#/posts`.</span>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sanity Settings</CardTitle>
+            <CardDescription>Form ini hanya kirim payload ke backend. Test connection tidak menyimpan token di frontend.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+            {sanitySettings ? (
+              <>
+                <Input
+                  placeholder="Sanity project ID"
+                  value={sanitySettings.projectId}
+                  onChange={(event) =>
+                    setSanitySettings((current) => (current ? { ...current, projectId: event.target.value } : current))
+                  }
+                />
+                <Input
+                  placeholder="development"
+                  value={sanitySettings.dataset}
+                  onChange={(event) =>
+                    setSanitySettings((current) => (current ? { ...current, dataset: event.target.value } : current))
+                  }
+                />
+                <Input
+                  placeholder="2026-03-29"
+                  value={sanitySettings.apiVersion}
+                  onChange={(event) =>
+                    setSanitySettings((current) => (current ? { ...current, apiVersion: event.target.value } : current))
+                  }
+                />
+                <Input
+                  placeholder={sanitySettings.hasWriteToken ? "********" : "Sanity write token"}
+                  value={sanitySettings.writeToken}
+                  onChange={(event) =>
+                    setSanitySettings((current) => (current ? { ...current, writeToken: event.target.value } : current))
+                  }
+                />
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => void testSanitySettings()} disabled={isTestingSanity}>
+                    {isTestingSanity ? "Testing..." : "Test connection"}
+                  </Button>
+                  <Button onClick={() => void saveSanitySettings()} disabled={isSavingSanity}>
+                    {isSavingSanity ? "Saving..." : "Save Sanity settings"}
+                  </Button>
+                </div>
+                <span>Sanity status: {config?.sanityConfigured ? "ready" : "not configured"}</span>
+              </>
+            ) : (
+              <span>Loading Sanity settings...</span>
+            )}
           </CardContent>
         </Card>
 

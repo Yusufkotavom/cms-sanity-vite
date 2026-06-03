@@ -556,7 +556,7 @@ export function PostEditorPage({
             <TabsContent value="content" className="space-y-4">
               {!config?.sanityConfigured ? (
                 <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
-                  Publish dan schedule belum bisa jalan ke Sanity karena secret Worker belum diisi.
+                  Publish dan schedule belum bisa jalan ke Sanity karena settings backend belum diisi.
                 </div>
               ) : null}
 

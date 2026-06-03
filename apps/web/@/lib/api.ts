@@ -44,6 +44,20 @@ export type ApiConfig = {
   d1Binding: string;
 };
 
+export type SanitySettings = {
+  projectId: string;
+  dataset: string;
+  apiVersion: string;
+  writeToken: string;
+  hasWriteToken: boolean;
+};
+
+export type SanityConnectionTestResult = {
+  ok: boolean;
+  categoryCount: number;
+  sample: ApiCategory[];
+};
+
 export type AiAssistMode = "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only";
 
 export type AiAssistRequest = {
@@ -262,6 +276,17 @@ export const notesApi = {
   generateOg: (id: string) =>
     request<ApiNote>(`/api/notes/${id}/generate-og`, {
       method: "POST",
+    }),
+  getSanitySettings: () => request<SanitySettings>("/api/settings/sanity"),
+  saveSanitySettings: (payload: SanitySettings) =>
+    request<SanitySettings>("/api/settings/sanity", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  testSanitySettings: (payload: SanitySettings) =>
+    request<SanityConnectionTestResult>("/api/settings/sanity/test", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
   aiAssist: (payload: AiAssistRequest) =>
     request<AiAssistResponse>("/api/ai/assist", {

@@ -89,6 +89,13 @@ const ogBrandingSettingsSchema = z.object({
   footerText: z.string().default(""),
 });
 
+const sanitySettingsSchema = z.object({
+  projectId: z.string().trim().default(""),
+  dataset: z.string().trim().default("development"),
+  apiVersion: z.string().trim().default("2026-03-29"),
+  writeToken: z.string().trim().default(""),
+});
+
 const scheduleSchema = z.object({
   publishAt: z.string().datetime(),
 });
@@ -145,6 +152,13 @@ const OG_BRANDING_SETTING_KEYS = [
   "og.footerText",
 ] as const;
 
+const SANITY_SETTING_KEYS = [
+  "sanity.projectId",
+  "sanity.dataset",
+  "sanity.apiVersion",
+  "sanity.writeToken",
+] as const;
+
 async function getAiSettings(db: D1Database) {
   const settings = await getSettingsMap(db, [...AI_SETTING_KEYS]);
   return {
@@ -165,6 +179,16 @@ async function getOgBrandingSettings(db: D1Database) {
     logoUrl: settings.get("og.logoUrl") ?? "",
     workflowLabel: settings.get("og.workflowLabel") ?? "",
     footerText: settings.get("og.footerText") ?? "",
+  };
+}
+
+async function getSanitySettings(db: D1Database, env?: Env) {
+  const settings = await getSettingsMap(db, [...SANITY_SETTING_KEYS]);
+  return {
+    projectId: settings.get("sanity.projectId") ?? env?.SANITY_PROJECT_ID ?? "",
+    dataset: settings.get("sanity.dataset") ?? env?.SANITY_DATASET ?? "development",
+    apiVersion: settings.get("sanity.apiVersion") ?? env?.SANITY_API_VERSION ?? "2026-03-29",
+    writeToken: settings.get("sanity.writeToken") ?? env?.SANITY_WRITE_TOKEN ?? "",
   };
 }
 
@@ -213,16 +237,17 @@ app.get("/api/health", (c) => c.json({ ok: true }));
 
 app.get("/api/config", async (c) => {
   const aiSettings = await getAiSettings(c.env.DB);
+  const sanitySettings = await getSanitySettings(c.env.DB, c.env);
 
   return c.json({
     sanityConfigured: Boolean(
-      c.env.SANITY_PROJECT_ID &&
-        c.env.SANITY_DATASET &&
-        c.env.SANITY_API_VERSION &&
-        c.env.SANITY_WRITE_TOKEN
+      sanitySettings.projectId &&
+        sanitySettings.dataset &&
+        sanitySettings.apiVersion &&
+        sanitySettings.writeToken
     ),
-    sanityProjectId: c.env.SANITY_PROJECT_ID ?? null,
-    sanityDataset: c.env.SANITY_DATASET ?? null,
+    sanityProjectId: sanitySettings.projectId || null,
+    sanityDataset: sanitySettings.dataset || null,
     aiConfigured: Boolean(aiSettings.apiBaseUrl && aiSettings.apiKey && aiSettings.model),
     aiBaseUrl: aiSettings.apiBaseUrl || null,
     aiModel: aiSettings.model || null,
@@ -230,6 +255,73 @@ app.get("/api/config", async (c) => {
     aiBatchMaxItemsPerRun: 3,
     d1Binding: "DB",
   });
+});
+
+app.get("/api/settings/sanity", async (c) => {
+  const settings = await getSanitySettings(c.env.DB, c.env);
+  return c.json({
+    projectId: settings.projectId,
+    dataset: settings.dataset,
+    apiVersion: settings.apiVersion,
+    writeToken: settings.writeToken ? "********" : "",
+    hasWriteToken: Boolean(settings.writeToken),
+  });
+});
+
+app.put("/api/settings/sanity", async (c) => {
+  const payload = sanitySettingsSchema.parse(await c.req.json());
+  const existing = await getSanitySettings(c.env.DB, c.env);
+
+  await setSettings(c.env.DB, {
+    "sanity.projectId": payload.projectId,
+    "sanity.dataset": payload.dataset,
+    "sanity.apiVersion": payload.apiVersion,
+    "sanity.writeToken": payload.writeToken === "********" ? existing.writeToken : payload.writeToken,
+  });
+
+  const saved = await getSanitySettings(c.env.DB, c.env);
+  return c.json({
+    projectId: saved.projectId,
+    dataset: saved.dataset,
+    apiVersion: saved.apiVersion,
+    writeToken: saved.writeToken ? "********" : "",
+    hasWriteToken: Boolean(saved.writeToken),
+  });
+});
+
+app.post("/api/settings/sanity/test", async (c) => {
+  const payload = sanitySettingsSchema.parse(await c.req.json());
+  const existing = await getSanitySettings(c.env.DB, c.env);
+  const settings = {
+    projectId: payload.projectId,
+    dataset: payload.dataset,
+    apiVersion: payload.apiVersion,
+    writeToken: payload.writeToken === "********" ? existing.writeToken : payload.writeToken,
+  };
+
+  if (!settings.projectId || !settings.dataset || !settings.apiVersion || !settings.writeToken) {
+    return c.json({ message: "Sanity settings are incomplete" }, 400);
+  }
+
+  try {
+    const items = await fetchSanityCategories({
+      projectId: settings.projectId,
+      dataset: settings.dataset,
+      apiVersion: settings.apiVersion,
+      token: settings.writeToken,
+    });
+
+    return c.json({
+      ok: true,
+      categoryCount: items.length,
+      sample: items.slice(0, 5),
+    });
+  } catch (error) {
+    return c.json(
+      { message: error instanceof Error ? error.message : "Sanity connectivity test failed" },
+      500
+    );
+  }
 });
 
 app.get("/api/settings/ai", async (c) => {
@@ -428,17 +520,19 @@ app.get("/api/notes", async (c) => {
 });
 
 app.get("/api/sanity/categories", async (c) => {
-  if (!c.env.SANITY_PROJECT_ID || !c.env.SANITY_DATASET) {
+  const sanitySettings = await getSanitySettings(c.env.DB, c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset) {
     return c.json({ items: [] satisfies SanityCategory[] });
   }
 
   try {
     return c.json({
       items: await fetchSanityCategories({
-        projectId: c.env.SANITY_PROJECT_ID,
-        dataset: c.env.SANITY_DATASET,
-        apiVersion: c.env.SANITY_API_VERSION || "2026-03-23",
-        token: c.env.SANITY_WRITE_TOKEN,
+        projectId: sanitySettings.projectId,
+        dataset: sanitySettings.dataset,
+        apiVersion: sanitySettings.apiVersion || "2026-03-29",
+        token: sanitySettings.writeToken || undefined,
       }),
     });
   } catch (error) {
@@ -450,33 +544,31 @@ app.get("/api/sanity/categories", async (c) => {
 });
 
 app.get("/api/sanity/status", async (c) => {
-  const configured = Boolean(
-    c.env.SANITY_PROJECT_ID &&
-      c.env.SANITY_DATASET &&
-      c.env.SANITY_API_VERSION &&
-      c.env.SANITY_WRITE_TOKEN
-  );
+  const settings = await getSanitySettings(c.env.DB, c.env);
+  const configured = Boolean(settings.projectId && settings.dataset && settings.apiVersion && settings.writeToken);
 
   return c.json({
     configured,
-    projectId: c.env.SANITY_PROJECT_ID ?? null,
-    dataset: c.env.SANITY_DATASET ?? null,
-    apiVersion: c.env.SANITY_API_VERSION ?? null,
-    hasWriteToken: Boolean(c.env.SANITY_WRITE_TOKEN),
+    projectId: settings.projectId || null,
+    dataset: settings.dataset || null,
+    apiVersion: settings.apiVersion || null,
+    hasWriteToken: Boolean(settings.writeToken),
   });
 });
 
 app.post("/api/sanity/test", async (c) => {
-  if (!c.env.SANITY_PROJECT_ID || !c.env.SANITY_DATASET || !c.env.SANITY_WRITE_TOKEN) {
+  const settings = await getSanitySettings(c.env.DB, c.env);
+
+  if (!settings.projectId || !settings.dataset || !settings.writeToken) {
     return c.json({ message: "Sanity env is not configured" }, 400);
   }
 
   try {
     const items = await fetchSanityCategories({
-      projectId: c.env.SANITY_PROJECT_ID,
-      dataset: c.env.SANITY_DATASET,
-      apiVersion: c.env.SANITY_API_VERSION || "2026-03-23",
-      token: c.env.SANITY_WRITE_TOKEN,
+      projectId: settings.projectId,
+      dataset: settings.dataset,
+      apiVersion: settings.apiVersion || "2026-03-29",
+      token: settings.writeToken,
     });
 
     return c.json({
@@ -622,13 +714,15 @@ app.post("/api/notes/:id/generate-og", async (c) => {
     return c.json({ message: "Note not found" }, 404);
   }
 
-  if (!c.env.SANITY_PROJECT_ID || !c.env.SANITY_DATASET || !c.env.SANITY_WRITE_TOKEN) {
+  const sanitySettings = await getSanitySettings(c.env.DB, c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
     return c.json({ message: "Sanity env is not configured" }, 400);
   }
 
   const ogTitle = note.og_title || note.seo_title || note.title;
   const ogExcerpt = note.og_description || note.seo_description || note.excerpt;
-  const apiVersion = c.env.SANITY_API_VERSION || "2026-03-23";
+  const apiVersion = sanitySettings.apiVersion || "2026-03-29";
 
   try {
     const branding = await resolveOgBranding(c.env.DB);
@@ -636,10 +730,10 @@ app.post("/api/notes/:id/generate-og", async (c) => {
       title: ogTitle,
       excerpt: ogExcerpt,
       branding,
-      projectId: c.env.SANITY_PROJECT_ID,
-      dataset: c.env.SANITY_DATASET,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
       apiVersion,
-      token: c.env.SANITY_WRITE_TOKEN,
+      token: sanitySettings.writeToken,
     });
 
     const now = new Date().toISOString();
@@ -815,12 +909,14 @@ async function publishNoteById(env: Env, noteId: string) {
     return { ok: false as const, message: "Note not found" };
   }
 
-  if (!env.SANITY_PROJECT_ID || !env.SANITY_DATASET || !env.SANITY_WRITE_TOKEN) {
-    return { ok: false as const, message: "Sanity env is not configured" };
+  const sanitySettings = await getSanitySettings(env.DB, env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return { ok: false as const, message: "Sanity settings are not configured" };
   }
 
   const categoryIds = await getNoteCategoryIds(env.DB, note.id);
-  const apiVersion = env.SANITY_API_VERSION || "2026-03-23";
+  const apiVersion = sanitySettings.apiVersion || "2026-03-29";
   try {
     if (!note.og_image_asset_id) {
       const ogTitle = note.og_title || note.seo_title || note.title;
@@ -830,10 +926,10 @@ async function publishNoteById(env: Env, noteId: string) {
         title: ogTitle,
         excerpt: ogExcerpt,
         branding,
-        projectId: env.SANITY_PROJECT_ID!,
-        dataset: env.SANITY_DATASET!,
+        projectId: sanitySettings.projectId,
+        dataset: sanitySettings.dataset,
         apiVersion,
-        token: env.SANITY_WRITE_TOKEN!,
+        token: sanitySettings.writeToken,
       });
 
       const now = new Date().toISOString();
@@ -854,10 +950,10 @@ async function publishNoteById(env: Env, noteId: string) {
       note,
       categoryIds,
       ogImageAssetId: note.og_image_asset_id,
-      projectId: env.SANITY_PROJECT_ID!,
-      dataset: env.SANITY_DATASET!,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
       apiVersion,
-      token: env.SANITY_WRITE_TOKEN!,
+      token: sanitySettings.writeToken,
     });
 
     const now = new Date().toISOString();
