@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "cms-sanity-vite",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+      "database_id": "9dae5491-e9c3-4fa1-856d-cd534b802ea6"
     }
   ]
 }
