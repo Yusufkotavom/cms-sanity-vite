@@ -446,7 +446,7 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
   }
 
   return (
-    <section className="grid gap-6">
+    <section className="grid min-w-0 gap-6">
       <AiBatchOverviewCard
         config={config}
         processLimitInput={processLimitInput}
@@ -458,13 +458,19 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
         openCreateView={openCreateView}
       />
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "runs" | "templates")} className="grid gap-6">
-        <TabsList>
-          <TabsTrigger value="runs">Runs</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
-        </TabsList>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as "runs" | "templates")}
+        className="grid min-w-0 gap-6"
+      >
+        <div className="min-w-0 overflow-x-auto pb-1">
+          <TabsList className="w-max min-w-max">
+            <TabsTrigger value="runs">Runs</TabsTrigger>
+            <TabsTrigger value="templates">Templates</TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="runs">
+        <TabsContent value="runs" className="min-w-0">
           {runsView === "new" ? (
             <AiBatchCreateView
               batchName={batchName}

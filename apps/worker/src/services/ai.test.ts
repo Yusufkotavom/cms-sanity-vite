@@ -83,4 +83,52 @@ describe("ai service", () => {
       )
     ).rejects.toThrow("AI request failed (502): upstream gateway timeout");
   });
+
+  it("normalizes notes arrays from provider responses", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  outlineMd: "# Test",
+                  notes: ["point satu", "point dua"],
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response);
+
+    await expect(
+      requestAiSuggestion(
+        {
+          mode: "outline",
+          note: {
+            title: "Test",
+            slug: "test",
+            excerpt: "",
+            seoTitle: "",
+            seoDescription: "",
+            seoKeywords: "",
+            ogTitle: "",
+            ogDescription: "",
+            outlineMd: "",
+            contentMd: "",
+          },
+        },
+        {
+          apiBaseUrl: "https://provider.example/v1",
+          apiKey: "secret",
+          model: "model-1",
+        },
+        fetchMock
+      )
+    ).resolves.toMatchObject({
+      outlineMd: "# Test",
+      notes: "point satu\npoint dua",
+    });
+  });
 });

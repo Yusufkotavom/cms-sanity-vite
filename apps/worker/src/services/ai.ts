@@ -8,6 +8,14 @@ const aiKeywordSchema = z
       : value
   );
 
+const aiNotesSchema = z
+  .union([z.string(), z.array(z.string())])
+  .transform((value) =>
+    Array.isArray(value)
+      ? value.map((item) => item.trim()).filter(Boolean).join("\n")
+      : value
+  );
+
 const aiNoteSchema = z.object({
   title: z.string().default(""),
   slug: z.string().default(""),
@@ -39,7 +47,7 @@ const aiSuggestionSchema = z.object({
   ogTitle: z.string().optional(),
   ogDescription: z.string().optional(),
   contentMd: z.string().optional(),
-  notes: z.string().optional(),
+  notes: aiNotesSchema.optional(),
 });
 
 export type AiAssistRequest = z.infer<typeof aiAssistRequestSchema>;
