@@ -98,9 +98,18 @@ const noteSchema = z.object({
 });
 
 const aiSettingsSchema = z.object({
-  apiBaseUrl: z.string().trim().default(""),
-  apiKey: z.string().trim().default(""),
-  model: z.string().trim().default(""),
+  models: z.array(
+    z.object({
+      id: z.string().trim().min(1),
+      name: z.string().trim().min(1),
+      providerPreset: z.string().trim().default("custom"),
+      apiBaseUrl: z.string().trim().default(""),
+      apiKey: z.string().trim().default(""),
+      hasApiKey: z.boolean().default(false),
+      model: z.string().trim().default(""),
+    })
+  ).default([]),
+  defaultModelId: z.string().trim().default(""),
   systemPrompt: z.string().default(""),
   metadataPrompt: z.string().default(""),
   draftPrompt: z.string().default(""),
@@ -159,7 +168,7 @@ const aiBatchSchema = z.object({
 });
 
 const aiBatchProcessSchema = z.object({
-  limit: z.number().int().min(1).max(5).optional(),
+  limit: z.number().int().min(1).max(10).optional(),
 });
 
 const aiBatchUpdateSchema = z.object({
@@ -210,6 +219,8 @@ export interface Env {
 }
 
 const AI_SETTING_KEYS = [
+  "ai.models",
+  "ai.defaultModelId",
   "ai.apiBaseUrl",
   "ai.apiKey",
   "ai.model",
@@ -219,6 +230,128 @@ const AI_SETTING_KEYS = [
   "ai.outlinePrompt",
   "ai.outlineToPostPrompt",
 ] as const;
+
+type AiModelSettings = {
+  id: string;
+  name: string;
+  providerPreset: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  model: string;
+};
+
+type AiWorkspaceSettings = {
+  models: AiModelSettings[];
+  defaultModelId: string;
+  systemPrompt: string;
+  metadataPrompt: string;
+  draftPrompt: string;
+  outlinePrompt: string;
+  outlineToPostPrompt: string;
+};
+
+function createLegacyAiModel(settings: Map<string, string>) {
+  const apiBaseUrl = settings.get("ai.apiBaseUrl") ?? "";
+  const apiKey = settings.get("ai.apiKey") ?? "";
+  const model = settings.get("ai.model") ?? "";
+
+  if (!apiBaseUrl && !apiKey && !model) {
+    return null;
+  }
+
+  return {
+    id: "default-model",
+    name: "Default Model",
+    providerPreset: "custom",
+    apiBaseUrl,
+    apiKey,
+    model,
+  } satisfies AiModelSettings;
+}
+
+function normalizeAiWorkspaceSettings(settings: Map<string, string>): AiWorkspaceSettings {
+  const modelsValue = settings.get("ai.models") ?? "";
+  let parsedModels: AiModelSettings[] = [];
+
+  if (modelsValue) {
+    try {
+      parsedModels = z
+        .array(
+          z.object({
+            id: z.string().trim().min(1),
+            name: z.string().trim().min(1),
+            providerPreset: z.string().trim().default("custom"),
+            apiBaseUrl: z.string().trim().default(""),
+            apiKey: z.string().trim().default(""),
+            model: z.string().trim().default(""),
+          })
+        )
+        .parse(JSON.parse(modelsValue));
+    } catch {
+      parsedModels = [];
+    }
+  }
+
+  if (parsedModels.length === 0) {
+    const legacyModel = createLegacyAiModel(settings);
+    if (legacyModel) {
+      parsedModels = [legacyModel];
+    }
+  }
+
+  const requestedDefaultModelId = settings.get("ai.defaultModelId") ?? "";
+  const defaultModelId = parsedModels.some((model) => model.id === requestedDefaultModelId)
+    ? requestedDefaultModelId
+    : (parsedModels[0]?.id ?? "");
+
+  return {
+    models: parsedModels,
+    defaultModelId,
+    systemPrompt: settings.get("ai.systemPrompt") ?? "",
+    metadataPrompt: settings.get("ai.metadataPrompt") ?? "",
+    draftPrompt: settings.get("ai.draftPrompt") ?? "",
+    outlinePrompt: settings.get("ai.outlinePrompt") ?? "",
+    outlineToPostPrompt: settings.get("ai.outlineToPostPrompt") ?? "",
+  };
+}
+
+function resolveDefaultAiModel(settings: AiWorkspaceSettings) {
+  return settings.models.find((model) => model.id === settings.defaultModelId) ?? settings.models[0] ?? null;
+}
+
+function toAiConfig(settings: AiWorkspaceSettings) {
+  const model = resolveDefaultAiModel(settings);
+  return {
+    apiBaseUrl: model?.apiBaseUrl ?? "",
+    apiKey: model?.apiKey ?? "",
+    model: model?.model ?? "",
+    systemPrompt: settings.systemPrompt,
+    metadataPrompt: settings.metadataPrompt,
+    draftPrompt: settings.draftPrompt,
+    outlinePrompt: settings.outlinePrompt,
+    outlineToPostPrompt: settings.outlineToPostPrompt,
+  };
+}
+
+function toAiSettingsResponse(settings: AiWorkspaceSettings) {
+  return {
+    models: settings.models.map((model) => ({
+      id: model.id,
+      name: model.name,
+      providerPreset: model.providerPreset,
+      apiBaseUrl: model.apiBaseUrl,
+      apiKey: model.apiKey ? "********" : "",
+      hasApiKey: Boolean(model.apiKey),
+      model: model.model,
+    })),
+    defaultModelId: settings.defaultModelId,
+    systemPrompt: settings.systemPrompt,
+    metadataPrompt: settings.metadataPrompt,
+    draftPrompt: settings.draftPrompt,
+    outlinePrompt: settings.outlinePrompt,
+    outlineToPostPrompt: settings.outlineToPostPrompt,
+  };
+}
 
 const OG_BRANDING_SETTING_KEYS = [
   "og.logoUrl",
@@ -235,16 +368,7 @@ const SANITY_SETTING_KEYS = [
 
 async function getAiSettings(db: D1Database, workspaceId: string) {
   const settings = await getSettingsMap(db, workspaceId, [...AI_SETTING_KEYS]);
-  return {
-    apiBaseUrl: settings.get("ai.apiBaseUrl") ?? "",
-    apiKey: settings.get("ai.apiKey") ?? "",
-    model: settings.get("ai.model") ?? "",
-    systemPrompt: settings.get("ai.systemPrompt") ?? "",
-    metadataPrompt: settings.get("ai.metadataPrompt") ?? "",
-    draftPrompt: settings.get("ai.draftPrompt") ?? "",
-    outlinePrompt: settings.get("ai.outlinePrompt") ?? "",
-    outlineToPostPrompt: settings.get("ai.outlineToPostPrompt") ?? "",
-  };
+  return normalizeAiWorkspaceSettings(settings);
 }
 
 async function getOgBrandingSettings(db: D1Database, workspaceId: string) {
@@ -668,6 +792,7 @@ app.get("/api/settings/auth", (c) => {
 app.get("/api/config", async (c) => {
   const workspaceId = c.get("workspaceId");
   const aiSettings = await getAiSettings(c.env.DB, workspaceId);
+  const activeAiModel = resolveDefaultAiModel(aiSettings);
   const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
 
   return c.json({
@@ -679,11 +804,11 @@ app.get("/api/config", async (c) => {
     ),
     sanityProjectId: sanitySettings.projectId || null,
     sanityDataset: sanitySettings.dataset || null,
-    aiConfigured: Boolean(aiSettings.apiBaseUrl && aiSettings.apiKey && aiSettings.model),
-    aiBaseUrl: aiSettings.apiBaseUrl || null,
-    aiModel: aiSettings.model || null,
+    aiConfigured: Boolean(activeAiModel?.apiBaseUrl && activeAiModel?.apiKey && activeAiModel?.model),
+    aiBaseUrl: activeAiModel?.apiBaseUrl || null,
+    aiModel: activeAiModel?.model || null,
     cron: "*/15 * * * *",
-    aiBatchMaxItemsPerRun: 3,
+    aiBatchMaxItemsPerRun: 10,
     d1Binding: "DB",
   });
 });
@@ -743,22 +868,35 @@ app.post("/api/settings/sanity/test", async (c) => {
 
 app.get("/api/settings/ai", async (c) => {
   const settings = await getAiSettings(c.env.DB, c.get("workspaceId"));
-  return c.json({
-    ...settings,
-    apiKey: settings.apiKey ? "********" : "",
-    hasApiKey: Boolean(settings.apiKey),
-  });
+  return c.json(toAiSettingsResponse(settings));
 });
 
 app.put("/api/settings/ai", async (c) => {
   const workspaceId = c.get("workspaceId");
   const payload = aiSettingsSchema.parse(await c.req.json());
   const existing = await getAiSettings(c.env.DB, workspaceId);
+  const normalizedModels = payload.models.map((model) => {
+    const existingModel = existing.models.find((entry) => entry.id === model.id);
+    return {
+      id: model.id,
+      name: model.name,
+      providerPreset: model.providerPreset,
+      apiBaseUrl: model.apiBaseUrl,
+      apiKey: model.apiKey === "********" ? (existingModel?.apiKey ?? "") : model.apiKey,
+      model: model.model,
+    } satisfies AiModelSettings;
+  });
+  const defaultModelId = normalizedModels.some((model) => model.id === payload.defaultModelId)
+    ? payload.defaultModelId
+    : (normalizedModels[0]?.id ?? "");
+  const activeModel = normalizedModels.find((model) => model.id === defaultModelId) ?? normalizedModels[0] ?? null;
 
   await setSettings(c.env.DB, workspaceId, {
-    "ai.apiBaseUrl": payload.apiBaseUrl,
-    "ai.apiKey": payload.apiKey === "********" ? existing.apiKey : payload.apiKey,
-    "ai.model": payload.model,
+    "ai.models": JSON.stringify(normalizedModels),
+    "ai.defaultModelId": defaultModelId,
+    "ai.apiBaseUrl": activeModel?.apiBaseUrl ?? "",
+    "ai.apiKey": activeModel?.apiKey ?? "",
+    "ai.model": activeModel?.model ?? "",
     "ai.systemPrompt": payload.systemPrompt,
     "ai.metadataPrompt": payload.metadataPrompt,
     "ai.draftPrompt": payload.draftPrompt,
@@ -767,11 +905,7 @@ app.put("/api/settings/ai", async (c) => {
   });
 
   const saved = await getAiSettings(c.env.DB, workspaceId);
-  return c.json({
-    ...saved,
-    apiKey: saved.apiKey ? "********" : "",
-    hasApiKey: Boolean(saved.apiKey),
-  });
+  return c.json(toAiSettingsResponse(saved));
 });
 
 app.get("/api/settings/og-branding", async (c) => {
@@ -932,12 +1066,13 @@ app.post("/api/ai/batches", async (c) => {
 app.post("/api/ai/batches/process", async (c) => {
   const workspaceId = c.get("workspaceId");
   const aiSettings = await getAiSettings(c.env.DB, workspaceId);
-  if (!aiSettings.apiBaseUrl || !aiSettings.apiKey || !aiSettings.model) {
+  const aiConfig = toAiConfig(aiSettings);
+  if (!aiConfig.apiBaseUrl || !aiConfig.apiKey || !aiConfig.model) {
     return c.json({ message: "AI env is not configured" }, 400);
   }
 
   const payload = aiBatchProcessSchema.parse((await c.req.json().catch(() => ({}))) as unknown);
-  const result = await processAiBatchWork(c.env, workspaceId, aiSettings, payload.limit ?? 2);
+  const result = await processAiBatchWork(c.env, workspaceId, aiConfig, payload.limit ?? 2);
   return c.json(result);
 });
 
@@ -1381,20 +1516,21 @@ app.post("/api/sanity/publish", async (c) => {
 
 app.post("/api/ai/assist", async (c) => {
   const aiSettings = await getAiSettings(c.env.DB, c.get("workspaceId"));
+  const aiConfig = toAiConfig(aiSettings);
 
-  if (!aiSettings.apiBaseUrl || !aiSettings.apiKey || !aiSettings.model) {
+  if (!aiConfig.apiBaseUrl || !aiConfig.apiKey || !aiConfig.model) {
     return c.json({ message: "AI env is not configured" }, 400);
   }
 
   const payload = aiAssistRequestSchema.parse(await c.req.json());
 
   try {
-    const suggestion = await requestAiSuggestion(payload, aiSettings);
+    const suggestion = await requestAiSuggestion(payload, aiConfig);
 
     return c.json({
       suggestion,
-      provider: aiSettings.apiBaseUrl,
-      model: aiSettings.model,
+      provider: aiConfig.apiBaseUrl,
+      model: aiConfig.model,
     });
   } catch (error) {
     return c.json(
@@ -1666,8 +1802,9 @@ export default {
     const workspaces = await listWorkspaces(env.DB);
     for (const workspace of workspaces) {
       const aiSettings = await getAiSettings(env.DB, workspace.id);
-      if (aiSettings.apiBaseUrl && aiSettings.apiKey && aiSettings.model) {
-        await processAiBatchWork(env, workspace.id, aiSettings, 3);
+      const aiConfig = toAiConfig(aiSettings);
+      if (aiConfig.apiBaseUrl && aiConfig.apiKey && aiConfig.model) {
+        await processAiBatchWork(env, workspace.id, aiConfig, 10);
       }
     }
   },

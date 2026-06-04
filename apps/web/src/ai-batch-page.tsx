@@ -470,15 +470,20 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
                 Batch generator aman untuk free tier. Worker hanya memproses sedikit item per run.
               </CardDescription>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Input
-                type="number"
-                min={1}
-                max={config?.aiBatchMaxItemsPerRun ?? 3}
-                value={processLimitInput}
-                onChange={(event) => setProcessLimitInput(event.target.value)}
-                className="w-24"
-              />
+              <div className="flex flex-wrap gap-2">
+                <div className="grid gap-1">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={config?.aiBatchMaxItemsPerRun ?? 10}
+                    value={processLimitInput}
+                    onChange={(event) => setProcessLimitInput(event.target.value)}
+                    className="w-24"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Manual process limit. Maksimal {config?.aiBatchMaxItemsPerRun ?? 10} item per klik.
+                  </span>
+                </div>
               <Button variant="outline" onClick={() => void loadAll(selectedBatch?.id)} disabled={isLoading}>
                 <RefreshCcwIcon data-icon="inline-start" />
                 Refresh
@@ -496,7 +501,7 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3 text-sm text-muted-foreground">
           <Badge variant="outline">Cron: {config?.cron ?? "*/15 * * * *"}</Badge>
-          <Badge variant="outline">Max/process run: {config?.aiBatchMaxItemsPerRun ?? 3}</Badge>
+          <Badge variant="outline">Max/process run: {config?.aiBatchMaxItemsPerRun ?? 10}</Badge>
           <Badge variant="outline">AI: {config?.aiConfigured ? config.aiModel : "Not configured"}</Badge>
         </CardContent>
       </Card>

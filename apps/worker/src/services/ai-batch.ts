@@ -25,7 +25,7 @@ import {
   updateNoteDraft,
 } from "../db/repositories/notes";
 
-const MAX_ITEMS_PER_INVOCATION = 3;
+const MAX_ITEMS_PER_INVOCATION = 10;
 
 type WorkerEnv = {
   DB: D1Database;

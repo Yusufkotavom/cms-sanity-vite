@@ -97,10 +97,16 @@ export type AiAssistResponse = {
 };
 
 export type AiSettings = {
-  apiBaseUrl: string;
-  apiKey: string;
-  hasApiKey: boolean;
-  model: string;
+  models: Array<{
+    id: string;
+    name: string;
+    providerPreset: string;
+    apiBaseUrl: string;
+    apiKey: string;
+    hasApiKey: boolean;
+    model: string;
+  }>;
+  defaultModelId: string;
   systemPrompt: string;
   metadataPrompt: string;
   draftPrompt: string;
