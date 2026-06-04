@@ -104,10 +104,10 @@ describe("ai settings service", () => {
   it("fills empty prompt fields with default ai prompts", () => {
     const settings = normalizeAiWorkspaceSettings(new Map());
 
-    expect(settings.systemPrompt).toContain("editor senior konten berbahasa Indonesia");
-    expect(settings.metadataPrompt).toContain("metadata SEO berbahasa Indonesia");
-    expect(settings.draftPrompt).toContain("draft artikel Indonesia");
-    expect(settings.outlinePrompt).toContain("outline artikel SEO");
-    expect(settings.outlineToPostPrompt).toContain("artikel lengkap berbahasa Indonesia");
+    expect(settings.systemPrompt).toContain("editor senior B2B");
+    expect(settings.metadataPrompt).toContain("audiens B2B");
+    expect(settings.draftPrompt).toContain("content lead B2B");
+    expect(settings.outlinePrompt).toContain("outline artikel SEO B2B");
+    expect(settings.outlineToPostPrompt).toContain("artikel lengkap B2B");
   });
 });
