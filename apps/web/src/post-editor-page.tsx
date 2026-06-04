@@ -132,10 +132,8 @@ export function PostEditorPage({
         <CardHeader>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-col gap-1">
-              <CardTitle>Markdown Editor</CardTitle>
-              <CardDescription>
-                Halaman editor terpisah untuk create atau edit note.
-              </CardDescription>
+              <CardTitle>Post Editor</CardTitle>
+              <CardDescription>Tulis, rapikan, dan siapkan post Anda di satu tempat.</CardDescription>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={navigateBack}>
@@ -149,9 +147,7 @@ export function PostEditorPage({
         </CardHeader>
         <CardHeader>
           <CardTitle className="sr-only">Editor Content</CardTitle>
-          <CardDescription>
-            Save draft ke D1, schedule via Worker cron, lalu publish ke Sanity `post`.
-          </CardDescription>
+          <CardDescription>Atur jadwal, isi konten, SEO, dan gambar preview dengan alur yang ringkas.</CardDescription>
         </CardHeader>
 
         <CardContent className="border-y border-border bg-muted/20 py-4">
@@ -170,7 +166,7 @@ export function PostEditorPage({
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium" htmlFor="schedule-time">
-                  Jam publish (WIB / UTC+7)
+                  Jam publish
                 </label>
                 <div className="relative">
                   <Clock3Icon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -298,12 +294,22 @@ export function PostEditorPage({
             value={editorSectionTab}
             onValueChange={(value) => setEditorSectionTab(value as typeof editorSectionTab)}
           >
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="seo-og">SEO & OG</TabsTrigger>
-              <TabsTrigger value="outline">Outline</TabsTrigger>
-              <TabsTrigger value="content">Content</TabsTrigger>
-            </TabsList>
+            <div className="-mx-4 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+              <TabsList className="w-max min-w-full flex-nowrap md:grid md:w-full md:grid-cols-4">
+                <TabsTrigger className="shrink-0 md:flex-1" value="overview">
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger className="shrink-0 md:flex-1" value="seo-og">
+                  SEO & OG
+                </TabsTrigger>
+                <TabsTrigger className="shrink-0 md:flex-1" value="outline">
+                  Outline
+                </TabsTrigger>
+                <TabsTrigger className="shrink-0 md:flex-1" value="content">
+                  Content
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="overview" className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -344,24 +350,23 @@ export function PostEditorPage({
                 <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                   <div className="grid gap-2">
                     <span>Status: {draft.status}</span>
-                    <span>Sanity: {config?.sanityConfigured ? "Siap publish" : "Belum dikonfigurasi"}</span>
-                    <span>Categories: {draft.categoryIds.length}</span>
-                    <span>Schedule: {scheduleAt ? `${getScheduleDate(scheduleAt)} ${getScheduleTime(scheduleAt)} WIB` : "Belum diatur"}</span>
-                    <span>Updated: {formatRelativeDate(draft.updatedAt)}</span>
-                    <span>Sanity ID: {draft.sanityDocumentId ?? "Belum publish"}</span>
+                    <span>Publish ready: {config?.sanityConfigured ? "Ya" : "Belum"}</span>
+                    <span>Kategori: {draft.categoryIds.length}</span>
+                    <span>Jadwal: {scheduleAt ? `${getScheduleDate(scheduleAt)} ${getScheduleTime(scheduleAt)}` : "Belum diatur"}</span>
+                    <span>Terakhir diubah: {formatRelativeDate(draft.updatedAt)}</span>
                     {draft.lastError ? <span>Error: {draft.lastError}</span> : null}
                   </div>
                 </div>
 
                 <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                   <div className="grid gap-2">
-                    <span>SEO title: {draft.seoTitle ? "Filled" : "Empty"}</span>
-                    <span>SEO description: {draft.seoDescription ? "Filled" : "Empty"}</span>
-                    <span>SEO keywords: {draft.seoKeywords ? "Filled" : "Empty"}</span>
-                    <span>OG title: {draft.ogTitle ? "Filled" : "Empty"}</span>
-                    <span>OG description: {draft.ogDescription ? "Filled" : "Empty"}</span>
-                    <span>OG image: {draft.ogImageAssetId ? `Attached (${draft.ogImageAssetId.slice(0, 20)}...)` : "Not generated"}</span>
-                    <span>Outline: {draft.outlineMd ? "Ready" : "Empty"}</span>
+                    <span>SEO title: {draft.seoTitle ? "Terisi" : "Kosong"}</span>
+                    <span>SEO description: {draft.seoDescription ? "Terisi" : "Kosong"}</span>
+                    <span>SEO keywords: {draft.seoKeywords ? "Terisi" : "Kosong"}</span>
+                    <span>OG title: {draft.ogTitle ? "Terisi" : "Kosong"}</span>
+                    <span>OG description: {draft.ogDescription ? "Terisi" : "Kosong"}</span>
+                    <span>OG image: {draft.ogImageAssetId ? "Sudah ada" : "Belum ada"}</span>
+                    <span>Outline: {draft.outlineMd ? "Siap" : "Kosong"}</span>
                   </div>
                 </div>
               </div>
@@ -430,9 +435,7 @@ export function PostEditorPage({
                   <div className="flex flex-col gap-1">
                     <span className="text-sm font-medium">OG Image Preview</span>
                     <span className="text-xs text-muted-foreground">
-                      {draft.ogImageAssetId
-                        ? "Image sudah di-generate dan tersimpan di Sanity."
-                        : "Belum ada OG image. Klik Generate OG Image untuk membuat."}
+                      {draft.ogImageAssetId ? "Preview gambar saat ini." : "Buat gambar preview bila diperlukan."}
                     </span>
                   </div>
                   <Button
@@ -493,7 +496,7 @@ export function PostEditorPage({
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium">Categories</span>
                   <span className="text-xs text-muted-foreground">
-                    Pilih kategori Sanity yang relevan. Ini cukup sebagai field tambahan minimum.
+                    Pilih kategori yang paling relevan untuk post ini.
                   </span>
                 </div>
                 <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
@@ -508,15 +511,13 @@ export function PostEditorPage({
                   <DialogContent className="max-w-2xl gap-0 p-0 sm:max-w-2xl">
                     <DialogHeader className="border-b px-6 py-4">
                       <DialogTitle>Pilih Categories</DialogTitle>
-                      <DialogDescription>
-                        Daftar category diambil langsung dari Sanity. Scroll di sini, lalu klik Done.
-                      </DialogDescription>
+                      <DialogDescription>Pilih satu atau beberapa kategori, lalu klik Done.</DialogDescription>
                     </DialogHeader>
 
                     <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
                       {categoryOptions.length === 0 ? (
                         <span className="text-sm text-muted-foreground">
-                          Belum ada kategori yang berhasil dimuat dari Sanity.
+                          Belum ada kategori yang tersedia.
                         </span>
                       ) : (
                         <div className="grid gap-3 md:grid-cols-2">
@@ -561,7 +562,7 @@ export function PostEditorPage({
             <TabsContent value="content" className="space-y-4">
               {!config?.sanityConfigured ? (
                 <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
-                  Publish dan schedule belum bisa jalan ke Sanity karena settings backend belum diisi.
+                  Pengaturan publish belum lengkap.
                 </div>
               ) : null}
 
@@ -569,10 +570,16 @@ export function PostEditorPage({
                 value={contentTab}
                 onValueChange={(value) => setContentTab(value as typeof contentTab)}
               >
-                <TabsList>
-                  <TabsTrigger value="editor">Editor</TabsTrigger>
-                  <TabsTrigger value="preview">Preview</TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto pb-1">
+                  <TabsList className="w-max min-w-full flex-nowrap sm:w-fit">
+                    <TabsTrigger className="shrink-0" value="editor">
+                      Editor
+                    </TabsTrigger>
+                    <TabsTrigger className="shrink-0" value="preview">
+                      Preview
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
                 <TabsContent value="editor">
                   <Textarea
                     value={draft.contentMd}

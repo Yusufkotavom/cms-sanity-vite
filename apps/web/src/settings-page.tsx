@@ -11,14 +11,28 @@ export function SettingsPage(props: SettingsPageProps) {
   return (
     <section className="grid gap-6">
       <Tabs defaultValue="workspace" className="grid gap-6">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-          <TabsTrigger value="workspace">Workspace</TabsTrigger>
-          <TabsTrigger value="sanity">Sanity</TabsTrigger>
-          <TabsTrigger value="ai">AI</TabsTrigger>
-          <TabsTrigger value="branding">Branding</TabsTrigger>
-          <TabsTrigger value="auth">Auth</TabsTrigger>
-          <TabsTrigger value="frontend">Frontend</TabsTrigger>
-        </TabsList>
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+          <TabsList className="w-max min-w-full flex-nowrap md:grid md:w-full md:grid-cols-3 xl:grid-cols-6">
+            <TabsTrigger className="shrink-0 md:flex-1" value="workspace">
+              Workspace
+            </TabsTrigger>
+            <TabsTrigger className="shrink-0 md:flex-1" value="sanity">
+              Sanity
+            </TabsTrigger>
+            <TabsTrigger className="shrink-0 md:flex-1" value="ai">
+              AI
+            </TabsTrigger>
+            <TabsTrigger className="shrink-0 md:flex-1" value="branding">
+              Branding
+            </TabsTrigger>
+            <TabsTrigger className="shrink-0 md:flex-1" value="auth">
+              Auth
+            </TabsTrigger>
+            <TabsTrigger className="shrink-0 md:flex-1" value="frontend">
+              Frontend
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <WorkspaceSettingsTab {...props} />
         <SanitySettingsTab {...props} />
