@@ -29,6 +29,23 @@ export default defineConfig({
             return "markdown-preview";
           }
 
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("scheduler")
+          ) {
+            return "react-vendor";
+          }
+
+          if (
+            id.includes("@base-ui/react") ||
+            id.includes("next-themes") ||
+            id.includes("sonner") ||
+            id.includes("vaul")
+          ) {
+            return "ui-vendor";
+          }
+
           if (id.includes("lucide-react")) {
             return "icons";
           }

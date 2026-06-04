@@ -36,8 +36,6 @@ import {
   workspacesApi,
 } from "@/lib/api";
 import { AppSidebar } from "@/components/app-sidebar";
-import { PostEditorPage } from "./post-editor-page";
-import { SettingsPage } from "./settings-page";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +61,16 @@ import {
 const AiBatchPage = lazy(async () => {
   const module = await import("./ai-batch-page");
   return { default: module.AiBatchPage };
+});
+
+const PostEditorPage = lazy(async () => {
+  const module = await import("./post-editor-page");
+  return { default: module.PostEditorPage };
+});
+
+const SettingsPage = lazy(async () => {
+  const module = await import("./settings-page");
+  return { default: module.SettingsPage };
 });
 
 type Note = ApiNote;
@@ -228,6 +236,14 @@ function buildWorkspaceHash(workspaceSlug: string, route: AppRoute, noteId?: str
   }
 
   return base;
+}
+
+function RouteFallback({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border bg-card/60 text-sm text-muted-foreground">
+      {label}
+    </div>
+  );
 }
 
 function formatRelativeDate(value: string | null) {
@@ -1683,40 +1699,42 @@ function App() {
 
     return (
       <section className="grid gap-6">
-        <PostEditorPage
-          draft={draft}
-          config={config}
-          scheduleAt={scheduleAt}
-          getScheduleDate={getScheduleDate}
-          getScheduleTime={getScheduleTime}
-          updateScheduleDate={updateScheduleDate}
-          updateScheduleTime={updateScheduleTime}
-          runAiAssist={runAiAssist}
-          generateOgImage={generateOgImage}
-          saveDraft={saveDraft}
-          scheduleDraft={scheduleDraft}
-          publishDraft={publishDraft}
-          retryPublishDraft={retryPublishDraft}
-          updateTitle={updateTitle}
-          updateDraft={updateDraft}
-          formatRelativeDate={formatRelativeDate}
-          categoryOptions={categoryOptions}
-          isCategoryDialogOpen={isCategoryDialogOpen}
-          setIsCategoryDialogOpen={setIsCategoryDialogOpen}
-          getSelectedCategoryLabel={getSelectedCategoryLabel}
-          toggleCategory={toggleCategory}
-          navigateBack={() => activeWorkspaceSlug && navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts"))}
-          deleteSelectedNote={deleteSelectedNote}
-          isAiRunning={isAiRunning}
-          isGeneratingOg={isGeneratingOg}
-          isSaving={isSaving}
-          isScheduling={isScheduling}
-          isPublishing={isPublishing}
-          editorSectionTab={editorSectionTab}
-          setEditorSectionTab={setEditorSectionTab}
-          contentTab={contentTab}
-          setContentTab={setContentTab}
-        />
+        <Suspense fallback={<RouteFallback label="Loading editor..." />}>
+          <PostEditorPage
+            draft={draft}
+            config={config}
+            scheduleAt={scheduleAt}
+            getScheduleDate={getScheduleDate}
+            getScheduleTime={getScheduleTime}
+            updateScheduleDate={updateScheduleDate}
+            updateScheduleTime={updateScheduleTime}
+            runAiAssist={runAiAssist}
+            generateOgImage={generateOgImage}
+            saveDraft={saveDraft}
+            scheduleDraft={scheduleDraft}
+            publishDraft={publishDraft}
+            retryPublishDraft={retryPublishDraft}
+            updateTitle={updateTitle}
+            updateDraft={updateDraft}
+            formatRelativeDate={formatRelativeDate}
+            categoryOptions={categoryOptions}
+            isCategoryDialogOpen={isCategoryDialogOpen}
+            setIsCategoryDialogOpen={setIsCategoryDialogOpen}
+            getSelectedCategoryLabel={getSelectedCategoryLabel}
+            toggleCategory={toggleCategory}
+            navigateBack={() => activeWorkspaceSlug && navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts"))}
+            deleteSelectedNote={deleteSelectedNote}
+            isAiRunning={isAiRunning}
+            isGeneratingOg={isGeneratingOg}
+            isSaving={isSaving}
+            isScheduling={isScheduling}
+            isPublishing={isPublishing}
+            editorSectionTab={editorSectionTab}
+            setEditorSectionTab={setEditorSectionTab}
+            contentTab={contentTab}
+            setContentTab={setContentTab}
+          />
+        </Suspense>
 
         <Card>
           <CardFooter className="justify-between gap-3">
@@ -1856,54 +1874,56 @@ function App() {
 
   function renderSettingsView() {
     return (
-      <SettingsPage
-        apiBaseUrl={apiBaseUrl}
-        apiBaseUrlInput={apiBaseUrlInput}
-        setApiBaseUrlInput={setApiBaseUrlInput}
-        saveApiBaseOverride={saveApiBaseOverride}
-        resetApiBaseOverride={resetApiBaseOverride}
-        getDefaultApiBaseUrl={getDefaultApiBaseUrl}
-        activeWorkspaceSlug={activeWorkspaceSlug}
-        currentWorkspace={currentWorkspace}
-        workspaces={workspaces}
-        workspaceEditorSlug={workspaceEditorSlug}
-        workspaceForm={workspaceForm}
-        setWorkspaceForm={setWorkspaceForm}
-        workspaceSanitySettings={workspaceSanitySettings}
-        setWorkspaceSanitySettings={setWorkspaceSanitySettings}
-        setWorkspaceSanityTestFingerprint={setWorkspaceSanityTestFingerprint}
-        loadWorkspaceIntoEditor={loadWorkspaceIntoEditor}
-        switchWorkspace={switchWorkspace}
-        testWorkspaceSanityBeforeSave={testWorkspaceSanityBeforeSave}
-        saveWorkspace={saveWorkspace}
-        resetWorkspaceEditor={resetWorkspaceEditor}
-        deleteWorkspace={deleteWorkspace}
-        isTestingWorkspaceSanity={isTestingWorkspaceSanity}
-        isSavingWorkspace={isSavingWorkspace}
-        isDeletingWorkspace={isDeletingWorkspace}
-        isWorkspaceFormComplete={isWorkspaceFormComplete}
-        isWorkspaceSanityComplete={isWorkspaceSanityComplete}
-        hasWorkspaceSanityTestPassed={hasWorkspaceSanityTestPassed}
-        sanitySettings={sanitySettings}
-        setSanitySettings={setSanitySettings}
-        testSanitySettings={testSanitySettings}
-        saveSanitySettings={saveSanitySettings}
-        isTestingSanity={isTestingSanity}
-        isSavingSanity={isSavingSanity}
-        config={config}
-        authConfig={authConfig}
-        authEmail={authEmail}
-        getStoredAuthToken={getStoredAuthToken}
-        copyToken={copyToken}
-        isCopyingToken={isCopyingToken}
-        aiSettings={aiSettings}
-        setAiSettings={setAiSettings}
-        saveAiSettings={saveAiSettings}
-        ogBrandingSettings={ogBrandingSettings}
-        setOgBrandingSettings={setOgBrandingSettings}
-        saveOgBrandingSettings={saveOgBrandingSettings}
-        slugify={slugify}
-      />
+      <Suspense fallback={<RouteFallback label="Loading settings..." />}>
+        <SettingsPage
+          apiBaseUrl={apiBaseUrl}
+          apiBaseUrlInput={apiBaseUrlInput}
+          setApiBaseUrlInput={setApiBaseUrlInput}
+          saveApiBaseOverride={saveApiBaseOverride}
+          resetApiBaseOverride={resetApiBaseOverride}
+          getDefaultApiBaseUrl={getDefaultApiBaseUrl}
+          activeWorkspaceSlug={activeWorkspaceSlug}
+          currentWorkspace={currentWorkspace}
+          workspaces={workspaces}
+          workspaceEditorSlug={workspaceEditorSlug}
+          workspaceForm={workspaceForm}
+          setWorkspaceForm={setWorkspaceForm}
+          workspaceSanitySettings={workspaceSanitySettings}
+          setWorkspaceSanitySettings={setWorkspaceSanitySettings}
+          setWorkspaceSanityTestFingerprint={setWorkspaceSanityTestFingerprint}
+          loadWorkspaceIntoEditor={loadWorkspaceIntoEditor}
+          switchWorkspace={switchWorkspace}
+          testWorkspaceSanityBeforeSave={testWorkspaceSanityBeforeSave}
+          saveWorkspace={saveWorkspace}
+          resetWorkspaceEditor={resetWorkspaceEditor}
+          deleteWorkspace={deleteWorkspace}
+          isTestingWorkspaceSanity={isTestingWorkspaceSanity}
+          isSavingWorkspace={isSavingWorkspace}
+          isDeletingWorkspace={isDeletingWorkspace}
+          isWorkspaceFormComplete={isWorkspaceFormComplete}
+          isWorkspaceSanityComplete={isWorkspaceSanityComplete}
+          hasWorkspaceSanityTestPassed={hasWorkspaceSanityTestPassed}
+          sanitySettings={sanitySettings}
+          setSanitySettings={setSanitySettings}
+          testSanitySettings={testSanitySettings}
+          saveSanitySettings={saveSanitySettings}
+          isTestingSanity={isTestingSanity}
+          isSavingSanity={isSavingSanity}
+          config={config}
+          authConfig={authConfig}
+          authEmail={authEmail}
+          getStoredAuthToken={getStoredAuthToken}
+          copyToken={copyToken}
+          isCopyingToken={isCopyingToken}
+          aiSettings={aiSettings}
+          setAiSettings={setAiSettings}
+          saveAiSettings={saveAiSettings}
+          ogBrandingSettings={ogBrandingSettings}
+          setOgBrandingSettings={setOgBrandingSettings}
+          saveOgBrandingSettings={saveOgBrandingSettings}
+          slugify={slugify}
+        />
+      </Suspense>
     );
   }
 
