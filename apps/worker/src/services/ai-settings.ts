@@ -32,6 +32,24 @@ export type AiWorkspaceSettings = {
   outlineToPostPrompt: string;
 };
 
+export const DEFAULT_AI_PROMPTS = {
+  systemPrompt:
+    "Anda adalah editor senior konten berbahasa Indonesia untuk brand dan website bisnis. Fokus pada artikel SEO yang bermanfaat, akurat, mudah dipahami, dan siap publish. Utamakan prinsip E-E-A-T: pengalaman nyata, keahlian, otoritas, dan kepercayaan. Hindari klaim berlebihan, data fiktif, dan fluff. Tulis dengan sudut pandang marketing yang tetap jujur, membantu pembaca, dan mendorong conversion secara natural.",
+  metadataPrompt:
+    "Buat metadata SEO berbahasa Indonesia yang kuat untuk search intent komersial maupun informasional. Judul harus jelas, meyakinkan, dan relevan dengan keyword utama tanpa clickbait. Meta description harus ringkas, human, dan mendorong klik. SEO keywords cukup natural, tidak stuffing. OG title dan description harus tetap enak dibaca saat dibagikan di social media.",
+  draftPrompt:
+    "Tulis draft artikel Indonesia yang terasa seperti ditulis editor marketing yang paham SEO. Buka dengan hook yang jelas, jawab intent pembaca secepat mungkin, lalu susun isi dengan subheading yang rapi. Sertakan penjelasan konkret, contoh praktis, dan sudut pandang yang menunjukkan pengalaman nyata. Hindari kalimat generik AI, pengulangan, dan isi yang terlalu normatif tanpa value.",
+  outlinePrompt:
+    "Buat outline artikel SEO berbahasa Indonesia yang siap dikembangkan menjadi post berkualitas tinggi. Struktur harus mengikuti intent keyword, mencakup topik inti, FAQ bila relevan, angle E-E-A-T, dan poin yang membantu conversion atau trust building. Pastikan urutan heading logis, tidak tumpang tindih, dan cocok untuk pembaca Indonesia.",
+  outlineToPostPrompt:
+    "Ubah outline menjadi artikel lengkap berbahasa Indonesia yang kuat secara SEO dan marketing. Jaga akurasi, berikan penjelasan bernilai, gunakan gaya yang meyakinkan tetapi tidak berlebihan, dan tunjukkan prinsip E-E-A-T dalam isi. Artikel harus enak dibaca, bisa dipublish langsung, dan tetap fokus pada keyword utama serta kebutuhan pembaca.",
+} as const;
+
+function withDefaultPrompt(value: string | undefined, fallback: string) {
+  const normalized = value?.trim();
+  return normalized || fallback;
+}
+
 function createLegacyAiModel(settings: Map<string, string>) {
   const apiBaseUrl = settings.get("ai.apiBaseUrl") ?? "";
   const apiKey = settings.get("ai.apiKey") ?? "";
@@ -88,11 +106,14 @@ export function normalizeAiWorkspaceSettings(settings: Map<string, string>): AiW
   return {
     models: parsedModels,
     defaultModelId,
-    systemPrompt: settings.get("ai.systemPrompt") ?? "",
-    metadataPrompt: settings.get("ai.metadataPrompt") ?? "",
-    draftPrompt: settings.get("ai.draftPrompt") ?? "",
-    outlinePrompt: settings.get("ai.outlinePrompt") ?? "",
-    outlineToPostPrompt: settings.get("ai.outlineToPostPrompt") ?? "",
+    systemPrompt: withDefaultPrompt(settings.get("ai.systemPrompt"), DEFAULT_AI_PROMPTS.systemPrompt),
+    metadataPrompt: withDefaultPrompt(settings.get("ai.metadataPrompt"), DEFAULT_AI_PROMPTS.metadataPrompt),
+    draftPrompt: withDefaultPrompt(settings.get("ai.draftPrompt"), DEFAULT_AI_PROMPTS.draftPrompt),
+    outlinePrompt: withDefaultPrompt(settings.get("ai.outlinePrompt"), DEFAULT_AI_PROMPTS.outlinePrompt),
+    outlineToPostPrompt: withDefaultPrompt(
+      settings.get("ai.outlineToPostPrompt"),
+      DEFAULT_AI_PROMPTS.outlineToPostPrompt
+    ),
   };
 }
 
