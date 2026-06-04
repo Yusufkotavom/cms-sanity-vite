@@ -89,6 +89,16 @@ function toBatchItemRecord(item: typeof aiBatchItems.$inferSelect): AiBatchItemR
   };
 }
 
+function summarizeLatestBatchFailure(items: AiBatchItemRecord[]) {
+  const failedItems = items.filter((item) => item.status === "failed" && item.last_error);
+  if (failedItems.length === 0) {
+    return null;
+  }
+
+  failedItems.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  return failedItems[0].last_error;
+}
+
 export async function listAiBatches(db: D1Database, workspaceId: string) {
   const drizzleDb = getDb(db);
   const rows = await drizzleDb
@@ -448,7 +458,7 @@ export async function syncAiBatchAggregates(
       completedItems,
       failedItems,
       status,
-      lastError: failedItems > 0 ? "Some items failed" : null,
+      lastError: summarizeLatestBatchFailure(items),
       updatedAt,
     })
     .where(and(eq(aiBatches.workspaceId, workspaceId), eq(aiBatches.id, batchId)));

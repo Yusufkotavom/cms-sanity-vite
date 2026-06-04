@@ -31,6 +31,15 @@ type WorkerEnv = {
   DB: D1Database;
 };
 
+export type AiBatchProcessFailure = {
+  batchId: string;
+  batchName: string;
+  itemId: string;
+  keyword: string;
+  stage: "outline" | "content";
+  message: string;
+};
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -43,6 +52,44 @@ function slugify(value: string) {
 function trimOrFallback(value: string | undefined, fallback: string) {
   const normalized = value?.trim();
   return normalized || fallback;
+}
+
+function truncateErrorMessage(value: string, maxLength = 800) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "Unknown AI batch error";
+  }
+
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
+}
+
+function getBatchItemStage(item: AiBatchItemRecord): AiBatchProcessFailure["stage"] {
+  return item.status === "outline_done" ? "content" : "outline";
+}
+
+function formatBatchItemError(
+  batch: AiBatchRecord,
+  item: AiBatchItemRecord,
+  error: unknown
+) {
+  const stage = getBatchItemStage(item);
+  const rawMessage = error instanceof Error ? error.message : "AI batch item failed";
+  const message = truncateErrorMessage(rawMessage);
+  return {
+    stage,
+    message: `${stage} step failed for "${item.keyword}" in batch "${batch.name}": ${message}`,
+  };
+}
+
+function buildBatchFailureSummary(items: AiBatchItemRecord[]) {
+  const failedItems = items.filter((item) => item.status === "failed" && item.last_error);
+  if (failedItems.length === 0) {
+    return null;
+  }
+
+  failedItems.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  const latest = failedItems[0];
+  return truncateErrorMessage(latest.last_error || `${latest.keyword} failed`);
 }
 
 async function ensureUniqueSlug(db: D1Database, preferredSlug: string, noteId?: string | null) {
@@ -331,7 +378,7 @@ async function refreshBatchStatus(db: D1Database, workspaceId: string, batchId: 
     completedItems,
     failedItems,
     updatedAt: new Date().toISOString(),
-    lastError: failedItems > 0 ? "Some items failed" : null,
+    lastError: buildBatchFailureSummary(items),
   });
 
   return { completedItems, failedItems, status };
@@ -362,6 +409,7 @@ export async function processAiBatchWork(
   const activeBatches = await listActiveAiBatches(env.DB, workspaceId);
   let processed = 0;
   let failed = 0;
+  const failures: AiBatchProcessFailure[] = [];
 
   for (const batch of activeBatches) {
     if (processed >= limit) {
@@ -381,9 +429,18 @@ export async function processAiBatchWork(
       processed += 1;
     } catch (error) {
       failed += 1;
+      const formattedFailure = formatBatchItemError(batch, nextItem, error);
+      failures.push({
+        batchId: batch.id,
+        batchName: batch.name,
+        itemId: nextItem.id,
+        keyword: nextItem.keyword,
+        stage: formattedFailure.stage,
+        message: formattedFailure.message,
+      });
       await markAiBatchItemFailed(env.DB, {
         itemId: nextItem.id,
-        message: error instanceof Error ? error.message : "AI batch item failed",
+        message: formattedFailure.message,
         updatedAt: new Date().toISOString(),
       });
     }
@@ -391,5 +448,5 @@ export async function processAiBatchWork(
     await refreshBatchStatus(env.DB, workspaceId, batch.id);
   }
 
-  return { processed, failed };
+  return { processed, failed, failures };
 }

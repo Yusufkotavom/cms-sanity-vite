@@ -263,7 +263,13 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
         ? Math.max(1, Math.min(config.aiBatchMaxItemsPerRun, requestedLimit))
         : 1;
       const result = await notesApi.processAiBatches(safeLimit);
-      toast.success(`Processed ${result.processed} item, failed ${result.failed}`);
+      if (result.failed > 0) {
+        const firstFailure = result.failures[0];
+        const suffix = firstFailure ? ` First failure: ${firstFailure.message}` : "";
+        toast.error(`Processed ${result.processed} item, failed ${result.failed}.${suffix}`);
+      } else {
+        toast.success(`Processed ${result.processed} item, failed ${result.failed}`);
+      }
       await loadAll(selectedBatch?.id);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to process AI batch");

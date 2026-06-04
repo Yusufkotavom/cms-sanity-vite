@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { testAiConnection } from "./ai";
+import { requestAiSuggestion, testAiConnection } from "./ai";
 
 describe("ai service", () => {
   it("passes when the provider returns a non-empty completion", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        choices: [{ message: { content: "OK" } }],
-      }),
+      text: async () =>
+        JSON.stringify({
+          choices: [{ message: { content: "OK" } }],
+        }),
     } as Response);
 
     await expect(
@@ -31,9 +32,10 @@ describe("ai service", () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
       status: 401,
-      json: async () => ({
-        error: { message: "Invalid API key" },
-      }),
+      text: async () =>
+        JSON.stringify({
+          error: { message: "Invalid API key" },
+        }),
     } as Response);
 
     await expect(
@@ -46,5 +48,39 @@ describe("ai service", () => {
         fetchMock
       )
     ).rejects.toThrow("Invalid API key");
+  });
+
+  it("includes status and raw provider response when ai suggestion fails without json error", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => "upstream gateway timeout",
+    } as Response);
+
+    await expect(
+      requestAiSuggestion(
+        {
+          mode: "outline",
+          note: {
+            title: "Test",
+            slug: "test",
+            excerpt: "",
+            seoTitle: "",
+            seoDescription: "",
+            seoKeywords: "",
+            ogTitle: "",
+            ogDescription: "",
+            outlineMd: "",
+            contentMd: "",
+          },
+        },
+        {
+          apiBaseUrl: "https://provider.example/v1",
+          apiKey: "secret",
+          model: "model-1",
+        },
+        fetchMock
+      )
+    ).rejects.toThrow("AI request failed (502): upstream gateway timeout");
   });
 });

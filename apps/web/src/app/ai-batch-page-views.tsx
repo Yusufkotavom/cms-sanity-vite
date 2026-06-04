@@ -477,7 +477,12 @@ export function AiBatchDetailView({
                   <span>Outline Ready: {selectedBatch.outlineReadyItems}</span>
                   <span>Processing Items: {selectedBatch.processingItems}</span>
                   <span>Updated: {formatDate(selectedBatch.updatedAt)}</span>
-                  {selectedBatch.lastError ? <span>Error: {selectedBatch.lastError}</span> : null}
+                  {selectedBatch.lastError ? (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-destructive">
+                      <p className="font-medium">Last failure</p>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-xs">{selectedBatch.lastError}</p>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
 
@@ -590,6 +595,35 @@ export function AiBatchDetailView({
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
+                {selectedBatch.failedItems > 0 ? (
+                  <div className="grid gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                    <div>
+                      <p className="font-medium text-destructive">Failure Log</p>
+                      <p className="text-xs text-muted-foreground">
+                        Error terbaru per item gagal ditampilkan di sini agar lebih mudah tahu respons provider saat run gagal.
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      {selectedBatch.items
+                        .filter((item) => item.status === "failed" && item.lastError)
+                        .map((item) => (
+                          <div key={item.id} className="rounded-lg border border-destructive/20 bg-background/80 p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium text-foreground">{item.keyword}</span>
+                              <Badge variant="outline">{item.status}</Badge>
+                              <span className="text-xs text-muted-foreground">
+                                Attempt {item.attempts} • {formatDate(item.updatedAt)}
+                              </span>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap break-words text-xs text-destructive">
+                              {item.lastError}
+                            </p>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="overflow-hidden rounded-xl border border-border">
                   <Table>
                     <TableHeader>
@@ -612,6 +646,11 @@ export function AiBatchDetailView({
                             <div className="flex flex-col gap-1">
                               <Badge variant="outline">{item.status}</Badge>
                               <span className="text-xs text-muted-foreground">{describeItemStatus(item.status)}</span>
+                              {item.lastError ? (
+                                <div className="rounded-md border border-destructive/20 bg-destructive/5 p-2 text-xs text-destructive whitespace-pre-wrap break-words">
+                                  {item.lastError}
+                                </div>
+                              ) : null}
                               {item.noteId ? (
                                 <a className="text-xs underline" href={`#/w/${workspaceSlug}/posts/${item.noteId}`}>
                                   Open draft

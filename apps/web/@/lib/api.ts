@@ -248,6 +248,19 @@ export type AiBatchDetail = AiBatchSummary & {
   items: AiBatchItem[];
 };
 
+export type AiBatchProcessResult = {
+  processed: number;
+  failed: number;
+  failures: Array<{
+    batchId: string;
+    batchName: string;
+    itemId: string;
+    keyword: string;
+    stage: "outline" | "content";
+    message: string;
+  }>;
+};
+
 function resolveApiBaseUrl() {
   const overrideBaseUrl = getStoredApiBaseUrlOverride();
   if (overrideBaseUrl) {
@@ -591,7 +604,7 @@ export const notesApi = {
       body: JSON.stringify(payload),
     }),
   processAiBatches: (limit = 2) =>
-    request<{ processed: number; failed: number }>("/api/ai/batches/process", {
+    request<AiBatchProcessResult>("/api/ai/batches/process", {
       method: "POST",
       body: JSON.stringify({ limit }),
     }),

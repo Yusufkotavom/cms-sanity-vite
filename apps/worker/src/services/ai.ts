@@ -62,6 +62,14 @@ export type AiConnectionTestResult = {
   message: string;
 };
 
+type AiResponsePayload = {
+  rawText: string;
+  json: {
+    choices?: Array<{ message?: { content?: string } }>;
+    error?: { message?: string };
+  };
+};
+
 function stripCodeFence(value: string) {
   const trimmed = value.trim();
   const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -165,6 +173,49 @@ function buildUserPrompt(input: AiAssistRequest) {
   );
 }
 
+function truncateProviderMessage(value: string, maxLength = 500) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
+}
+
+async function readAiResponsePayload(response: Response): Promise<AiResponsePayload> {
+  const rawText = await response.text().catch(() => "");
+  if (!rawText.trim()) {
+    return { rawText: "", json: {} };
+  }
+
+  try {
+    return {
+      rawText,
+      json: JSON.parse(rawText) as AiResponsePayload["json"],
+    };
+  } catch {
+    return { rawText, json: {} };
+  }
+}
+
+function buildAiRequestErrorMessage(
+  prefix: string,
+  status: number,
+  payload: AiResponsePayload
+) {
+  const apiMessage = payload.json.error?.message?.trim();
+  if (apiMessage) {
+    return `${prefix} (${status}): ${apiMessage}`;
+  }
+
+  const bodySnippet = truncateProviderMessage(payload.rawText);
+  if (bodySnippet) {
+    return `${prefix} (${status}): ${bodySnippet}`;
+  }
+
+  return `${prefix} (${status})`;
+}
+
 export async function requestAiSuggestion(
   input: AiAssistRequest,
   config: AiConfig,
@@ -192,17 +243,13 @@ export async function requestAiSuggestion(
       ],
     }),
   });
-
-  const json = (await response.json().catch(() => ({}))) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    error?: { message?: string };
-  };
+  const payload = await readAiResponsePayload(response);
 
   if (!response.ok) {
-    throw new Error(json.error?.message || `AI request failed (${response.status})`);
+    throw new Error(buildAiRequestErrorMessage("AI request failed", response.status, payload));
   }
 
-  const content = json.choices?.[0]?.message?.content?.trim();
+  const content = payload.json.choices?.[0]?.message?.content?.trim();
   if (!content) {
     throw new Error("AI response was empty");
   }
@@ -242,17 +289,13 @@ export async function testAiConnection(
       ],
     }),
   });
-
-  const json = (await response.json().catch(() => ({}))) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    error?: { message?: string };
-  };
+  const payload = await readAiResponsePayload(response);
 
   if (!response.ok) {
-    throw new Error(json.error?.message || `AI connection test failed (${response.status})`);
+    throw new Error(buildAiRequestErrorMessage("AI connection test failed", response.status, payload));
   }
 
-  const content = json.choices?.[0]?.message?.content?.trim();
+  const content = payload.json.choices?.[0]?.message?.content?.trim();
   if (!content) {
     throw new Error("AI connection test returned an empty response");
   }
