@@ -1,7 +1,9 @@
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
-import { geistRegularFont } from "./geist-regular-font";
+import { geistVariableFont } from "./geist-variable-font";
 import { kotacomLogoDataUri } from "./kotacom-logo-data";
+
+const OG_FONT_FAMILY = "Geist Variable, Geist, Arial, sans-serif";
 
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
@@ -165,7 +167,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX + 82}" y="${rightPanelY + 143}" width="226" height="8" rx="4" fill="#64748b" fill-opacity="0.78"/>
   <rect x="${rightPanelX + 82}" y="${rightPanelY + 161}" width="182" height="8" rx="4" fill="#64748b" fill-opacity="0.58"/>
   <rect x="${rightPanelX + 82}" y="${rightPanelY + 184}" width="112" height="18" rx="9" fill="#0070f3"/>
-  <text x="${rightPanelX + 102}" y="${rightPanelY + 198}" font-family="Geist, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff">${escapeXml(safeWorkflowLabel)}</text>
+  <text x="${rightPanelX + 102}" y="${rightPanelY + 198}" font-family="${OG_FONT_FAMILY}" font-size="12" font-weight="700" fill="#ffffff">${escapeXml(safeWorkflowLabel)}</text>
 
   <rect x="${accentX}" y="${accentY + 212}" width="176" height="136" rx="24" fill="#111827" stroke="#334155"/>
   <circle cx="${accentX + 42}" cy="${accentY + 254}" r="18" fill="#0070f3" fill-opacity="0.16" stroke="#60a5fa"/>
@@ -192,7 +194,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   ${titleLines
     .map(
       (line, i) =>
-        `<text x="${leftPanelX + 44}" y="${titleStartY + i * titleLineHeight}" font-family="Geist, Arial, sans-serif" font-size="${titleFontSize}" font-weight="700" letter-spacing="${titleFontSize > 54 ? "-1.6" : "-1.0"}" fill="#111827">${line}</text>`
+        `<text x="${leftPanelX + 44}" y="${titleStartY + i * titleLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${titleFontSize}" font-weight="700" letter-spacing="${titleFontSize > 54 ? "-1.6" : "-1.0"}" fill="#111827">${line}</text>`
     )
     .join("\n  ")}
 
@@ -201,14 +203,14 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
       ? excerptLines
           .map(
             (line, i) =>
-              `<text x="${leftPanelX + 44}" y="${excerptStartY + i * excerptLineHeight}" font-family="Geist, Arial, sans-serif" font-size="${excerptFontSize}" font-weight="700" fill="#64748b">${line}</text>`
+              `<text x="${leftPanelX + 44}" y="${excerptStartY + i * excerptLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${excerptFontSize}" font-weight="700" fill="#64748b">${line}</text>`
           )
           .join("\n  ")
       : ""
   }
 
   <rect x="${leftPanelX + 18}" y="${OG_HEIGHT - 86}" width="290" height="44" fill="#111111"/>
-  <text x="${leftPanelX + 38}" y="${OG_HEIGHT - 56}" font-family="Geist, Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">${escapeXml(safeFooterText)}</text>
+  <text x="${leftPanelX + 38}" y="${OG_HEIGHT - 56}" font-family="${OG_FONT_FAMILY}" font-size="18" font-weight="700" fill="#ffffff">${escapeXml(safeFooterText)}</text>
 </svg>`;
 }
 
@@ -224,10 +226,10 @@ export async function generateOgImagePng(
     fitTo: { mode: "width", value: OG_WIDTH },
     font: {
       loadSystemFonts: false,
-      defaultFontFamily: "Geist",
-      sansSerifFamily: "Geist",
-      monospaceFamily: "Geist",
-      fontBuffers: [geistRegularFont],
+      defaultFontFamily: "Geist Variable",
+      sansSerifFamily: "Geist Variable",
+      monospaceFamily: "Geist Variable",
+      fontBuffers: [geistVariableFont],
     },
   });
 

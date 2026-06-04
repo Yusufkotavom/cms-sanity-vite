@@ -11,13 +11,16 @@ import { toast } from "sonner";
 import {
   ApiError,
   authApi,
+  clearStoredActiveWorkspaceSlug,
   clearStoredAuthToken,
   clearStoredApiBaseUrlOverride,
   getApiBaseUrl,
   getDefaultApiBaseUrl,
+  getStoredActiveWorkspaceSlug,
   getStoredAuthToken,
   getStoredApiBaseUrlOverride,
   notesApi,
+  setStoredActiveWorkspaceSlug,
   setStoredAuthToken,
   setStoredApiBaseUrlOverride,
   type AiSettings,
@@ -28,6 +31,8 @@ import {
   type AuthStatus,
   type OgBrandingSettings,
   type SanitySettings,
+  type Workspace,
+  workspacesApi,
 } from "@/lib/api";
 import { AppSidebar } from "@/components/app-sidebar";
 import { PostEditorPage } from "./post-editor-page";
@@ -71,6 +76,7 @@ type AppRoute =
   | "api-status";
 
 type RouteState = {
+  workspaceSlug: string | null;
   route: AppRoute;
   noteId: string | null;
   isNewNote: boolean;
@@ -122,6 +128,9 @@ function slugify(value: string) {
 function getRouteFromHash(hash: string): RouteState {
   const normalized = hash.replace(/^#\/?/, "").trim();
   const segments = normalized.split("/").filter(Boolean);
+  const hasWorkspacePrefix = segments[0] === "w" && Boolean(segments[1]);
+  const workspaceSlug = hasWorkspacePrefix ? (segments[1] ?? null) : null;
+  const routeOffset = hasWorkspacePrefix ? 2 : 0;
   const allowedRoutes: AppRoute[] = [
     "dashboard",
     "posts",
@@ -132,20 +141,22 @@ function getRouteFromHash(hash: string): RouteState {
     "api-status",
   ];
 
-  const route = allowedRoutes.includes((segments[0] ?? "") as AppRoute)
-    ? ((segments[0] ?? "dashboard") as AppRoute)
+  const route = allowedRoutes.includes((segments[routeOffset] ?? "") as AppRoute)
+    ? ((segments[routeOffset] ?? "dashboard") as AppRoute)
     : "dashboard";
 
   if (route !== "posts") {
     return {
+      workspaceSlug,
       route,
       noteId: null,
       isNewNote: false,
     };
   }
 
-  if (segments[1] === "new") {
+  if (segments[routeOffset + 1] === "new") {
     return {
+      workspaceSlug,
       route,
       noteId: null,
       isNewNote: true,
@@ -153,10 +164,28 @@ function getRouteFromHash(hash: string): RouteState {
   }
 
   return {
+    workspaceSlug,
     route,
-    noteId: segments[1] ?? null,
+    noteId: segments[routeOffset + 1] ?? null,
     isNewNote: false,
   };
+}
+
+function buildWorkspaceHash(workspaceSlug: string, route: AppRoute, noteId?: string | null, isNewNote = false) {
+  const base = `#/w/${workspaceSlug}/${route}`;
+  if (route !== "posts") {
+    return base;
+  }
+
+  if (isNewNote) {
+    return `${base}/new`;
+  }
+
+  if (noteId) {
+    return `${base}/${noteId}`;
+  }
+
+  return base;
 }
 
 function formatRelativeDate(value: string | null) {
@@ -287,6 +316,11 @@ function App() {
   const [authSettings, setAuthSettings] = useState<AuthStatus | null>(null);
   const [authConfig, setAuthConfig] = useState<AuthSettings | null>(null);
   const [authEmail, setAuthEmail] = useState("");
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceSlug, setActiveWorkspaceSlug] = useState(() => getStoredActiveWorkspaceSlug() ?? "");
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [newWorkspaceSlug, setNewWorkspaceSlug] = useState("");
+  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -365,14 +399,38 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!activeWorkspaceSlug || authStatus !== "authenticated") {
+      return;
+    }
+
+    if (routeState.workspaceSlug === activeWorkspaceSlug) {
+      return;
+    }
+
+    navigate(buildWorkspaceHash(activeWorkspaceSlug, routeState.route, routeState.noteId, routeState.isNewNote));
+  }, [activeWorkspaceSlug, authStatus, routeState.isNewNote, routeState.noteId, routeState.route, routeState.workspaceSlug]);
+
+  useEffect(() => {
+    if (!routeState.workspaceSlug || routeState.workspaceSlug === activeWorkspaceSlug) {
+      return;
+    }
+
+    setActiveWorkspaceSlug(routeState.workspaceSlug);
+    setStoredActiveWorkspaceSlug(routeState.workspaceSlug);
+  }, [activeWorkspaceSlug, routeState.workspaceSlug]);
+
+  useEffect(() => {
     function handleUnauthorized() {
       setAuthEmail("");
       setAuthStatus("unauthenticated");
+      setWorkspaces([]);
+      setActiveWorkspaceSlug("");
       setDraft(null);
       setSavedDraft(null);
       setNotes([]);
       setConfig(null);
       setAuthConfig(null);
+      clearStoredActiveWorkspaceSlug();
     }
 
     window.addEventListener("auth:unauthorized", handleUnauthorized);
@@ -384,7 +442,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (authStatus !== "authenticated") {
+    if (authStatus !== "authenticated" || !activeWorkspaceSlug) {
       return;
     }
 
@@ -393,9 +451,10 @@ function App() {
     void loadAiSettings();
     void loadOgBrandingSettings();
     void loadAuthConfig();
+    void loadWorkspaces();
     void loadCategories();
     void loadNotes();
-  }, [authStatus]);
+  }, [activeWorkspaceSlug, authStatus]);
 
   useEffect(() => {
     if (authStatus !== "authenticated") {
@@ -469,6 +528,7 @@ function App() {
       const session = await authApi.me();
       setAuthEmail(session.user.email);
       setLoginEmail(session.user.email);
+      await loadWorkspaces();
       setAuthStatus("authenticated");
     } catch (error) {
       clearStoredAuthToken();
@@ -477,6 +537,19 @@ function App() {
         toast.error(error instanceof Error ? error.message : "Failed to initialize auth");
       }
     }
+  }
+
+  async function loadWorkspaces(preferredSlug?: string) {
+    const response = await workspacesApi.list();
+    setWorkspaces(response.items);
+
+    const storedSlug = preferredSlug ?? getStoredActiveWorkspaceSlug() ?? activeWorkspaceSlug;
+    const fallbackSlug = response.items[0]?.slug ?? "";
+    const nextSlug = response.items.some((workspace) => workspace.slug === storedSlug) ? storedSlug : fallbackSlug;
+
+    setActiveWorkspaceSlug(nextSlug);
+    setStoredActiveWorkspaceSlug(nextSlug);
+    return response.items;
   }
 
   async function signIn() {
@@ -495,6 +568,7 @@ function App() {
       setStoredAuthToken(session.token);
       setAuthEmail(session.user.email);
       setLoginPassword("");
+      await loadWorkspaces();
       setAuthStatus("authenticated");
       toast.success("Login berhasil");
     } catch (error) {
@@ -507,6 +581,8 @@ function App() {
   function logout() {
     clearStoredAuthToken();
     setAuthEmail("");
+    setWorkspaces([]);
+    setActiveWorkspaceSlug("");
     setDraft(null);
     setSavedDraft(null);
     setSelectedId("");
@@ -515,7 +591,41 @@ function App() {
     setAuthConfig(null);
     setAuthStatus("unauthenticated");
     setLoginPassword("");
+    clearStoredActiveWorkspaceSlug();
     toast.success("Logged out");
+  }
+
+  async function createWorkspace() {
+    if (!newWorkspaceName.trim() || !newWorkspaceSlug.trim()) {
+      toast.error("Nama dan slug workspace wajib diisi");
+      return;
+    }
+
+    setIsCreatingWorkspace(true);
+
+    try {
+      const created = await workspacesApi.create({
+        name: newWorkspaceName.trim(),
+        slug: newWorkspaceSlug.trim(),
+      });
+      setNewWorkspaceName("");
+      setNewWorkspaceSlug("");
+      await loadWorkspaces(created.slug);
+      toast.success("Workspace dibuat");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create workspace");
+    } finally {
+      setIsCreatingWorkspace(false);
+    }
+  }
+
+  function switchWorkspace(slug: string) {
+    setActiveWorkspaceSlug(slug);
+    setStoredActiveWorkspaceSlug(slug);
+    setDraft(null);
+    setSavedDraft(null);
+    setSelectedId("");
+    navigate(buildWorkspaceHash(slug, "dashboard"));
   }
 
   async function copyToken(kind: "session" | "integration", value: string) {
@@ -713,7 +823,9 @@ function App() {
 
       toast.success("Note created");
       setSelectedId(created.id);
-      navigate(`#/posts/${created.id}`);
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts", created.id));
+      }
       setContentTab("editor");
       await loadNotes(created.id);
     } catch (error) {
@@ -814,7 +926,9 @@ function App() {
       setSavedDraft(updated);
       setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setScheduleAt(toJakartaScheduleValue(updated.publishAt));
-      navigate("#/scheduled");
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "scheduled"));
+      }
       toast.success("Note scheduled");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to schedule note");
@@ -844,7 +958,9 @@ function App() {
       setSavedDraft(updated);
       setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setScheduleAt(toJakartaScheduleValue(updated.publishAt));
-      navigate("#/sanity-sync");
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "sanity-sync"));
+      }
       toast.success("Published to Sanity");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to publish note");
@@ -874,7 +990,9 @@ function App() {
       setSavedDraft(updated);
       setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setScheduleAt(toJakartaScheduleValue(updated.publishAt));
-      navigate("#/sanity-sync");
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "sanity-sync"));
+      }
       toast.success("Retry publish berhasil");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to retry publish");
@@ -1006,6 +1124,7 @@ function App() {
     void loadAiSettings();
     void loadOgBrandingSettings();
     void loadAuthConfig();
+    void loadWorkspaces();
     void loadCategories();
     void loadNotes(selectedId || undefined);
   }
@@ -1118,6 +1237,8 @@ function App() {
   }
 
   function renderLoginScreen() {
+    const authConfigured = authSettings?.configured ?? null;
+
     return (
       <main className="flex min-h-screen items-center justify-center bg-background p-6">
         <Card className="w-full max-w-md">
@@ -1160,15 +1281,15 @@ function App() {
                 placeholder="Masukkan password admin"
               />
             </div>
-            <Button onClick={() => void signIn()} disabled={isSigningIn || authSettings?.configured === false}>
+            <Button onClick={() => void signIn()} disabled={isSigningIn || authConfigured === false}>
               {isSigningIn ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
               {isSigningIn ? "Signing in..." : "Sign in"}
             </Button>
             <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
               <div className="grid gap-2">
                 <span>API base: <code>{apiBaseUrl}</code></span>
-                <span>Auth configured: {authSettings?.configured ? "yes" : "no"}</span>
-                {authSettings?.configured === false ? (
+                <span>Auth configured: {authConfigured ? "yes" : "no"}</span>
+                {authConfigured === false ? (
                   <span>Set `AUTH_ADMIN_EMAIL`, `AUTH_ADMIN_PASSWORD`, dan `AUTH_TOKEN_SECRET` di Worker secrets dulu.</span>
                 ) : null}
               </div>
@@ -1510,6 +1631,38 @@ function App() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Workspace</CardTitle>
+            <CardDescription>Setiap workspace punya notes, setting Sanity, AI, branding, dan queue publish sendiri.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-border bg-muted/20 p-4">
+              Workspace aktif: <code>{activeWorkspaceSlug || "-"}</code>
+            </div>
+            <div className="grid gap-2">
+              {workspaces.map((workspace) => (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  className={`rounded-xl border p-3 text-left ${workspace.slug === activeWorkspaceSlug ? "border-primary bg-primary/5" : "border-border"}`}
+                  onClick={() => switchWorkspace(workspace.slug)}
+                >
+                  <div className="font-medium text-foreground">{workspace.name}</div>
+                  <div className="text-xs text-muted-foreground">{workspace.slug}</div>
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-2">
+              <Input placeholder="Workspace name" value={newWorkspaceName} onChange={(event) => setNewWorkspaceName(event.target.value)} />
+              <Input placeholder="workspace-slug" value={newWorkspaceSlug} onChange={(event) => setNewWorkspaceSlug(event.target.value)} />
+              <Button onClick={() => void createWorkspace()} disabled={isCreatingWorkspace}>
+                {isCreatingWorkspace ? "Creating..." : "Create workspace"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Sanity Settings</CardTitle>
             <CardDescription>Form ini hanya kirim payload ke backend. Test connection tidak menyimpan token di frontend.</CardDescription>
           </CardHeader>
@@ -1801,7 +1954,7 @@ function App() {
               </div>
             }
           >
-            <AiBatchPage config={config} />
+            <AiBatchPage config={config} workspaceSlug={activeWorkspaceSlug} />
           </Suspense>
         );
       case "settings":
@@ -1833,11 +1986,14 @@ function App() {
   return (
     <SidebarProvider>
       <AppSidebar
-        currentUrl={`#/${route}`}
+        currentUrl={window.location.hash || buildWorkspaceHash(activeWorkspaceSlug, route, routeState.noteId, routeState.isNewNote)}
         onNavigate={navigate}
         onCreate={() => void createNote()}
         userEmail={authEmail}
         onLogout={logout}
+        workspaces={workspaces}
+        activeWorkspaceSlug={activeWorkspaceSlug}
+        onSelectWorkspace={switchWorkspace}
       />
       <SidebarInset>
         <SiteHeader title={header.title} description={header.description} />

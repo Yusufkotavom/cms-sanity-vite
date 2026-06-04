@@ -18,6 +18,7 @@ import {
   updateAiPromptTemplate,
 } from "./db/repositories/ai-prompt-templates";
 import {
+  copyLegacyAppSettingsToWorkspace,
   getSettingsMap,
   setSettings,
 } from "./db/repositories/app-settings";
@@ -26,6 +27,7 @@ import {
   createNote,
   deleteNote,
   findNoteById,
+  findNoteByIdInWorkspace,
   getCategoryIdsByNoteIds,
   getNoteCategoryIds,
   listNotes,
@@ -46,6 +48,15 @@ import {
   markJobsFailed,
   markJobsPublished,
 } from "./db/repositories/publish-jobs";
+import {
+  createWorkspace,
+  DEFAULT_WORKSPACE_SLUG,
+  ensureDefaultWorkspace,
+  findWorkspaceById,
+  findWorkspaceBySlug,
+  listWorkspaces,
+  updateWorkspace,
+} from "./db/repositories/workspaces";
 import {
   mapNoteDetail,
   mapNoteSummary as mapNoteSummaryService,
@@ -142,6 +153,15 @@ const authLoginSchema = z.object({
   password: z.string().min(1),
 });
 
+const workspaceSchema = z.object({
+  name: z.string().trim().min(1),
+  slug: z.string().trim().min(1).regex(/^[a-z0-9-]+$/),
+  domain: z.string().trim().default(""),
+  description: z.string().default(""),
+  timezone: z.string().trim().default("Asia/Jakarta"),
+  status: z.enum(["active", "archived"]).default("active"),
+});
+
 export interface Env {
   DB: D1Database;
   SANITY_PROJECT_ID?: string;
@@ -179,8 +199,8 @@ const SANITY_SETTING_KEYS = [
   "sanity.writeToken",
 ] as const;
 
-async function getAiSettings(db: D1Database) {
-  const settings = await getSettingsMap(db, [...AI_SETTING_KEYS]);
+async function getAiSettings(db: D1Database, workspaceId: string) {
+  const settings = await getSettingsMap(db, workspaceId, [...AI_SETTING_KEYS]);
   return {
     apiBaseUrl: settings.get("ai.apiBaseUrl") ?? "",
     apiKey: settings.get("ai.apiKey") ?? "",
@@ -193,8 +213,8 @@ async function getAiSettings(db: D1Database) {
   };
 }
 
-async function getOgBrandingSettings(db: D1Database) {
-  const settings = await getSettingsMap(db, [...OG_BRANDING_SETTING_KEYS]);
+async function getOgBrandingSettings(db: D1Database, workspaceId: string) {
+  const settings = await getSettingsMap(db, workspaceId, [...OG_BRANDING_SETTING_KEYS]);
   return {
     logoUrl: settings.get("og.logoUrl") ?? "",
     workflowLabel: settings.get("og.workflowLabel") ?? "",
@@ -202,8 +222,8 @@ async function getOgBrandingSettings(db: D1Database) {
   };
 }
 
-async function getSanitySettings(db: D1Database, env?: Env) {
-  const settings = await getSettingsMap(db, [...SANITY_SETTING_KEYS]);
+async function getSanitySettings(db: D1Database, workspaceId: string, env?: Env) {
+  const settings = await getSettingsMap(db, workspaceId, [...SANITY_SETTING_KEYS]);
   return {
     projectId: settings.get("sanity.projectId") ?? env?.SANITY_PROJECT_ID ?? "",
     dataset: settings.get("sanity.dataset") ?? env?.SANITY_DATASET ?? "development",
@@ -223,8 +243,8 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return btoa(binary);
 }
 
-async function resolveOgBranding(db: D1Database, fetchImpl: typeof fetch = fetch): Promise<OgBranding> {
-  const settings = await getOgBrandingSettings(db);
+async function resolveOgBranding(db: D1Database, workspaceId: string, fetchImpl: typeof fetch = fetch): Promise<OgBranding> {
+  const settings = await getOgBrandingSettings(db, workspaceId);
   let logoDataUri: string | undefined;
 
   if (settings.logoUrl) {
@@ -250,18 +270,22 @@ const app = new Hono<{
   Variables: {
     authEmail: string;
     authExpiresAt: string;
+    workspaceId: string;
+    workspaceSlug: string;
   };
 }>();
 
 app.use(
   "/api/*",
   cors({
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Workspace-Slug"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   })
 );
 app.use("/api/*", async (c, next) => {
   await ensureSchema(c.env.DB);
+  await ensureDefaultWorkspace(c.env.DB);
+  await copyLegacyAppSettingsToWorkspace(c.env.DB, "default");
   await next();
 });
 app.use("/api/*", async (c, next) => {
@@ -306,6 +330,27 @@ app.use("/api/*", async (c, next) => {
 
   c.set("authEmail", payload.email);
   c.set("authExpiresAt", new Date(payload.exp * 1000).toISOString());
+  await next();
+});
+app.use("/api/*", async (c, next) => {
+  const path = c.req.path;
+  const isPublicPath = path === "/api/health" || path === "/api/auth/status" || path === "/api/auth/login";
+  const isWorkspaceAdminPath = path === "/api/workspaces" || /^\/api\/workspaces\/[^/]+$/.test(path);
+
+  if (isPublicPath || isWorkspaceAdminPath) {
+    await next();
+    return;
+  }
+
+  const requestedWorkspaceSlug = c.req.header("X-Workspace-Slug")?.trim() || DEFAULT_WORKSPACE_SLUG;
+  const workspace = await findWorkspaceBySlug(c.env.DB, requestedWorkspaceSlug);
+
+  if (!workspace) {
+    return c.json({ message: "Workspace not found" }, 404);
+  }
+
+  c.set("workspaceId", workspace.id);
+  c.set("workspaceSlug", workspace.slug);
   await next();
 });
 
@@ -361,6 +406,101 @@ app.get("/api/auth/me", (c) => {
   });
 });
 
+app.get("/api/workspaces", async (c) => {
+  const items = await listWorkspaces(c.env.DB);
+  return c.json({
+    items: items.map((workspace) => ({
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      status: workspace.status,
+      domain: workspace.domain,
+      description: workspace.description,
+      timezone: workspace.timezone,
+      createdAt: workspace.created_at,
+      updatedAt: workspace.updated_at,
+    })),
+  });
+});
+
+app.post("/api/workspaces", async (c) => {
+  const payload = workspaceSchema.parse(await c.req.json());
+  const existing = await findWorkspaceBySlug(c.env.DB, payload.slug);
+
+  if (existing) {
+    return c.json({ message: "Workspace slug already exists" }, 409);
+  }
+
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await createWorkspace(c.env.DB, {
+    id,
+    accountId: "owner",
+    name: payload.name,
+    slug: payload.slug,
+    status: payload.status,
+    domain: payload.domain || undefined,
+    description: payload.description || undefined,
+    timezone: payload.timezone || undefined,
+    now,
+  });
+
+  const workspace = await findWorkspaceById(c.env.DB, id);
+  return c.json(
+    {
+      id: workspace?.id ?? id,
+      name: workspace?.name ?? payload.name,
+      slug: workspace?.slug ?? payload.slug,
+      status: workspace?.status ?? payload.status,
+      domain: workspace?.domain ?? null,
+      description: workspace?.description ?? null,
+      timezone: workspace?.timezone ?? payload.timezone,
+      createdAt: workspace?.created_at ?? now,
+      updatedAt: workspace?.updated_at ?? now,
+    },
+    201
+  );
+});
+
+app.patch("/api/workspaces/:id", async (c) => {
+  const payload = workspaceSchema.parse(await c.req.json());
+  const id = c.req.param("id");
+  const existing = await findWorkspaceById(c.env.DB, id);
+
+  if (!existing) {
+    return c.json({ message: "Workspace not found" }, 404);
+  }
+
+  const duplicate = await findWorkspaceBySlug(c.env.DB, payload.slug);
+  if (duplicate && duplicate.id !== id) {
+    return c.json({ message: "Workspace slug already exists" }, 409);
+  }
+
+  await updateWorkspace(c.env.DB, {
+    id,
+    name: payload.name,
+    slug: payload.slug,
+    status: payload.status,
+    domain: payload.domain || undefined,
+    description: payload.description || undefined,
+    timezone: payload.timezone || undefined,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const workspace = await findWorkspaceById(c.env.DB, id);
+  return c.json({
+    id: workspace?.id ?? id,
+    name: workspace?.name ?? payload.name,
+    slug: workspace?.slug ?? payload.slug,
+    status: workspace?.status ?? payload.status,
+    domain: workspace?.domain ?? null,
+    description: workspace?.description ?? null,
+    timezone: workspace?.timezone ?? payload.timezone,
+    createdAt: workspace?.created_at ?? existing.created_at,
+    updatedAt: workspace?.updated_at ?? new Date().toISOString(),
+  });
+});
+
 app.get("/api/settings/auth", (c) => {
   if (!isAuthConfigured(c.env)) {
     return c.json({ message: "Auth is not configured on this worker" }, 503);
@@ -375,8 +515,9 @@ app.get("/api/settings/auth", (c) => {
 });
 
 app.get("/api/config", async (c) => {
-  const aiSettings = await getAiSettings(c.env.DB);
-  const sanitySettings = await getSanitySettings(c.env.DB, c.env);
+  const workspaceId = c.get("workspaceId");
+  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
 
   return c.json({
     sanityConfigured: Boolean(
@@ -397,7 +538,7 @@ app.get("/api/config", async (c) => {
 });
 
 app.get("/api/settings/sanity", async (c) => {
-  const settings = await getSanitySettings(c.env.DB, c.env);
+  const settings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
   return c.json({
     projectId: settings.projectId,
     dataset: settings.dataset,
@@ -408,17 +549,18 @@ app.get("/api/settings/sanity", async (c) => {
 });
 
 app.put("/api/settings/sanity", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const payload = sanitySettingsSchema.parse(await c.req.json());
-  const existing = await getSanitySettings(c.env.DB, c.env);
+  const existing = await getSanitySettings(c.env.DB, workspaceId, c.env);
 
-  await setSettings(c.env.DB, {
+  await setSettings(c.env.DB, workspaceId, {
     "sanity.projectId": payload.projectId,
     "sanity.dataset": payload.dataset,
     "sanity.apiVersion": payload.apiVersion,
     "sanity.writeToken": payload.writeToken === "********" ? existing.writeToken : payload.writeToken,
   });
 
-  const saved = await getSanitySettings(c.env.DB, c.env);
+  const saved = await getSanitySettings(c.env.DB, workspaceId, c.env);
   return c.json({
     projectId: saved.projectId,
     dataset: saved.dataset,
@@ -429,8 +571,9 @@ app.put("/api/settings/sanity", async (c) => {
 });
 
 app.post("/api/settings/sanity/test", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const payload = sanitySettingsSchema.parse(await c.req.json());
-  const existing = await getSanitySettings(c.env.DB, c.env);
+  const existing = await getSanitySettings(c.env.DB, workspaceId, c.env);
   const settings = {
     projectId: payload.projectId,
     dataset: payload.dataset,
@@ -464,7 +607,7 @@ app.post("/api/settings/sanity/test", async (c) => {
 });
 
 app.get("/api/settings/ai", async (c) => {
-  const settings = await getAiSettings(c.env.DB);
+  const settings = await getAiSettings(c.env.DB, c.get("workspaceId"));
   return c.json({
     ...settings,
     apiKey: settings.apiKey ? "********" : "",
@@ -473,10 +616,11 @@ app.get("/api/settings/ai", async (c) => {
 });
 
 app.put("/api/settings/ai", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const payload = aiSettingsSchema.parse(await c.req.json());
-  const existing = await getAiSettings(c.env.DB);
+  const existing = await getAiSettings(c.env.DB, workspaceId);
 
-  await setSettings(c.env.DB, {
+  await setSettings(c.env.DB, workspaceId, {
     "ai.apiBaseUrl": payload.apiBaseUrl,
     "ai.apiKey": payload.apiKey === "********" ? existing.apiKey : payload.apiKey,
     "ai.model": payload.model,
@@ -487,7 +631,7 @@ app.put("/api/settings/ai", async (c) => {
     "ai.outlineToPostPrompt": payload.outlineToPostPrompt,
   });
 
-  const saved = await getAiSettings(c.env.DB);
+  const saved = await getAiSettings(c.env.DB, workspaceId);
   return c.json({
     ...saved,
     apiKey: saved.apiKey ? "********" : "",
@@ -496,37 +640,41 @@ app.put("/api/settings/ai", async (c) => {
 });
 
 app.get("/api/settings/og-branding", async (c) => {
-  const settings = await getOgBrandingSettings(c.env.DB);
+  const settings = await getOgBrandingSettings(c.env.DB, c.get("workspaceId"));
   return c.json(settings);
 });
 
 app.put("/api/settings/og-branding", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const payload = ogBrandingSettingsSchema.parse(await c.req.json());
 
-  await setSettings(c.env.DB, {
+  await setSettings(c.env.DB, workspaceId, {
     "og.logoUrl": payload.logoUrl,
     "og.workflowLabel": payload.workflowLabel,
     "og.footerText": payload.footerText,
   });
 
-  return c.json(await getOgBrandingSettings(c.env.DB));
+  return c.json(await getOgBrandingSettings(c.env.DB, workspaceId));
 });
 
 app.get("/api/ai/batches/templates", async (c) => {
-  await ensureDefaultAiPromptTemplate(c.env.DB);
-  const items = await listAiPromptTemplates(c.env.DB);
+  const workspaceId = c.get("workspaceId");
+  await ensureDefaultAiPromptTemplate(c.env.DB, workspaceId);
+  const items = await listAiPromptTemplates(c.env.DB, workspaceId);
   return c.json({
     items: items.map(mapAiPromptTemplate),
   });
 });
 
 app.post("/api/ai/batches/templates", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const payload = aiPromptTemplateSchema.parse(await c.req.json());
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
 
   await createAiPromptTemplate(c.env.DB, {
     id,
+    workspaceId,
     name: payload.name,
     description: payload.description,
     outlinePrompt: payload.outlinePrompt,
@@ -534,14 +682,15 @@ app.post("/api/ai/batches/templates", async (c) => {
     now,
   });
 
-  const template = await findAiPromptTemplateById(c.env.DB, id);
+  const template = await findAiPromptTemplateById(c.env.DB, workspaceId, id);
   return c.json(template ? mapAiPromptTemplate(template) : { id }, 201);
 });
 
 app.patch("/api/ai/batches/templates/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const payload = aiPromptTemplateSchema.parse(await c.req.json());
   const id = c.req.param("id");
-  const existing = await findAiPromptTemplateById(c.env.DB, id);
+  const existing = await findAiPromptTemplateById(c.env.DB, workspaceId, id);
 
   if (!existing) {
     return c.json({ message: "Template not found" }, 404);
@@ -549,6 +698,7 @@ app.patch("/api/ai/batches/templates/:id", async (c) => {
 
   await updateAiPromptTemplate(c.env.DB, {
     id,
+    workspaceId,
     name: payload.name,
     description: payload.description,
     outlinePrompt: payload.outlinePrompt,
@@ -556,36 +706,42 @@ app.patch("/api/ai/batches/templates/:id", async (c) => {
     updatedAt: new Date().toISOString(),
   });
 
-  const updated = await findAiPromptTemplateById(c.env.DB, id);
+  const updated = await findAiPromptTemplateById(c.env.DB, workspaceId, id);
   return c.json(updated ? mapAiPromptTemplate(updated) : { id });
 });
 
 app.get("/api/ai/batches", async (c) => {
-  await ensureDefaultAiPromptTemplate(c.env.DB);
+  const workspaceId = c.get("workspaceId");
+  await ensureDefaultAiPromptTemplate(c.env.DB, workspaceId);
   const [batches, templates] = await Promise.all([
-    listAiBatches(c.env.DB),
-    listAiPromptTemplates(c.env.DB),
+    listAiBatches(c.env.DB, workspaceId),
+    listAiPromptTemplates(c.env.DB, workspaceId),
   ]);
   const templateMap = new Map(templates.map((template) => [template.id, template]));
 
   return c.json({
     items: await Promise.all(
       batches.map(async (batch) =>
-        mapAiBatchSummary(batch, await listAiBatchItemsByBatchId(c.env.DB, batch.id), templateMap.get(batch.template_id) ?? null)
+        mapAiBatchSummary(
+          batch,
+          await listAiBatchItemsByBatchId(c.env.DB, workspaceId, batch.id),
+          templateMap.get(batch.template_id) ?? null
+        )
       )
     ),
   });
 });
 
 app.get("/api/ai/batches/:id", async (c) => {
-  const batch = await findAiBatchById(c.env.DB, c.req.param("id"));
+  const workspaceId = c.get("workspaceId");
+  const batch = await findAiBatchById(c.env.DB, workspaceId, c.req.param("id"));
   if (!batch) {
     return c.json({ message: "Batch not found" }, 404);
   }
 
   const [template, items] = await Promise.all([
-    findAiPromptTemplateById(c.env.DB, batch.template_id),
-    listAiBatchItemsByBatchId(c.env.DB, batch.id),
+    findAiPromptTemplateById(c.env.DB, workspaceId, batch.template_id),
+    listAiBatchItemsByBatchId(c.env.DB, workspaceId, batch.id),
   ]);
 
   return c.json({
@@ -595,9 +751,10 @@ app.get("/api/ai/batches/:id", async (c) => {
 });
 
 app.post("/api/ai/batches", async (c) => {
-  await ensureDefaultAiPromptTemplate(c.env.DB);
+  const workspaceId = c.get("workspaceId");
+  await ensureDefaultAiPromptTemplate(c.env.DB, workspaceId);
   const payload = aiBatchSchema.parse(await c.req.json());
-  const template = await findAiPromptTemplateById(c.env.DB, payload.templateId);
+  const template = await findAiPromptTemplateById(c.env.DB, workspaceId, payload.templateId);
 
   if (!template) {
     return c.json({ message: "Template not found" }, 404);
@@ -607,6 +764,7 @@ app.post("/api/ai/batches", async (c) => {
   const id = crypto.randomUUID();
   const items = payload.items.map((item) => ({
     id: crypto.randomUUID(),
+    workspaceId,
     batchId: id,
     keyword: item.keyword,
     description: item.description,
@@ -615,6 +773,7 @@ app.post("/api/ai/batches", async (c) => {
 
   await createAiBatch(c.env.DB, {
     id,
+    workspaceId,
     name: payload.name,
     mode: payload.mode as AiBatchMode,
     templateId: payload.templateId,
@@ -624,8 +783,8 @@ app.post("/api/ai/batches", async (c) => {
   });
   await createAiBatchItems(c.env.DB, items);
 
-  const batch = await findAiBatchById(c.env.DB, id);
-  const batchItems = await listAiBatchItemsByBatchId(c.env.DB, id);
+  const batch = await findAiBatchById(c.env.DB, workspaceId, id);
+  const batchItems = await listAiBatchItemsByBatchId(c.env.DB, workspaceId, id);
   return c.json(
     {
       ...mapAiBatchSummary(batch!, batchItems, template),
@@ -636,20 +795,23 @@ app.post("/api/ai/batches", async (c) => {
 });
 
 app.post("/api/ai/batches/process", async (c) => {
-  const aiSettings = await getAiSettings(c.env.DB);
+  const workspaceId = c.get("workspaceId");
+  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
   if (!aiSettings.apiBaseUrl || !aiSettings.apiKey || !aiSettings.model) {
     return c.json({ message: "AI env is not configured" }, 400);
   }
 
   const payload = aiBatchProcessSchema.parse((await c.req.json().catch(() => ({}))) as unknown);
-  const result = await processAiBatchWork(c.env, aiSettings, payload.limit ?? 2);
+  const result = await processAiBatchWork(c.env, workspaceId, aiSettings, payload.limit ?? 2);
   return c.json(result);
 });
 
 app.get("/api/notes", async (c) => {
-  const records = await listNotes(c.env.DB);
+  const workspaceId = c.get("workspaceId");
+  const records = await listNotes(c.env.DB, workspaceId);
   const categoryIdsByNoteId = await getCategoryIdsByNoteIds(
     c.env.DB,
+    workspaceId,
     records.map((note) => note.id)
   );
 
@@ -659,7 +821,7 @@ app.get("/api/notes", async (c) => {
 });
 
 app.get("/api/sanity/categories", async (c) => {
-  const sanitySettings = await getSanitySettings(c.env.DB, c.env);
+  const sanitySettings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
 
   if (!sanitySettings.projectId || !sanitySettings.dataset) {
     return c.json({ items: [] satisfies SanityCategory[] });
@@ -683,7 +845,7 @@ app.get("/api/sanity/categories", async (c) => {
 });
 
 app.get("/api/sanity/status", async (c) => {
-  const settings = await getSanitySettings(c.env.DB, c.env);
+  const settings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
   const configured = Boolean(settings.projectId && settings.dataset && settings.apiVersion && settings.writeToken);
 
   return c.json({
@@ -696,7 +858,7 @@ app.get("/api/sanity/status", async (c) => {
 });
 
 app.post("/api/sanity/test", async (c) => {
-  const settings = await getSanitySettings(c.env.DB, c.env);
+  const settings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
 
   if (!settings.projectId || !settings.dataset || !settings.writeToken) {
     return c.json({ message: "Sanity env is not configured" }, 400);
@@ -724,7 +886,7 @@ app.post("/api/sanity/test", async (c) => {
 });
 
 app.get("/api/notes/:id", async (c) => {
-  const note = await findNoteById(c.env.DB, c.req.param("id"));
+  const note = await findNoteByIdInWorkspace(c.env.DB, c.get("workspaceId"), c.req.param("id"));
 
   if (!note) {
     return c.json({ message: "Not found" }, 404);
@@ -734,6 +896,7 @@ app.get("/api/notes/:id", async (c) => {
 });
 
 app.post("/api/notes", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const payload = noteSchema.parse(await c.req.json());
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -741,6 +904,7 @@ app.post("/api/notes", async (c) => {
   try {
     await createNote(c.env.DB, {
       id,
+      workspaceId,
       title: payload.title,
       slug: payload.slug,
       contentMd: payload.contentMd,
@@ -753,19 +917,20 @@ app.post("/api/notes", async (c) => {
       ogDescription: payload.ogDescription,
       createdAt: now,
     });
-    await replaceNoteCategories(c.env.DB, id, payload.categoryIds);
+    await replaceNoteCategories(c.env.DB, workspaceId, id, payload.categoryIds);
   } catch (error) {
     return handleDbError(error);
   }
 
-  const note = await findNoteById(c.env.DB, id);
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
   return c.json(note ? await mapNote(c.env.DB, note) : { id }, 201);
 });
 
 app.patch("/api/notes/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const payload = noteSchema.partial().parse(await c.req.json());
   const id = c.req.param("id");
-  const existing = await findNoteById(c.env.DB, id);
+  const existing = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
 
   if (!existing) {
     return c.json({ message: "Not found" }, 404);
@@ -773,6 +938,7 @@ app.patch("/api/notes/:id", async (c) => {
 
   try {
     await updateNoteDraft(c.env.DB, {
+      workspaceId,
       id,
       title: payload.title ?? existing.title,
       slug: payload.slug ?? existing.slug,
@@ -788,27 +954,29 @@ app.patch("/api/notes/:id", async (c) => {
       updatedAt: new Date().toISOString(),
     });
     if (payload.categoryIds) {
-      await replaceNoteCategories(c.env.DB, id, payload.categoryIds);
+      await replaceNoteCategories(c.env.DB, workspaceId, id, payload.categoryIds);
     }
   } catch (error) {
     return handleDbError(error);
   }
 
-  const updated = await findNoteById(c.env.DB, id);
+  const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
   return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
 });
 
 app.delete("/api/notes/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const id = c.req.param("id");
-  await deleteJobsByNoteId(c.env.DB, id);
-  await deleteNote(c.env.DB, id);
+  await deleteJobsByNoteId(c.env.DB, workspaceId, id);
+  await deleteNote(c.env.DB, workspaceId, id);
   return c.json({ ok: true });
 });
 
 app.post("/api/notes/:id/schedule", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const id = c.req.param("id");
   const payload = scheduleSchema.parse(await c.req.json());
-  const note = await findNoteById(c.env.DB, id);
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
 
   if (!note) {
     return c.json({ message: "Not found" }, 404);
@@ -816,21 +984,23 @@ app.post("/api/notes/:id/schedule", async (c) => {
 
   const now = new Date().toISOString();
 
-  await deleteJobsByNoteId(c.env.DB, id);
+  await deleteJobsByNoteId(c.env.DB, workspaceId, id);
   await createScheduledJob(c.env.DB, {
     id: crypto.randomUUID(),
+    workspaceId,
     noteId: id,
     runAt: payload.publishAt,
     now,
   });
 
   await markNoteScheduled(c.env.DB, {
+    workspaceId,
     noteId: id,
     publishAt: payload.publishAt,
     updatedAt: now,
   });
 
-  const updated = await findNoteById(c.env.DB, id);
+  const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
   return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
 });
 
@@ -846,8 +1016,9 @@ app.post("/api/notes/:id/publish", async (c) => {
 });
 
 app.post("/api/notes/:id/retry-publish", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const id = c.req.param("id");
-  const note = await findNoteById(c.env.DB, id);
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
 
   if (!note) {
     return c.json({ message: "Note not found" }, 404);
@@ -867,14 +1038,15 @@ app.post("/api/notes/:id/retry-publish", async (c) => {
 });
 
 app.post("/api/notes/:id/generate-og", async (c) => {
+  const workspaceId = c.get("workspaceId");
   const id = c.req.param("id");
-  const note = await findNoteById(c.env.DB, id);
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
 
   if (!note) {
     return c.json({ message: "Note not found" }, 404);
   }
 
-  const sanitySettings = await getSanitySettings(c.env.DB, c.env);
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
 
   if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
     return c.json({ message: "Sanity env is not configured" }, 400);
@@ -885,7 +1057,7 @@ app.post("/api/notes/:id/generate-og", async (c) => {
   const apiVersion = sanitySettings.apiVersion || "2026-03-29";
 
   try {
-    const branding = await resolveOgBranding(c.env.DB);
+    const branding = await resolveOgBranding(c.env.DB, workspaceId);
     const { assetId } = await generateAndUploadOgImage({
       title: ogTitle,
       excerpt: ogExcerpt,
@@ -898,12 +1070,13 @@ app.post("/api/notes/:id/generate-og", async (c) => {
 
     const now = new Date().toISOString();
     await setNoteOgImageAssetId(c.env.DB, {
+      workspaceId,
       noteId: id,
       ogImageAssetId: assetId,
       updatedAt: now,
     });
 
-    const updated = await findNoteById(c.env.DB, id);
+    const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
     return c.json(updated ? await mapNote(c.env.DB, updated) : { ogImageAssetId: assetId });
   } catch (error) {
     return c.json(
@@ -926,7 +1099,7 @@ app.post("/api/sanity/publish", async (c) => {
 });
 
 app.post("/api/ai/assist", async (c) => {
-  const aiSettings = await getAiSettings(c.env.DB);
+  const aiSettings = await getAiSettings(c.env.DB, c.get("workspaceId"));
 
   if (!aiSettings.apiBaseUrl || !aiSettings.apiKey || !aiSettings.model) {
     return c.json({ message: "AI env is not configured" }, 400);
@@ -1059,7 +1232,7 @@ function mapAiBatchSummary(
 }
 
 async function mapNote(db: D1Database, note: NoteRecord) {
-  return mapNoteDetail(note, await getNoteCategoryIds(db, note.id));
+  return mapNoteDetail(note, await getNoteCategoryIds(db, note.workspace_id, note.id));
 }
 
 async function publishNoteById(env: Env, noteId: string) {
@@ -1069,19 +1242,20 @@ async function publishNoteById(env: Env, noteId: string) {
     return { ok: false as const, message: "Note not found" };
   }
 
-  const sanitySettings = await getSanitySettings(env.DB, env);
+  const workspaceId = note.workspace_id;
+  const sanitySettings = await getSanitySettings(env.DB, workspaceId, env);
 
   if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
     return { ok: false as const, message: "Sanity settings are not configured" };
   }
 
-  const categoryIds = await getNoteCategoryIds(env.DB, note.id);
+  const categoryIds = await getNoteCategoryIds(env.DB, workspaceId, note.id);
   const apiVersion = sanitySettings.apiVersion || "2026-03-29";
   try {
     if (!note.og_image_asset_id) {
       const ogTitle = note.og_title || note.seo_title || note.title;
       const ogExcerpt = note.og_description || note.seo_description || note.excerpt;
-      const branding = await resolveOgBranding(env.DB);
+      const branding = await resolveOgBranding(env.DB, workspaceId);
       const { assetId } = await generateAndUploadOgImage({
         title: ogTitle,
         excerpt: ogExcerpt,
@@ -1094,6 +1268,7 @@ async function publishNoteById(env: Env, noteId: string) {
 
       const now = new Date().toISOString();
       await setNoteOgImageAssetId(env.DB, {
+        workspaceId,
         noteId: note.id,
         ogImageAssetId: assetId,
         updatedAt: now,
@@ -1118,11 +1293,12 @@ async function publishNoteById(env: Env, noteId: string) {
 
     const now = new Date().toISOString();
     await markNotePublished(env.DB, {
+      workspaceId,
       noteId: note.id,
       publishedAt: now,
       sanityDocumentId,
     });
-    await markJobsPublished(env.DB, { noteId: note.id, updatedAt: now });
+    await markJobsPublished(env.DB, { workspaceId, noteId: note.id, updatedAt: now });
 
     const updated = await findNoteById(env.DB, note.id);
     return {
@@ -1132,8 +1308,8 @@ async function publishNoteById(env: Env, noteId: string) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sanity publish failed";
     const now = new Date().toISOString();
-    await markNoteFailed(env.DB, { noteId: note.id, message, updatedAt: now });
-    await markJobsFailed(env.DB, { noteId: note.id, message, updatedAt: now });
+    await markNoteFailed(env.DB, { workspaceId, noteId: note.id, message, updatedAt: now });
+    await markJobsFailed(env.DB, { workspaceId, noteId: note.id, message, updatedAt: now });
     return { ok: false as const, message };
   }
 }
@@ -1156,17 +1332,20 @@ async function runScheduledPublishes(env: Env) {
 
   for (const job of timedOutJobs) {
     await markNoteFailed(env.DB, {
+      workspaceId: job.workspace_id,
       noteId: job.note_id,
       message: PUBLISH_TIMEOUT_MESSAGE,
       updatedAt: now,
     });
     await markJobsFailed(env.DB, {
+      workspaceId: job.workspace_id,
       noteId: job.note_id,
       message: PUBLISH_TIMEOUT_MESSAGE,
       updatedAt: now,
     });
     console.warn("Publish job timed out", {
       jobId: job.id,
+      workspaceId: job.workspace_id,
       noteId: job.note_id,
       runAt: job.run_at,
       processingSince: job.updated_at,
@@ -1179,6 +1358,7 @@ async function runScheduledPublishes(env: Env) {
     await markJobProcessing(env.DB, { jobId: job.id, updatedAt: now });
     console.info("Running scheduled publish job", {
       jobId: job.id,
+      workspaceId: job.workspace_id,
       noteId: job.note_id,
       runAt: job.run_at,
     });
@@ -1187,6 +1367,7 @@ async function runScheduledPublishes(env: Env) {
     if (!result.ok) {
       console.warn("Scheduled publish failed", {
         jobId: job.id,
+        workspaceId: job.workspace_id,
         noteId: job.note_id,
         message: result.message,
       });
@@ -1198,10 +1379,15 @@ export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env) {
     await ensureSchema(env.DB);
+    await ensureDefaultWorkspace(env.DB);
+    await copyLegacyAppSettingsToWorkspace(env.DB, "default");
     await runScheduledPublishes(env);
-    const aiSettings = await getAiSettings(env.DB);
-    if (aiSettings.apiBaseUrl && aiSettings.apiKey && aiSettings.model) {
-      await processAiBatchWork(env, aiSettings, 3);
+    const workspaces = await listWorkspaces(env.DB);
+    for (const workspace of workspaces) {
+      const aiSettings = await getAiSettings(env.DB, workspace.id);
+      if (aiSettings.apiBaseUrl && aiSettings.apiKey && aiSettings.model) {
+        await processAiBatchWork(env, workspace.id, aiSettings, 3);
+      }
     }
   },
 };

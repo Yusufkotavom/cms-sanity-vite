@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { getDb } from "../client";
 import { aiBatchItems, aiBatches } from "../schema";
@@ -9,6 +9,7 @@ export type AiBatchItemStatus = "pending" | "outline_done" | "processing" | "com
 
 export type AiBatchRecord = {
   id: string;
+  workspace_id: string;
   name: string;
   mode: AiBatchMode;
   template_id: string;
@@ -23,6 +24,7 @@ export type AiBatchRecord = {
 
 export type AiBatchItemRecord = {
   id: string;
+  workspace_id: string;
   batch_id: string;
   keyword: string;
   description: string;
@@ -47,6 +49,7 @@ export type AiBatchItemRecord = {
 function toBatchRecord(batch: typeof aiBatches.$inferSelect): AiBatchRecord {
   return {
     id: batch.id,
+    workspace_id: batch.workspaceId,
     name: batch.name,
     mode: batch.mode as AiBatchMode,
     template_id: batch.templateId,
@@ -63,6 +66,7 @@ function toBatchRecord(batch: typeof aiBatches.$inferSelect): AiBatchRecord {
 function toBatchItemRecord(item: typeof aiBatchItems.$inferSelect): AiBatchItemRecord {
   return {
     id: item.id,
+    workspace_id: item.workspaceId,
     batch_id: item.batchId,
     keyword: item.keyword,
     description: item.description,
@@ -85,35 +89,43 @@ function toBatchItemRecord(item: typeof aiBatchItems.$inferSelect): AiBatchItemR
   };
 }
 
-export async function listAiBatches(db: D1Database) {
-  const drizzleDb = getDb(db);
-  const rows = await drizzleDb.select().from(aiBatches).orderBy(asc(aiBatches.createdAt));
-  return rows.map(toBatchRecord);
-}
-
-export async function listActiveAiBatches(db: D1Database) {
+export async function listAiBatches(db: D1Database, workspaceId: string) {
   const drizzleDb = getDb(db);
   const rows = await drizzleDb
     .select()
     .from(aiBatches)
-    .where(inArray(aiBatches.status, ["queued", "processing"]))
+    .where(eq(aiBatches.workspaceId, workspaceId))
     .orderBy(asc(aiBatches.createdAt));
   return rows.map(toBatchRecord);
 }
 
-export async function findAiBatchById(db: D1Database, id: string) {
+export async function listActiveAiBatches(db: D1Database, workspaceId: string) {
   const drizzleDb = getDb(db);
-  const rows = await drizzleDb.select().from(aiBatches).where(eq(aiBatches.id, id)).limit(1);
+  const rows = await drizzleDb
+    .select()
+    .from(aiBatches)
+    .where(and(eq(aiBatches.workspaceId, workspaceId), inArray(aiBatches.status, ["queued", "processing"])))
+    .orderBy(asc(aiBatches.createdAt));
+  return rows.map(toBatchRecord);
+}
+
+export async function findAiBatchById(db: D1Database, workspaceId: string, id: string) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb
+    .select()
+    .from(aiBatches)
+    .where(and(eq(aiBatches.workspaceId, workspaceId), eq(aiBatches.id, id)))
+    .limit(1);
   const batch = rows[0];
   return batch ? toBatchRecord(batch) : null;
 }
 
-export async function listAiBatchItemsByBatchId(db: D1Database, batchId: string) {
+export async function listAiBatchItemsByBatchId(db: D1Database, workspaceId: string, batchId: string) {
   const drizzleDb = getDb(db);
   const rows = await drizzleDb
     .select()
     .from(aiBatchItems)
-    .where(eq(aiBatchItems.batchId, batchId))
+    .where(and(eq(aiBatchItems.workspaceId, workspaceId), eq(aiBatchItems.batchId, batchId)))
     .orderBy(asc(aiBatchItems.createdAt));
   return rows.map(toBatchItemRecord);
 }
@@ -122,6 +134,7 @@ export async function createAiBatch(
   db: D1Database,
   input: {
     id: string;
+    workspaceId: string;
     name: string;
     mode: AiBatchMode;
     templateId: string;
@@ -133,6 +146,7 @@ export async function createAiBatch(
   const drizzleDb = getDb(db);
   await drizzleDb.insert(aiBatches).values({
     id: input.id,
+    workspaceId: input.workspaceId,
     name: input.name,
     mode: input.mode,
     templateId: input.templateId,
@@ -148,8 +162,9 @@ export async function createAiBatch(
 export async function createAiBatchItems(
   db: D1Database,
   items: Array<{
-    id: string;
-    batchId: string;
+      id: string;
+      workspaceId: string;
+      batchId: string;
     keyword: string;
     description: string;
     now: string;
@@ -163,6 +178,7 @@ export async function createAiBatchItems(
   for (const item of items) {
     await drizzleDb.insert(aiBatchItems).values({
       id: item.id,
+      workspaceId: item.workspaceId,
       batchId: item.batchId,
       keyword: item.keyword,
       description: item.description,
@@ -210,12 +226,12 @@ export async function markAiBatchFinished(
     .where(eq(aiBatches.id, input.batchId));
 }
 
-export async function findNextRunnableAiBatchItem(db: D1Database, batchId: string) {
+export async function findNextRunnableAiBatchItem(db: D1Database, workspaceId: string, batchId: string) {
   const drizzleDb = getDb(db);
   const rows = await drizzleDb
     .select()
     .from(aiBatchItems)
-    .where(eq(aiBatchItems.batchId, batchId))
+    .where(and(eq(aiBatchItems.workspaceId, workspaceId), eq(aiBatchItems.batchId, batchId)))
     .orderBy(asc(aiBatchItems.createdAt));
 
   const runnable = rows.find((item) => item.status === "pending" || item.status === "outline_done");

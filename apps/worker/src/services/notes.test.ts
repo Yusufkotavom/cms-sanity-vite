@@ -5,6 +5,7 @@ import type { NoteRecord } from "../db/repositories/notes";
 
 const note: NoteRecord = {
   id: "note-1",
+  workspace_id: "default",
   title: "Title",
   slug: "title",
   content_md: "# Hello",

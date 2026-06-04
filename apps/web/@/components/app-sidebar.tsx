@@ -13,6 +13,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CalendarClockIcon,
   CommandIcon,
@@ -26,75 +27,80 @@ import {
   SparklesIcon,
   Settings2Icon,
 } from "lucide-react";
+import type { Workspace } from "@/lib/api";
 
 const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "#/dashboard",
+      route: "dashboard",
       icon: <LayoutDashboardIcon />,
     },
     {
       title: "Posts",
-      url: "#/posts",
+      route: "posts",
       icon: <FileTextIcon />,
     },
     {
       title: "Scheduled",
-      url: "#/scheduled",
+      route: "scheduled",
       icon: <CalendarClockIcon />,
     },
     {
       title: "Sanity Sync",
-      url: "#/sanity-sync",
+      route: "sanity-sync",
       icon: <FolderSyncIcon />,
     },
     {
       title: "AI Batch",
-      url: "#/ai-batch",
+      route: "ai-batch",
       icon: <SparklesIcon />,
     },
   ],
   navSecondary: [
     {
       title: "Settings",
-      url: "#/settings",
+      route: "settings",
       icon: <Settings2Icon />,
     },
     {
       title: "API Status",
-      url: "#/api-status",
+      route: "api-status",
       icon: <DatabaseIcon />,
     },
     {
       title: "Search",
-      url: "#/posts",
+      route: "posts",
       icon: <SearchIcon />,
     },
   ],
   documents: [
     {
       name: "All Notes",
-      url: "#/posts",
+      route: "posts",
       icon: <FileSearchIcon />,
     },
     {
       name: "Publish Queue",
-      url: "#/scheduled",
+      route: "scheduled",
       icon: <FileClockIcon />,
     },
     {
       name: "Sanity Mirror",
-      url: "#/sanity-sync",
+      route: "sanity-sync",
       icon: <FolderSyncIcon />,
     },
     {
       name: "AI Batch",
-      url: "#/ai-batch",
+      route: "ai-batch",
       icon: <SparklesIcon />,
     },
   ],
 };
+
+function buildWorkspaceUrl(workspaceSlug: string, route: string) {
+  return `#/w/${workspaceSlug}/${route}`;
+}
 
 export function AppSidebar({
   currentUrl,
@@ -102,6 +108,9 @@ export function AppSidebar({
   onCreate,
   userEmail,
   onLogout,
+  workspaces,
+  activeWorkspaceSlug,
+  onSelectWorkspace,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   currentUrl: string;
@@ -109,7 +118,23 @@ export function AppSidebar({
   onCreate: () => void;
   userEmail: string;
   onLogout: () => void;
+  workspaces: Workspace[];
+  activeWorkspaceSlug: string;
+  onSelectWorkspace: (slug: string) => void;
 }) {
+  const navMainItems = data.navMain.map((item) => ({
+    ...item,
+    url: buildWorkspaceUrl(activeWorkspaceSlug, item.route),
+  }));
+  const navSecondaryItems = data.navSecondary.map((item) => ({
+    ...item,
+    url: buildWorkspaceUrl(activeWorkspaceSlug, item.route),
+  }));
+  const documentItems = data.documents.map((item) => ({
+    ...item,
+    url: buildWorkspaceUrl(activeWorkspaceSlug, item.route),
+  }));
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -119,10 +144,10 @@ export function AppSidebar({
               className="data-[slot=sidebar-menu-button]:p-1.5!"
               render={
                 <a
-                  href="#/dashboard"
+                  href={buildWorkspaceUrl(activeWorkspaceSlug, "dashboard")}
                   onClick={(event) => {
                     event.preventDefault();
-                    onNavigate("#/dashboard");
+                    onNavigate(buildWorkspaceUrl(activeWorkspaceSlug, "dashboard"));
                   }}
                 />
               }
@@ -132,21 +157,35 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <div className="px-2 pb-2">
+          <Select value={activeWorkspaceSlug} onValueChange={(value) => value && onSelectWorkspace(value)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Pilih workspace" />
+            </SelectTrigger>
+            <SelectContent>
+              {workspaces.map((workspace) => (
+                <SelectItem key={workspace.id} value={workspace.slug}>
+                  {workspace.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <NavMain
-          items={data.navMain}
+          items={navMainItems}
           currentUrl={currentUrl}
           onNavigate={onNavigate}
           onCreate={onCreate}
         />
         <NavDocuments
-          items={data.documents}
+          items={documentItems}
           currentUrl={currentUrl}
           onNavigate={onNavigate}
         />
         <NavSecondary
-          items={data.navSecondary}
+          items={navSecondaryItems}
           currentUrl={currentUrl}
           onNavigate={onNavigate}
           className="mt-auto"

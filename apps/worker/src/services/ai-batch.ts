@@ -46,12 +46,21 @@ function trimOrFallback(value: string | undefined, fallback: string) {
 }
 
 async function ensureUniqueSlug(db: D1Database, preferredSlug: string, noteId?: string | null) {
+  throw new Error("ensureUniqueSlug workspace context required");
+}
+
+async function ensureUniqueSlugInWorkspace(
+  db: D1Database,
+  workspaceId: string,
+  preferredSlug: string,
+  noteId?: string | null
+) {
   const baseSlug = slugify(preferredSlug) || `draft-${crypto.randomUUID().slice(0, 8)}`;
   let nextSlug = baseSlug;
   let attempt = 1;
 
   while (true) {
-    const existing = await findNoteBySlug(db, nextSlug);
+    const existing = await findNoteBySlug(db, workspaceId, nextSlug);
     if (!existing || existing.id === noteId) {
       return nextSlug;
     }
@@ -79,12 +88,13 @@ function buildBatchNotePayload(item: AiBatchItemRecord) {
 async function upsertDraftNoteFromBatchItem(db: D1Database, item: AiBatchItemRecord, now: string) {
   const payload = buildBatchNotePayload(item);
   const noteId = item.note_id || crypto.randomUUID();
-  const uniqueSlug = await ensureUniqueSlug(db, payload.slug, item.note_id);
+  const uniqueSlug = await ensureUniqueSlugInWorkspace(db, item.workspace_id, payload.slug, item.note_id);
   const existing = item.note_id ? await findNoteById(db, item.note_id) : null;
 
   if (!existing) {
     await createNote(db, {
       id: noteId,
+      workspaceId: item.workspace_id,
       title: payload.title,
       slug: uniqueSlug,
       contentMd: payload.contentMd,
@@ -103,6 +113,7 @@ async function upsertDraftNoteFromBatchItem(db: D1Database, item: AiBatchItemRec
 
   await updateNoteDraft(db, {
     id: existing.id,
+    workspaceId: item.workspace_id,
     title: payload.title,
     slug: uniqueSlug,
     contentMd: payload.contentMd,
@@ -126,7 +137,7 @@ async function processPendingItem(
   item: AiBatchItemRecord,
   config: AiConfig
 ) {
-  const template = await findAiPromptTemplateById(env.DB, batch.template_id);
+  const template = await findAiPromptTemplateById(env.DB, batch.workspace_id, batch.template_id);
   if (!template) {
     throw new Error("Prompt template not found");
   }
@@ -220,7 +231,7 @@ async function processOutlineDoneItem(
   item: AiBatchItemRecord,
   config: AiConfig
 ) {
-  const template = await findAiPromptTemplateById(env.DB, batch.template_id);
+  const template = await findAiPromptTemplateById(env.DB, batch.workspace_id, batch.template_id);
   if (!template) {
     throw new Error("Prompt template not found");
   }
@@ -291,13 +302,13 @@ async function processOutlineDoneItem(
   });
 }
 
-async function refreshBatchStatus(db: D1Database, batchId: string) {
-  const batch = await findAiBatchById(db, batchId);
+async function refreshBatchStatus(db: D1Database, workspaceId: string, batchId: string) {
+  const batch = await findAiBatchById(db, workspaceId, batchId);
   if (!batch) {
     return null;
   }
 
-  const items = await listAiBatchItemsByBatchId(db, batchId);
+  const items = await listAiBatchItemsByBatchId(db, workspaceId, batchId);
   const completedItems = items.filter((item) => item.status === "completed").length;
   const failedItems = items.filter((item) => item.status === "failed").length;
   const hasRunnableItems = items.some(
@@ -340,10 +351,11 @@ async function processBatchItem(env: WorkerEnv, batch: AiBatchRecord, item: AiBa
 
 export async function processAiBatchWork(
   env: WorkerEnv,
+  workspaceId: string,
   config: AiConfig,
   limit = MAX_ITEMS_PER_INVOCATION
 ) {
-  const activeBatches = await listActiveAiBatches(env.DB);
+  const activeBatches = await listActiveAiBatches(env.DB, workspaceId);
   let processed = 0;
   let failed = 0;
 
@@ -353,10 +365,10 @@ export async function processAiBatchWork(
     }
 
     await markAiBatchProcessing(env.DB, batch.id, new Date().toISOString());
-    const nextItem = await findNextRunnableAiBatchItem(env.DB, batch.id);
+    const nextItem = await findNextRunnableAiBatchItem(env.DB, workspaceId, batch.id);
 
     if (!nextItem) {
-      await refreshBatchStatus(env.DB, batch.id);
+      await refreshBatchStatus(env.DB, workspaceId, batch.id);
       continue;
     }
 
@@ -372,7 +384,7 @@ export async function processAiBatchWork(
       });
     }
 
-    await refreshBatchStatus(env.DB, batch.id);
+    await refreshBatchStatus(env.DB, workspaceId, batch.id);
   }
 
   return { processed, failed };

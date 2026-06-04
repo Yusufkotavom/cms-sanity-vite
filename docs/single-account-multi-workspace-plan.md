@@ -2,7 +2,7 @@
 
 ## Goal
 
-Satu akun user bisa mengelola banyak workspace, dan setiap workspace mewakili satu website atau satu Sanity project yang berbeda.
+Satu owner login bisa mengelola banyak workspace, dan setiap workspace mewakili satu website atau satu Sanity project yang berbeda.
 
 Contoh:
 
@@ -10,7 +10,27 @@ Contoh:
 - `site-bisnis-a.com`
 - `site-bisnis-b.com`
 
-Setiap workspace punya data, setting, queue publish, AI config, dan branding sendiri tanpa tercampur dengan workspace lain.
+Setiap workspace punya data, setting, token, queue publish, AI config, branding, dan cron execution context sendiri tanpa tercampur dengan workspace lain.
+
+## Core Rule
+
+Workspace harus dianggap sebagai boundary isolasi penuh.
+
+Artinya:
+
+- note workspace A tidak boleh terbaca atau terpublish oleh workspace B
+- setting Sanity workspace A tidak boleh dipakai untuk publish workspace B
+- AI settings workspace A tidak boleh dipakai untuk batch workspace B
+- OG branding workspace A tidak boleh dipakai untuk generate image workspace B
+- publish job workspace A tidak boleh ikut diproses memakai config workspace B
+- failure, retry, timeout, dan logs harus tetap bisa dilacak per workspace
+
+Untuk use case Anda, target desainnya adalah:
+
+- satu owner/admin login
+- banyak workspace
+- satu workspace = satu project Sanity / satu website
+- semua resource operasional scoped ke `workspace_id`
 
 ## Current State
 
@@ -29,12 +49,13 @@ Akibatnya, satu deployment sekarang paling aman hanya dipakai untuk satu website
 
 ## Target Product Model
 
-### Account
+### Owner Account
 
-Entity identitas user utama.
+Entity identitas login utama.
 
-- satu account bisa punya banyak workspace
-- nanti bisa dipakai untuk owner billing, quota, dan audit
+- satu owner bisa punya banyak workspace
+- fase awal cukup single-user admin
+- belum perlu invitation, membership, atau role kompleks
 
 ### Workspace
 
@@ -59,27 +80,46 @@ Opsional:
 
 ### Membership
 
-Jika nanti ingin multi-user, tambahkan relasi user ke workspace.
+Untuk fase awal, membership multi-user tidak perlu diimplementasikan dulu.
+
+Kalau nanti dibutuhkan, baru tambahkan:
 
 - `workspace_members`
 - role minimal: `owner`, `editor`, `publisher`, `viewer`
 
-Untuk fase awal, kalau belum ada auth, struktur ini bisa ditunda.
+Tetapi untuk kebutuhan Anda sekarang, plan ini dioptimalkan untuk single-owner multi-workspace.
 
 ## Data Model Changes
 
 Semua data operasional perlu terikat ke workspace.
 
-### Tables yang perlu `workspace_id`
+### Tables yang wajib punya `workspace_id`
 
 - `notes`
 - `publish_jobs`
 - `ai_batches`
-- `ai_batch_items` secara tidak langsung lewat `batch_id`, tapi boleh tetap ditambah bila ingin query lebih simpel
-- `ai_prompt_templates` jika template ingin per workspace
-- `note_categories` tidak perlu `workspace_id` bila relasi ke `notes` sudah benar
+- `ai_batch_items`
+- `ai_prompt_templates`
+
+### Tables yang sebaiknya juga punya `workspace_id`
+
+- `note_categories`
+
+Walau `note_categories` bisa ikut lewat relasi `notes`, menambahkan `workspace_id` memberi dua keuntungan:
+
+- query dan cleanup lebih aman
+- validasi cross-workspace relation lebih mudah
 
 ### Settings
+
+Semua settings yang memengaruhi behavior runtime harus per workspace. Jangan ada config publish/AI/branding yang shared lintas workspace.
+
+`app_settings` global hanya boleh dipakai untuk setting aplikasi yang benar-benar universal dan tidak terkait tenant, misalnya:
+
+- feature flag internal yang berlaku untuk seluruh app
+- default UI constant yang tidak menyimpan credential
+
+Sanity, AI, OG branding, dan automation config tidak boleh lagi tinggal di `app_settings` global.
 
 `app_settings` global sebaiknya dipisah menjadi salah satu dari dua model berikut.
 
@@ -122,6 +162,12 @@ Kekurangan:
 
 Rekomendasi: mulai dari `workspace_settings` agar migrasi cepat, lalu pecah per domain kalau kebutuhan makin kompleks.
 
+Aturan penting:
+
+- semua credential harus dibaca dengan `workspace_id`
+- worker tidak boleh memiliki fallback ke workspace lain
+- jika config workspace tidak lengkap, request workspace itu harus gagal eksplisit
+
 ## Recommended Workspace Scope
 
 Setiap workspace menyimpan konfigurasi berikut secara terpisah:
@@ -138,10 +184,24 @@ Setiap workspace menyimpan konfigurasi berikut secara terpisah:
 - OG branding `workflowLabel`
 - OG branding `footerText`
 - cron preference atau publish window bila nanti dibutuhkan
+- timezone workspace jika schedule ingin mengikuti zona waktu masing-masing website
+- optional default category mapping per workspace
+
+## Isolation Rules
+
+Semua read/write path harus mengikuti aturan ini:
+
+1. Semua query notes wajib filter `workspace_id`.
+2. Semua query publish jobs wajib filter `workspace_id`.
+3. Semua read settings wajib menerima `workspace_id`.
+4. Semua create/update operation wajib menulis `workspace_id`.
+5. Semua foreign key relation harus divalidasi tetap berada di workspace yang sama.
+6. API tidak boleh menerima `note_id` lalu mengakses note lintas workspace.
+7. Scheduler tidak boleh publish job hanya berdasarkan `note_id`; harus selalu membawa `workspace_id`.
 
 ## Backend API Changes
 
-Semua endpoint notes dan publish perlu konteks workspace.
+Semua endpoint notes, publish, AI, category, settings, dan batch perlu konteks workspace.
 
 ### Opsi route
 
@@ -173,6 +233,15 @@ Kekurangan:
 - kurang jelas saat lihat logs
 
 Rekomendasi: gunakan path-based.
+
+Contoh target endpoint:
+
+- `GET /api/workspaces/:workspaceId/config`
+- `GET /api/workspaces/:workspaceId/notes`
+- `POST /api/workspaces/:workspaceId/notes/:id/publish`
+- `GET /api/workspaces/:workspaceId/settings/sanity`
+- `PUT /api/workspaces/:workspaceId/settings/ai`
+- `POST /api/workspaces/:workspaceId/ai/batches/process`
 
 ## Frontend Changes
 
@@ -227,16 +296,52 @@ Saat workspace berubah, frontend harus reload:
 - OG branding settings
 - batch status yang aktif
 
+Frontend juga harus memastikan:
+
+- draft editor lama dibuang saat pindah workspace
+- route note lama tidak boleh membuka note dari workspace lain
+- search/filter UI hanya berjalan di dataset workspace aktif
+
 ## Scheduler and Publish Isolation
 
-Cron worker tetap bisa satu deployment, tetapi setiap job harus jelas milik workspace tertentu.
+Cron worker tetap bisa satu deployment, tetapi eksekusi job harus tetap terisolasi per workspace.
 
 Perubahan penting:
 
 - `publish_jobs` harus menyimpan `workspace_id`
-- query scheduled jobs harus filter per workspace context data
+- query scheduled jobs harus selalu membaca `workspace_id`
+- saat cron memilih job, ia harus memuat config workspace milik job tersebut, bukan config global
 - log publish harus menyertakan `workspaceId`
 - status failed/timeout harus tetap terisolasi per workspace
+
+### Recommended Cron Model
+
+Gunakan satu cron global Worker, tetapi proses job satu per satu berdasarkan `workspace_id`.
+
+Alur yang direkomendasikan:
+
+1. Cron mengambil semua `publish_jobs` due dengan `workspace_id`.
+2. Untuk setiap job, worker load workspace config yang sesuai.
+3. Worker publish note memakai Sanity credential milik workspace itu.
+4. Jika gagal, fail hanya note/job milik workspace tersebut.
+5. Lanjut ke job berikutnya tanpa membawa state workspace sebelumnya.
+
+### Cron Safety Rules
+
+- jangan cache config workspace A lalu pakai ulang untuk workspace B
+- jangan buat singleton mutable yang menyimpan workspace terakhir
+- log harus selalu menyertakan `workspaceId`, `noteId`, `jobId`
+- timeout/retry harus tersimpan per workspace job
+- query reclaim stale job juga wajib scoped ke workspace melalui record job itu sendiri
+
+### Schedule Semantics
+
+Supaya antar workspace tetap normal:
+
+- semua scheduled note tetap masuk ke satu tabel queue, tapi setiap row punya `workspace_id`
+- cron tidak perlu satu jadwal per workspace; cukup satu cron global yang netral
+- fairness penting: gunakan limit batching agar satu workspace ramai tidak memonopoli semua run
+- bila perlu, tambahkan round-robin sederhana per workspace pada fase lanjut
 
 Kalau nanti volume job tinggi, bisa lanjut ke model:
 
@@ -265,6 +370,7 @@ Untuk tahap sekarang, satu worker multi-workspace masih cukup.
 - ubah repository agar semua query menerima `workspaceId`
 - ubah endpoint ke `/api/workspaces/:workspaceId/...`
 - tambahkan validasi workspace existence
+- tambahkan validasi bahwa `noteId`, `templateId`, `batchId`, `categoryId` milik workspace yang sama
 
 ### Phase 4: Frontend Workspace UX
 
@@ -278,6 +384,7 @@ Untuk tahap sekarang, satu worker multi-workspace masih cukup.
 - tambahkan `workspaceId` ke seluruh log publish
 - tambahkan filter workspace pada cron processing
 - tambahkan retry, timeout, dan metrics per workspace
+- tambahkan fairness rule agar satu workspace tidak memblokir workspace lain saat cron run
 
 ## Minimum Schema Proposal
 
@@ -310,33 +417,51 @@ primary key (workspace_id, key)
 - `notes.workspace_id text not null`
 - `publish_jobs.workspace_id text not null`
 - `ai_batches.workspace_id text not null`
-- `ai_prompt_templates.workspace_id text not null` bila ingin template per workspace
+- `ai_batch_items.workspace_id text not null`
+- `ai_prompt_templates.workspace_id text not null`
+- `note_categories.workspace_id text not null`
+
+## Recommended Constraints
+
+Tambahkan constraint atau validasi aplikasi untuk mencegah data silang antar workspace.
+
+Contoh:
+
+- note hanya boleh memakai category dari workspace yang sama
+- publish job hanya boleh mereferensikan note dari workspace yang sama
+- batch item hanya boleh mereferensikan batch dan note dari workspace yang sama
+- template AI hanya boleh dipakai untuk batch di workspace yang sama
 
 ## Recommended Implementation Order
 
 1. Tambahkan tabel `workspaces` dan `workspace_settings`.
-2. Backfill semua data lama ke workspace default.
-3. Update repository worker untuk menerima `workspaceId`.
-4. Update endpoint API ke path workspace-based.
-5. Tambahkan workspace switcher di frontend.
-6. Update cron publish dan AI batch agar scoped ke workspace.
-7. Tambahkan auth/account layer jika memang dibutuhkan.
+2. Buat `default workspace` untuk migrasi data lama.
+3. Tambahkan `workspace_id` ke semua tabel operasional utama.
+4. Backfill semua data lama ke `default workspace`.
+5. Update repository worker agar semua query wajib menerima `workspaceId`.
+6. Update endpoint API ke path workspace-based.
+7. Update cron publish dan AI batch agar selalu load config berdasarkan `workspace_id` job.
+8. Tambahkan workspace switcher di frontend.
+9. Tambahkan proteksi cross-workspace relation.
 
 ## Practical Recommendation For Your Use Case
 
 Karena Anda punya beberapa website berbasis Sanity yang ingin dikelola dari satu tempat, model terbaik untuk fase berikutnya adalah:
 
 - satu deployment app
-- satu account owner
+- satu owner login
 - banyak workspace
 - satu workspace = satu website Sanity
-- setting Sanity, AI, OG branding, notes, schedule, dan queue publish dipisah per workspace
+- setting Sanity, AI, OG branding, notes, schedule, AI batch, dan queue publish dipisah per workspace
+- cron global tetap satu, tetapi eksekusi job selalu berdasarkan context workspace masing-masing
 
 Ini memberi Anda:
 
 - dashboard tunggal
 - operasi publish yang terisolasi
 - retry/failed queue per website
+- cron tetap normal walau banyak workspace
+- tidak ada risiko project Sanity A memakai token project Sanity B
 - lebih mudah tambah website baru tanpa deploy app baru
 
 ## Out of Scope For First Iteration

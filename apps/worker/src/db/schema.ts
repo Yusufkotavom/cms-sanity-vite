@@ -1,7 +1,32 @@
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+
+export const workspaces = sqliteTable("workspaces", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  status: text("status").notNull(),
+  domain: text("domain"),
+  description: text("description"),
+  timezone: text("timezone"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [uniqueIndex("workspaces_slug_idx").on(table.slug)]);
+
+export const workspaceSettings = sqliteTable(
+  "workspace_settings",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.workspaceId, table.key] }), index("workspace_settings_workspace_id_idx").on(table.workspaceId)]
+);
 
 export const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull(),
   title: text("title").notNull(),
   slug: text("slug").notNull(),
   contentMd: text("content_md").notNull(),
@@ -19,7 +44,10 @@ export const notes = sqliteTable("notes", {
   lastError: text("last_error"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-});
+}, (table) => [
+  index("notes_workspace_id_idx").on(table.workspaceId),
+  uniqueIndex("notes_workspace_id_slug_idx").on(table.workspaceId, table.slug),
+]);
 
 export const appSettings = sqliteTable("app_settings", {
   key: text("key").primaryKey(),
@@ -28,18 +56,20 @@ export const appSettings = sqliteTable("app_settings", {
 
 export const aiPromptTemplates = sqliteTable("ai_prompt_templates", {
   id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull(),
   name: text("name").notNull(),
   description: text("description"),
   outlinePrompt: text("outline_prompt").notNull(),
   contentPrompt: text("content_prompt").notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-});
+}, (table) => [index("ai_prompt_templates_workspace_id_idx").on(table.workspaceId)]);
 
 export const aiBatches = sqliteTable(
   "ai_batches",
   {
     id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
     name: text("name").notNull(),
     mode: text("mode").notNull(),
     templateId: text("template_id").notNull(),
@@ -51,13 +81,17 @@ export const aiBatches = sqliteTable(
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
-  (table) => [index("ai_batches_status_updated_at_idx").on(table.status, table.updatedAt)]
+  (table) => [
+    index("ai_batches_workspace_id_idx").on(table.workspaceId),
+    index("ai_batches_status_updated_at_idx").on(table.status, table.updatedAt),
+  ]
 );
 
 export const aiBatchItems = sqliteTable(
   "ai_batch_items",
   {
     id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
     batchId: text("batch_id").notNull(),
     keyword: text("keyword").notNull(),
     description: text("description").notNull(),
@@ -80,6 +114,7 @@ export const aiBatchItems = sqliteTable(
   },
   (table) => [
     index("ai_batch_items_batch_id_idx").on(table.batchId),
+    index("ai_batch_items_workspace_id_idx").on(table.workspaceId),
     index("ai_batch_items_status_updated_at_idx").on(table.status, table.updatedAt),
   ]
 );
@@ -88,6 +123,7 @@ export const publishJobs = sqliteTable(
   "publish_jobs",
   {
     id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
     noteId: text("note_id").notNull(),
     status: text("status").notNull(),
     message: text("message"),
@@ -97,6 +133,7 @@ export const publishJobs = sqliteTable(
   },
   (table) => [
     index("publish_jobs_note_id_idx").on(table.noteId),
+    index("publish_jobs_workspace_id_idx").on(table.workspaceId),
     index("publish_jobs_status_run_at_idx").on(table.status, table.runAt),
   ]
 );
@@ -104,11 +141,13 @@ export const publishJobs = sqliteTable(
 export const noteCategories = sqliteTable(
   "note_categories",
   {
+    workspaceId: text("workspace_id").notNull(),
     noteId: text("note_id").notNull(),
     categoryId: text("category_id").notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.noteId, table.categoryId] }),
+    primaryKey({ columns: [table.workspaceId, table.noteId, table.categoryId] }),
+    index("note_categories_workspace_id_idx").on(table.workspaceId),
     index("note_categories_note_id_idx").on(table.noteId),
   ]
 );

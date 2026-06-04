@@ -2,8 +2,9 @@ import type { NoteInput } from "@repo/shared";
 
 const API_BASE_OVERRIDE_STORAGE_KEY = "cms-sanity-vite.api-base-url";
 const API_AUTH_TOKEN_STORAGE_KEY = "cms-sanity-vite.auth-token";
+const ACTIVE_WORKSPACE_STORAGE_KEY = "cms-sanity-vite.active-workspace-slug";
 const LOCAL_API_BASE_URL = "http://127.0.0.1:8787";
-const DEFAULT_PRODUCTION_API_BASE_URL = "";
+const DEFAULT_PRODUCTION_API_BASE_URL = "https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev";
 
 export class ApiError extends Error {
   status: number;
@@ -129,6 +130,18 @@ export type AuthSession = {
     email: string;
   };
   expiresAt: string;
+};
+
+export type Workspace = {
+  id: string;
+  name: string;
+  slug: string;
+  status: "active" | "archived";
+  domain: string | null;
+  description: string | null;
+  timezone: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AiPromptTemplate = {
@@ -270,6 +283,37 @@ export function clearStoredAuthToken() {
   window.localStorage.removeItem(API_AUTH_TOKEN_STORAGE_KEY);
 }
 
+export function getStoredActiveWorkspaceSlug() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const value = window.localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY)?.trim();
+  return value || null;
+}
+
+export function setStoredActiveWorkspaceSlug(value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    window.localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, normalized);
+}
+
+export function clearStoredActiveWorkspaceSlug() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+}
+
 export function getApiBaseUrl() {
   return resolveApiBaseUrl();
 }
@@ -289,10 +333,12 @@ export function getDefaultApiBaseUrl() {
 
 async function request<T>(path: string, init?: RequestInit, options?: { skipAuth?: boolean }) {
   const token = options?.skipAuth ? null : getStoredAuthToken();
+  const workspaceSlug = getStoredActiveWorkspaceSlug();
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : {}),
       ...(init?.headers || {}),
     },
     ...init,
@@ -329,6 +375,37 @@ export const authApi = {
     ),
   me: () => request<AuthSession>("/api/auth/me"),
   settings: () => request<AuthSettings>("/api/settings/auth"),
+};
+
+export const workspacesApi = {
+  list: () => request<{ items: Workspace[] }>("/api/workspaces"),
+  create: (payload: {
+    name: string;
+    slug: string;
+    domain?: string;
+    description?: string;
+    timezone?: string;
+    status?: "active" | "archived";
+  }) =>
+    request<Workspace>("/api/workspaces", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  update: (
+    id: string,
+    payload: {
+      name: string;
+      slug: string;
+      domain?: string;
+      description?: string;
+      timezone?: string;
+      status?: "active" | "archived";
+    }
+  ) =>
+    request<Workspace>(`/api/workspaces/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 };
 
 export const notesApi = {

@@ -5,6 +5,7 @@ import { publishJobs } from "../schema";
 
 export type PublishJobRecord = {
   id: string;
+  workspace_id: string;
   note_id: string;
   run_at: string;
   updated_at: string;
@@ -13,6 +14,7 @@ export type PublishJobRecord = {
 function toPublishJobRecord(job: typeof publishJobs.$inferSelect): PublishJobRecord {
   return {
     id: job.id,
+    workspace_id: job.workspaceId,
     note_id: job.noteId,
     run_at: job.runAt,
     updated_at: job.updatedAt,
@@ -37,20 +39,25 @@ export async function listTimedOutProcessingPublishJobs(
   return rows.map(toPublishJobRecord);
 }
 
-export async function deleteJobsByNoteId(db: D1Database, noteId: string) {
+export async function deleteJobsByNoteId(db: D1Database, workspaceId: string, noteId: string) {
   const drizzleDb = getDb(db);
-  await drizzleDb.delete(publishJobs).where(eq(publishJobs.noteId, noteId));
+  await drizzleDb.delete(publishJobs).where(and(eq(publishJobs.workspaceId, workspaceId), eq(publishJobs.noteId, noteId)));
 }
 
-export async function createScheduledJob(db: D1Database, input: {
-  id: string;
-  noteId: string;
-  runAt: string;
-  now: string;
-}) {
+export async function createScheduledJob(
+  db: D1Database,
+  input: {
+    id: string;
+    workspaceId: string;
+    noteId: string;
+    runAt: string;
+    now: string;
+  }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb.insert(publishJobs).values({
     id: input.id,
+    workspaceId: input.workspaceId,
     noteId: input.noteId,
     status: "scheduled",
     message: null,
@@ -60,7 +67,10 @@ export async function createScheduledJob(db: D1Database, input: {
   });
 }
 
-export async function markJobsPublished(db: D1Database, input: { noteId: string; updatedAt: string }) {
+export async function markJobsPublished(
+  db: D1Database,
+  input: { workspaceId: string; noteId: string; updatedAt: string }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb
     .update(publishJobs)
@@ -69,14 +79,18 @@ export async function markJobsPublished(db: D1Database, input: { noteId: string;
       message: null,
       updatedAt: input.updatedAt,
     })
-    .where(eq(publishJobs.noteId, input.noteId));
+    .where(and(eq(publishJobs.workspaceId, input.workspaceId), eq(publishJobs.noteId, input.noteId)));
 }
 
-export async function markJobsFailed(db: D1Database, input: {
-  noteId: string;
-  message: string;
-  updatedAt: string;
-}) {
+export async function markJobsFailed(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    noteId: string;
+    message: string;
+    updatedAt: string;
+  }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb
     .update(publishJobs)
@@ -85,7 +99,7 @@ export async function markJobsFailed(db: D1Database, input: {
       message: input.message,
       updatedAt: input.updatedAt,
     })
-    .where(eq(publishJobs.noteId, input.noteId));
+    .where(and(eq(publishJobs.workspaceId, input.workspaceId), eq(publishJobs.noteId, input.noteId)));
 }
 
 export async function listRunnablePublishJobs(

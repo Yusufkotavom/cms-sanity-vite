@@ -1,10 +1,11 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { getDb } from "../client";
 import { noteCategories, notes } from "../schema";
 
 export type NoteRecord = {
   id: string;
+  workspace_id: string;
   title: string;
   slug: string;
   content_md: string;
@@ -27,6 +28,7 @@ export type NoteRecord = {
 function toNoteRecord(note: typeof notes.$inferSelect): NoteRecord {
   return {
     id: note.id,
+    workspace_id: note.workspaceId,
     title: note.title,
     slug: note.slug,
     content_md: note.contentMd,
@@ -47,44 +49,65 @@ function toNoteRecord(note: typeof notes.$inferSelect): NoteRecord {
   };
 }
 
-export async function listNotes(db: D1Database) {
+export async function listNotes(db: D1Database, workspaceId: string) {
   const drizzleDb = getDb(db);
-  const rows = await drizzleDb.select().from(notes).orderBy(desc(notes.updatedAt));
+  const rows = await drizzleDb
+    .select()
+    .from(notes)
+    .where(eq(notes.workspaceId, workspaceId))
+    .orderBy(desc(notes.updatedAt));
   return rows.map(toNoteRecord);
 }
 
 export async function findNoteById(db: D1Database, id: string) {
   const drizzleDb = getDb(db);
   const rows = await drizzleDb.select().from(notes).where(eq(notes.id, id)).limit(1);
-  const note = rows[0];
-  return note ? toNoteRecord(note) : null;
+  return rows[0] ? toNoteRecord(rows[0]) : null;
 }
 
-export async function findNoteBySlug(db: D1Database, slug: string) {
+export async function findNoteByIdInWorkspace(db: D1Database, workspaceId: string, id: string) {
   const drizzleDb = getDb(db);
-  const rows = await drizzleDb.select().from(notes).where(eq(notes.slug, slug)).limit(1);
-  const note = rows[0];
-  return note ? toNoteRecord(note) : null;
+  const rows = await drizzleDb
+    .select()
+    .from(notes)
+    .where(and(eq(notes.workspaceId, workspaceId), eq(notes.id, id)))
+    .limit(1);
+  return rows[0] ? toNoteRecord(rows[0]) : null;
 }
 
-export async function createNote(db: D1Database, input: {
-  id: string;
-  title: string;
-  slug: string;
-  contentMd: string;
-  outlineMd: string;
-  excerpt: string;
-  seoTitle: string;
-  seoDescription: string;
-  seoKeywords: string;
-  ogTitle: string;
-  ogDescription: string;
-  ogImageAssetId?: string;
-  createdAt: string;
-}) {
+export async function findNoteBySlug(db: D1Database, workspaceId: string, slug: string) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb
+    .select()
+    .from(notes)
+    .where(and(eq(notes.workspaceId, workspaceId), eq(notes.slug, slug)))
+    .limit(1);
+  return rows[0] ? toNoteRecord(rows[0]) : null;
+}
+
+export async function createNote(
+  db: D1Database,
+  input: {
+    id: string;
+    workspaceId: string;
+    title: string;
+    slug: string;
+    contentMd: string;
+    outlineMd: string;
+    excerpt: string;
+    seoTitle: string;
+    seoDescription: string;
+    seoKeywords: string;
+    ogTitle: string;
+    ogDescription: string;
+    ogImageAssetId?: string;
+    createdAt: string;
+  }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb.insert(notes).values({
     id: input.id,
+    workspaceId: input.workspaceId,
     title: input.title,
     slug: input.slug,
     contentMd: input.contentMd,
@@ -102,22 +125,26 @@ export async function createNote(db: D1Database, input: {
   });
 }
 
-export async function updateNoteDraft(db: D1Database, input: {
-  id: string;
-  title: string;
-  slug: string;
-  contentMd: string;
-  outlineMd: string;
-  excerpt: string;
-  seoTitle: string;
-  seoDescription: string;
-  seoKeywords: string;
-  ogTitle: string;
-  ogDescription: string;
-  ogImageAssetId?: string | null;
-  currentStatus: string;
-  updatedAt: string;
-}) {
+export async function updateNoteDraft(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    id: string;
+    title: string;
+    slug: string;
+    contentMd: string;
+    outlineMd: string;
+    excerpt: string;
+    seoTitle: string;
+    seoDescription: string;
+    seoKeywords: string;
+    ogTitle: string;
+    ogDescription: string;
+    ogImageAssetId?: string | null;
+    currentStatus: string;
+    updatedAt: string;
+  }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb
     .update(notes)
@@ -137,27 +164,27 @@ export async function updateNoteDraft(db: D1Database, input: {
       lastError: null,
       updatedAt: input.updatedAt,
     })
-    .where(eq(notes.id, input.id));
+    .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.id)));
 }
 
-export async function deleteNote(db: D1Database, noteId: string) {
+export async function deleteNote(db: D1Database, workspaceId: string, noteId: string) {
   const drizzleDb = getDb(db);
-  await drizzleDb.delete(noteCategories).where(eq(noteCategories.noteId, noteId));
-  await drizzleDb.delete(notes).where(eq(notes.id, noteId));
+  await drizzleDb.delete(noteCategories).where(and(eq(noteCategories.workspaceId, workspaceId), eq(noteCategories.noteId, noteId)));
+  await drizzleDb.delete(notes).where(and(eq(notes.workspaceId, workspaceId), eq(notes.id, noteId)));
 }
 
-export async function getNoteCategoryIds(db: D1Database, noteId: string) {
+export async function getNoteCategoryIds(db: D1Database, workspaceId: string, noteId: string) {
   const drizzleDb = getDb(db);
   const rows = await drizzleDb
     .select({ categoryId: noteCategories.categoryId })
     .from(noteCategories)
-    .where(eq(noteCategories.noteId, noteId))
+    .where(and(eq(noteCategories.workspaceId, workspaceId), eq(noteCategories.noteId, noteId)))
     .orderBy(noteCategories.categoryId);
 
   return rows.map((item) => item.categoryId);
 }
 
-export async function getCategoryIdsByNoteIds(db: D1Database, noteIds: string[]) {
+export async function getCategoryIdsByNoteIds(db: D1Database, workspaceId: string, noteIds: string[]) {
   if (noteIds.length === 0) {
     return new Map<string, string[]>();
   }
@@ -166,7 +193,7 @@ export async function getCategoryIdsByNoteIds(db: D1Database, noteIds: string[])
   const rows = await drizzleDb
     .select({ noteId: noteCategories.noteId, categoryId: noteCategories.categoryId })
     .from(noteCategories)
-    .where(inArray(noteCategories.noteId, noteIds))
+    .where(and(eq(noteCategories.workspaceId, workspaceId), inArray(noteCategories.noteId, noteIds)))
     .orderBy(noteCategories.noteId, noteCategories.categoryId);
 
   const result = new Map<string, string[]>();
@@ -179,9 +206,9 @@ export async function getCategoryIdsByNoteIds(db: D1Database, noteIds: string[])
   return result;
 }
 
-export async function replaceNoteCategories(db: D1Database, noteId: string, categoryIds: string[]) {
+export async function replaceNoteCategories(db: D1Database, workspaceId: string, noteId: string, categoryIds: string[]) {
   const drizzleDb = getDb(db);
-  await drizzleDb.delete(noteCategories).where(eq(noteCategories.noteId, noteId));
+  await drizzleDb.delete(noteCategories).where(and(eq(noteCategories.workspaceId, workspaceId), eq(noteCategories.noteId, noteId)));
 
   const uniqueCategoryIds = [...new Set(categoryIds.map((item) => item.trim()).filter(Boolean))];
   if (uniqueCategoryIds.length === 0) {
@@ -190,17 +217,22 @@ export async function replaceNoteCategories(db: D1Database, noteId: string, cate
 
   await drizzleDb.insert(noteCategories).values(
     uniqueCategoryIds.map((categoryId) => ({
+      workspaceId,
       noteId,
       categoryId,
     }))
   );
 }
 
-export async function markNoteScheduled(db: D1Database, input: {
-  noteId: string;
-  publishAt: string;
-  updatedAt: string;
-}) {
+export async function markNoteScheduled(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    noteId: string;
+    publishAt: string;
+    updatedAt: string;
+  }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb
     .update(notes)
@@ -210,14 +242,18 @@ export async function markNoteScheduled(db: D1Database, input: {
       lastError: null,
       updatedAt: input.updatedAt,
     })
-    .where(eq(notes.id, input.noteId));
+    .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.noteId)));
 }
 
-export async function markNotePublished(db: D1Database, input: {
-  noteId: string;
-  publishedAt: string;
-  sanityDocumentId: string;
-}) {
+export async function markNotePublished(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    noteId: string;
+    publishedAt: string;
+    sanityDocumentId: string;
+  }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb
     .update(notes)
@@ -228,14 +264,18 @@ export async function markNotePublished(db: D1Database, input: {
       lastError: null,
       updatedAt: input.publishedAt,
     })
-    .where(eq(notes.id, input.noteId));
+    .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.noteId)));
 }
 
-export async function markNoteFailed(db: D1Database, input: {
-  noteId: string;
-  message: string;
-  updatedAt: string;
-}) {
+export async function markNoteFailed(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    noteId: string;
+    message: string;
+    updatedAt: string;
+  }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb
     .update(notes)
@@ -244,14 +284,18 @@ export async function markNoteFailed(db: D1Database, input: {
       lastError: input.message,
       updatedAt: input.updatedAt,
     })
-    .where(eq(notes.id, input.noteId));
+    .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.noteId)));
 }
 
-export async function setNoteOgImageAssetId(db: D1Database, input: {
-  noteId: string;
-  ogImageAssetId: string;
-  updatedAt: string;
-}) {
+export async function setNoteOgImageAssetId(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    noteId: string;
+    ogImageAssetId: string;
+    updatedAt: string;
+  }
+) {
   const drizzleDb = getDb(db);
   await drizzleDb
     .update(notes)
@@ -259,5 +303,5 @@ export async function setNoteOgImageAssetId(db: D1Database, input: {
       ogImageAssetId: input.ogImageAssetId,
       updatedAt: input.updatedAt,
     })
-    .where(eq(notes.id, input.noteId));
+    .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.noteId)));
 }

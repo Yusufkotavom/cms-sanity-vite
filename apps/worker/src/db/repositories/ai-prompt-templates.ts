@@ -1,10 +1,11 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { getDb } from "../client";
 import { aiPromptTemplates } from "../schema";
 
 export type AiPromptTemplateRecord = {
   id: string;
+  workspace_id: string;
   name: string;
   description: string | null;
   outline_prompt: string;
@@ -16,6 +17,7 @@ export type AiPromptTemplateRecord = {
 function toTemplateRecord(template: typeof aiPromptTemplates.$inferSelect): AiPromptTemplateRecord {
   return {
     id: template.id,
+    workspace_id: template.workspaceId,
     name: template.name,
     description: template.description,
     outline_prompt: template.outlinePrompt,
@@ -27,18 +29,22 @@ function toTemplateRecord(template: typeof aiPromptTemplates.$inferSelect): AiPr
 
 const DEFAULT_TEMPLATE_NAME = "Default Blog Batch";
 
-export async function listAiPromptTemplates(db: D1Database) {
-  const drizzleDb = getDb(db);
-  const rows = await drizzleDb.select().from(aiPromptTemplates).orderBy(asc(aiPromptTemplates.name));
-  return rows.map(toTemplateRecord);
-}
-
-export async function findAiPromptTemplateById(db: D1Database, id: string) {
+export async function listAiPromptTemplates(db: D1Database, workspaceId: string) {
   const drizzleDb = getDb(db);
   const rows = await drizzleDb
     .select()
     .from(aiPromptTemplates)
-    .where(eq(aiPromptTemplates.id, id))
+    .where(eq(aiPromptTemplates.workspaceId, workspaceId))
+    .orderBy(asc(aiPromptTemplates.name));
+  return rows.map(toTemplateRecord);
+}
+
+export async function findAiPromptTemplateById(db: D1Database, workspaceId: string, id: string) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb
+    .select()
+    .from(aiPromptTemplates)
+    .where(and(eq(aiPromptTemplates.workspaceId, workspaceId), eq(aiPromptTemplates.id, id)))
     .limit(1);
   const template = rows[0];
   return template ? toTemplateRecord(template) : null;
@@ -48,6 +54,7 @@ export async function createAiPromptTemplate(
   db: D1Database,
   input: {
     id: string;
+    workspaceId: string;
     name: string;
     description: string;
     outlinePrompt: string;
@@ -58,6 +65,7 @@ export async function createAiPromptTemplate(
   const drizzleDb = getDb(db);
   await drizzleDb.insert(aiPromptTemplates).values({
     id: input.id,
+    workspaceId: input.workspaceId,
     name: input.name,
     description: input.description,
     outlinePrompt: input.outlinePrompt,
@@ -71,6 +79,7 @@ export async function updateAiPromptTemplate(
   db: D1Database,
   input: {
     id: string;
+    workspaceId: string;
     name: string;
     description: string;
     outlinePrompt: string;
@@ -88,11 +97,11 @@ export async function updateAiPromptTemplate(
       contentPrompt: input.contentPrompt,
       updatedAt: input.updatedAt,
     })
-    .where(eq(aiPromptTemplates.id, input.id));
+    .where(and(eq(aiPromptTemplates.workspaceId, input.workspaceId), eq(aiPromptTemplates.id, input.id)));
 }
 
-export async function ensureDefaultAiPromptTemplate(db: D1Database) {
-  const existing = await listAiPromptTemplates(db);
+export async function ensureDefaultAiPromptTemplate(db: D1Database, workspaceId: string) {
+  const existing = await listAiPromptTemplates(db, workspaceId);
   if (existing.length > 0) {
     return existing[0];
   }
@@ -101,6 +110,7 @@ export async function ensureDefaultAiPromptTemplate(db: D1Database) {
   const id = crypto.randomUUID();
   await createAiPromptTemplate(db, {
     id,
+    workspaceId,
     name: DEFAULT_TEMPLATE_NAME,
     description: "Template default untuk batch outline lalu konten blog.",
     outlinePrompt:
@@ -110,5 +120,5 @@ export async function ensureDefaultAiPromptTemplate(db: D1Database) {
     now,
   });
 
-  return findAiPromptTemplateById(db, id);
+  return findAiPromptTemplateById(db, workspaceId, id);
 }

@@ -47,7 +47,7 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-export function AiBatchPage({ config }: { config: ApiConfig | null }) {
+export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | null; workspaceSlug: string }) {
   const [templates, setTemplates] = useState<AiPromptTemplate[]>([]);
   const [batches, setBatches] = useState<AiBatchSummary[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<AiBatchDetail | null>(null);
@@ -72,7 +72,7 @@ export function AiBatchPage({ config }: { config: ApiConfig | null }) {
 
   useEffect(() => {
     void loadAll();
-  }, []);
+  }, [workspaceSlug]);
 
   async function loadAll(selectedBatchId?: string) {
     setIsLoading(true);

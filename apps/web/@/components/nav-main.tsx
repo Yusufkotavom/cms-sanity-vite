@@ -42,7 +42,7 @@ export function NavMain({
               size="icon"
               className="size-8 group-data-[collapsible=icon]:opacity-0"
               variant="outline"
-              onClick={() => onNavigate("#/posts")}
+              onClick={() => onNavigate(items[1]?.url ?? "#/posts")}
             >
               <PenSquareIcon />
               <span className="sr-only">Open editor</span>
