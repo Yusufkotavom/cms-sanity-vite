@@ -50,6 +50,7 @@ import {
 } from "./db/repositories/publish-jobs";
 import {
   createWorkspace,
+  DEFAULT_WORKSPACE_ID,
   DEFAULT_WORKSPACE_SLUG,
   ensureDefaultWorkspace,
   findWorkspaceById,
@@ -117,6 +118,13 @@ const sanitySettingsSchema = z.object({
   writeToken: z.string().trim().default(""),
 });
 
+const requiredSanitySettingsSchema = z.object({
+  projectId: z.string().trim().min(1),
+  dataset: z.string().trim().min(1),
+  apiVersion: z.string().trim().min(1),
+  writeToken: z.string().trim().min(1),
+});
+
 const scheduleSchema = z.object({
   publishAt: z.string().datetime(),
 });
@@ -160,6 +168,14 @@ const workspaceSchema = z.object({
   description: z.string().default(""),
   timezone: z.string().trim().default("Asia/Jakarta"),
   status: z.enum(["active", "archived"]).default("active"),
+});
+
+const workspaceCreateSchema = workspaceSchema.extend({
+  sanity: requiredSanitySettingsSchema,
+});
+
+const workspaceUpdateSchema = workspaceSchema.extend({
+  sanity: sanitySettingsSchema.optional(),
 });
 
 export interface Env {
@@ -229,6 +245,40 @@ async function getSanitySettings(db: D1Database, workspaceId: string, env?: Env)
     dataset: settings.get("sanity.dataset") ?? env?.SANITY_DATASET ?? "development",
     apiVersion: settings.get("sanity.apiVersion") ?? env?.SANITY_API_VERSION ?? "2026-03-29",
     writeToken: settings.get("sanity.writeToken") ?? env?.SANITY_WRITE_TOKEN ?? "",
+  };
+}
+
+function normalizeSanitySettings(
+  payload: z.infer<typeof sanitySettingsSchema>,
+  existing?: Awaited<ReturnType<typeof getSanitySettings>>
+) {
+  const writeToken = payload.writeToken === "********" ? existing?.writeToken ?? "" : payload.writeToken;
+
+  return {
+    projectId: payload.projectId.trim(),
+    dataset: payload.dataset.trim(),
+    apiVersion: payload.apiVersion.trim(),
+    writeToken: writeToken.trim(),
+  };
+}
+
+async function testSanityConnection(settings: {
+  projectId: string;
+  dataset: string;
+  apiVersion: string;
+  writeToken: string;
+}) {
+  const items = await fetchSanityCategories({
+    projectId: settings.projectId,
+    dataset: settings.dataset,
+    apiVersion: settings.apiVersion,
+    token: settings.writeToken,
+  });
+
+  return {
+    ok: true as const,
+    categoryCount: items.length,
+    sample: items.slice(0, 5),
   };
 }
 
@@ -424,11 +474,30 @@ app.get("/api/workspaces", async (c) => {
 });
 
 app.post("/api/workspaces", async (c) => {
-  const payload = workspaceSchema.parse(await c.req.json());
+  const parsedPayload = workspaceCreateSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsedPayload.success) {
+    return c.json({ message: "Workspace payload is incomplete or invalid" }, 400);
+  }
+
+  const payload = parsedPayload.data;
   const existing = await findWorkspaceBySlug(c.env.DB, payload.slug);
 
   if (existing) {
     return c.json({ message: "Workspace slug already exists" }, 409);
+  }
+
+  const sanitySettings = normalizeSanitySettings(payload.sanity);
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.apiVersion || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are incomplete" }, 400);
+  }
+
+  try {
+    await testSanityConnection(sanitySettings);
+  } catch (error) {
+    return c.json(
+      { message: error instanceof Error ? error.message : "Sanity connectivity test failed" },
+      400
+    );
   }
 
   const now = new Date().toISOString();
@@ -443,6 +512,12 @@ app.post("/api/workspaces", async (c) => {
     description: payload.description || undefined,
     timezone: payload.timezone || undefined,
     now,
+  });
+  await setSettings(c.env.DB, id, {
+    "sanity.projectId": sanitySettings.projectId,
+    "sanity.dataset": sanitySettings.dataset,
+    "sanity.apiVersion": sanitySettings.apiVersion,
+    "sanity.writeToken": sanitySettings.writeToken,
   });
 
   const workspace = await findWorkspaceById(c.env.DB, id);
@@ -463,7 +538,12 @@ app.post("/api/workspaces", async (c) => {
 });
 
 app.patch("/api/workspaces/:id", async (c) => {
-  const payload = workspaceSchema.parse(await c.req.json());
+  const parsedPayload = workspaceUpdateSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsedPayload.success) {
+    return c.json({ message: "Workspace payload is incomplete or invalid" }, 400);
+  }
+
+  const payload = parsedPayload.data;
   const id = c.req.param("id");
   const existing = await findWorkspaceById(c.env.DB, id);
 
@@ -487,6 +567,31 @@ app.patch("/api/workspaces/:id", async (c) => {
     updatedAt: new Date().toISOString(),
   });
 
+  if (payload.sanity) {
+    const existingSanitySettings = await getSanitySettings(c.env.DB, id, c.env);
+    const sanitySettings = normalizeSanitySettings(payload.sanity, existingSanitySettings);
+
+    if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.apiVersion || !sanitySettings.writeToken) {
+      return c.json({ message: "Sanity settings are incomplete" }, 400);
+    }
+
+    try {
+      await testSanityConnection(sanitySettings);
+    } catch (error) {
+      return c.json(
+        { message: error instanceof Error ? error.message : "Sanity connectivity test failed" },
+        400
+      );
+    }
+
+    await setSettings(c.env.DB, id, {
+      "sanity.projectId": sanitySettings.projectId,
+      "sanity.dataset": sanitySettings.dataset,
+      "sanity.apiVersion": sanitySettings.apiVersion,
+      "sanity.writeToken": sanitySettings.writeToken,
+    });
+  }
+
   const workspace = await findWorkspaceById(c.env.DB, id);
   return c.json({
     id: workspace?.id ?? id,
@@ -499,6 +604,34 @@ app.patch("/api/workspaces/:id", async (c) => {
     createdAt: workspace?.created_at ?? existing.created_at,
     updatedAt: workspace?.updated_at ?? new Date().toISOString(),
   });
+});
+
+app.delete("/api/workspaces/:id", async (c) => {
+  const id = c.req.param("id");
+  const existing = await findWorkspaceById(c.env.DB, id);
+
+  if (!existing) {
+    return c.json({ message: "Workspace not found" }, 404);
+  }
+
+  if (id === DEFAULT_WORKSPACE_ID || existing.slug === DEFAULT_WORKSPACE_SLUG) {
+    return c.json({ message: "Default workspace cannot be deleted" }, 400);
+  }
+
+  const statements = [
+    c.env.DB.prepare("delete from note_categories where workspace_id = ?").bind(id),
+    c.env.DB.prepare("delete from publish_jobs where workspace_id = ?").bind(id),
+    c.env.DB.prepare("delete from ai_batch_items where workspace_id = ?").bind(id),
+    c.env.DB.prepare("delete from ai_batches where workspace_id = ?").bind(id),
+    c.env.DB.prepare("delete from ai_prompt_templates where workspace_id = ?").bind(id),
+    c.env.DB.prepare("delete from workspace_settings where workspace_id = ?").bind(id),
+    c.env.DB.prepare("delete from notes where workspace_id = ?").bind(id),
+    c.env.DB.prepare("delete from workspaces where id = ?").bind(id),
+  ];
+
+  await c.env.DB.batch(statements);
+
+  return c.json({ ok: true });
 });
 
 app.get("/api/settings/auth", (c) => {
@@ -574,30 +707,14 @@ app.post("/api/settings/sanity/test", async (c) => {
   const workspaceId = c.get("workspaceId");
   const payload = sanitySettingsSchema.parse(await c.req.json());
   const existing = await getSanitySettings(c.env.DB, workspaceId, c.env);
-  const settings = {
-    projectId: payload.projectId,
-    dataset: payload.dataset,
-    apiVersion: payload.apiVersion,
-    writeToken: payload.writeToken === "********" ? existing.writeToken : payload.writeToken,
-  };
+  const settings = normalizeSanitySettings(payload, existing);
 
   if (!settings.projectId || !settings.dataset || !settings.apiVersion || !settings.writeToken) {
     return c.json({ message: "Sanity settings are incomplete" }, 400);
   }
 
   try {
-    const items = await fetchSanityCategories({
-      projectId: settings.projectId,
-      dataset: settings.dataset,
-      apiVersion: settings.apiVersion,
-      token: settings.writeToken,
-    });
-
-    return c.json({
-      ok: true,
-      categoryCount: items.length,
-      sample: items.slice(0, 5),
-    });
+    return c.json(await testSanityConnection(settings));
   } catch (error) {
     return c.json(
       { message: error instanceof Error ? error.message : "Sanity connectivity test failed" },

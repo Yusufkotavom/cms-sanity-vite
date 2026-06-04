@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarClockIcon,
   CircleAlertIcon,
@@ -32,10 +32,12 @@ import {
   type OgBrandingSettings,
   type SanitySettings,
   type Workspace,
+  type WorkspacePayload,
   workspacesApi,
 } from "@/lib/api";
 import { AppSidebar } from "@/components/app-sidebar";
 import { PostEditorPage } from "./post-editor-page";
+import { SettingsPage } from "./settings-page";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,7 +59,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 
 const AiBatchPage = lazy(async () => {
   const module = await import("./ai-batch-page");
@@ -80,6 +81,16 @@ type RouteState = {
   route: AppRoute;
   noteId: string | null;
   isNewNote: boolean;
+};
+
+type WorkspaceFormState = {
+  id: string | null;
+  name: string;
+  slug: string;
+  domain: string;
+  description: string;
+  timezone: string;
+  status: "active" | "archived";
 };
 
 const JAKARTA_TIME_ZONE = "Asia/Jakarta";
@@ -123,6 +134,37 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
+}
+
+function createEmptyWorkspaceForm(): WorkspaceFormState {
+  return {
+    id: null,
+    name: "",
+    slug: "",
+    domain: "",
+    description: "",
+    timezone: "Asia/Jakarta",
+    status: "active",
+  };
+}
+
+function createEmptyWorkspaceSanitySettings(): SanitySettings {
+  return {
+    projectId: "",
+    dataset: "development",
+    apiVersion: "2026-03-29",
+    writeToken: "",
+    hasWriteToken: false,
+  };
+}
+
+function getSanityTestFingerprint(settings: SanitySettings) {
+  return JSON.stringify({
+    projectId: settings.projectId.trim(),
+    dataset: settings.dataset.trim(),
+    apiVersion: settings.apiVersion.trim(),
+    writeToken: settings.writeToken.trim(),
+  });
 }
 
 function getRouteFromHash(hash: string): RouteState {
@@ -318,9 +360,15 @@ function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceSlug, setActiveWorkspaceSlug] = useState(() => getStoredActiveWorkspaceSlug() ?? "");
-  const [newWorkspaceName, setNewWorkspaceName] = useState("");
-  const [newWorkspaceSlug, setNewWorkspaceSlug] = useState("");
-  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+  const [workspaceEditorSlug, setWorkspaceEditorSlug] = useState("");
+  const [workspaceForm, setWorkspaceForm] = useState<WorkspaceFormState>(() => createEmptyWorkspaceForm());
+  const [workspaceSanitySettings, setWorkspaceSanitySettings] = useState<SanitySettings>(() =>
+    createEmptyWorkspaceSanitySettings()
+  );
+  const [workspaceSanityTestFingerprint, setWorkspaceSanityTestFingerprint] = useState("");
+  const [isTestingWorkspaceSanity, setIsTestingWorkspaceSanity] = useState(false);
+  const [isSavingWorkspace, setIsSavingWorkspace] = useState(false);
+  const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -334,6 +382,7 @@ function App() {
   const [isTestingSanity, setIsTestingSanity] = useState(false);
   const [isSavingSanity, setIsSavingSanity] = useState(false);
   const [isCopyingToken, setIsCopyingToken] = useState<null | "session" | "integration">(null);
+  const lastErrorToastRef = useRef<{ message: string; at: number } | null>(null);
 
   const stats = useMemo(
     () => ({
@@ -376,6 +425,30 @@ function App() {
       });
   }, [draft, savedDraft]);
 
+  const workspaceSanityFingerprint = useMemo(
+    () => getSanityTestFingerprint(workspaceSanitySettings),
+    [workspaceSanitySettings]
+  );
+  const isWorkspaceSanityComplete = useMemo(
+    () =>
+      Boolean(
+        workspaceSanitySettings.projectId.trim() &&
+          workspaceSanitySettings.dataset.trim() &&
+          workspaceSanitySettings.apiVersion.trim() &&
+          workspaceSanitySettings.writeToken.trim()
+      ),
+    [workspaceSanitySettings]
+  );
+  const isWorkspaceFormComplete = useMemo(
+    () => Boolean(workspaceForm.name.trim() && workspaceForm.slug.trim() && workspaceForm.timezone.trim()),
+    [workspaceForm]
+  );
+  const hasWorkspaceSanityTestPassed = workspaceSanityTestFingerprint === workspaceSanityFingerprint;
+  const currentWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.slug === activeWorkspaceSlug) ?? null,
+    [activeWorkspaceSlug, workspaces]
+  );
+
   const scheduledNotes = useMemo(
     () => notes.filter((note) => note.status === "scheduled"),
     [notes]
@@ -390,24 +463,25 @@ function App() {
 
   useEffect(() => {
     if (!window.location.hash) {
-      window.location.hash = "#/dashboard";
+      window.location.hash = activeWorkspaceSlug
+        ? buildWorkspaceHash(activeWorkspaceSlug, "dashboard")
+        : "#/dashboard";
     }
 
     const handleHashChange = () => setRouteState(getRouteFromHash(window.location.hash));
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, []);
+  }, [activeWorkspaceSlug]);
 
   useEffect(() => {
     if (!activeWorkspaceSlug || authStatus !== "authenticated") {
       return;
     }
 
-    if (routeState.workspaceSlug === activeWorkspaceSlug) {
+    if (!routeState.workspaceSlug) {
+      navigate(buildWorkspaceHash(activeWorkspaceSlug, routeState.route, routeState.noteId, routeState.isNewNote));
       return;
     }
-
-    navigate(buildWorkspaceHash(activeWorkspaceSlug, routeState.route, routeState.noteId, routeState.isNewNote));
   }, [activeWorkspaceSlug, authStatus, routeState.isNewNote, routeState.noteId, routeState.route, routeState.workspaceSlug]);
 
   useEffect(() => {
@@ -425,6 +499,10 @@ function App() {
       setAuthStatus("unauthenticated");
       setWorkspaces([]);
       setActiveWorkspaceSlug("");
+      setWorkspaceEditorSlug("");
+      setWorkspaceForm(createEmptyWorkspaceForm());
+      setWorkspaceSanitySettings(createEmptyWorkspaceSanitySettings());
+      setWorkspaceSanityTestFingerprint("");
       setDraft(null);
       setSavedDraft(null);
       setNotes([]);
@@ -446,15 +524,55 @@ function App() {
       return;
     }
 
-    void loadConfig();
+    void loadWorkspaceData();
+  }, [activeWorkspaceSlug, authStatus]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !activeWorkspaceSlug) {
+      return;
+    }
+
+    if (route !== "settings") {
+      return;
+    }
+
     void loadSanitySettings();
     void loadAiSettings();
     void loadOgBrandingSettings();
     void loadAuthConfig();
-    void loadWorkspaces();
-    void loadCategories();
-    void loadNotes();
-  }, [activeWorkspaceSlug, authStatus]);
+  }, [activeWorkspaceSlug, authStatus, route]);
+
+  useEffect(() => {
+    if (workspaces.length === 0) {
+      return;
+    }
+
+    const existingEditorWorkspace = workspaces.find((workspace) => workspace.slug === workspaceEditorSlug);
+    if (existingEditorWorkspace) {
+      return;
+    }
+
+    const fallbackWorkspace =
+      workspaces.find((workspace) => workspace.slug === activeWorkspaceSlug) ?? workspaces[0];
+
+    if (!fallbackWorkspace) {
+      return;
+    }
+
+    setWorkspaceEditorSlug(fallbackWorkspace.slug);
+    setWorkspaceForm({
+      id: fallbackWorkspace.id,
+      name: fallbackWorkspace.name,
+      slug: fallbackWorkspace.slug,
+      domain: fallbackWorkspace.domain ?? "",
+      description: fallbackWorkspace.description ?? "",
+      timezone: fallbackWorkspace.timezone ?? "Asia/Jakarta",
+      status: fallbackWorkspace.status,
+    });
+    if (route === "settings") {
+      void loadSanitySettingsForEditorWorkspace(fallbackWorkspace.slug);
+    }
+  }, [activeWorkspaceSlug, route, workspaceEditorSlug, workspaces]);
 
   useEffect(() => {
     if (authStatus !== "authenticated") {
@@ -531,11 +649,14 @@ function App() {
       await loadWorkspaces();
       setAuthStatus("authenticated");
     } catch (error) {
-      clearStoredAuthToken();
-      setAuthStatus("unauthenticated");
-      if (!(error instanceof ApiError && error.status === 401)) {
-        toast.error(error instanceof Error ? error.message : "Failed to initialize auth");
+      if (error instanceof ApiError && error.status === 401) {
+        clearStoredAuthToken();
+        setAuthStatus("unauthenticated");
+        return;
       }
+
+      setAuthStatus("unauthenticated");
+      toast.error(error instanceof Error ? error.message : "Failed to initialize auth");
     }
   }
 
@@ -543,13 +664,30 @@ function App() {
     const response = await workspacesApi.list();
     setWorkspaces(response.items);
 
-    const storedSlug = preferredSlug ?? getStoredActiveWorkspaceSlug() ?? activeWorkspaceSlug;
+    const storedSlug =
+      preferredSlug ??
+      routeState.workspaceSlug ??
+      getStoredActiveWorkspaceSlug() ??
+      activeWorkspaceSlug;
     const fallbackSlug = response.items[0]?.slug ?? "";
     const nextSlug = response.items.some((workspace) => workspace.slug === storedSlug) ? storedSlug : fallbackSlug;
 
     setActiveWorkspaceSlug(nextSlug);
     setStoredActiveWorkspaceSlug(nextSlug);
     return response.items;
+  }
+
+  function showLoadError(error: unknown, fallbackMessage: string) {
+    const message = error instanceof Error ? error.message : fallbackMessage;
+    const now = Date.now();
+    const previous = lastErrorToastRef.current;
+
+    if (previous && previous.message === message && now - previous.at < 3000) {
+      return;
+    }
+
+    lastErrorToastRef.current = { message, at: now };
+    toast.error(message);
   }
 
   async function signIn() {
@@ -583,6 +721,10 @@ function App() {
     setAuthEmail("");
     setWorkspaces([]);
     setActiveWorkspaceSlug("");
+    setWorkspaceEditorSlug("");
+    setWorkspaceForm(createEmptyWorkspaceForm());
+    setWorkspaceSanitySettings(createEmptyWorkspaceSanitySettings());
+    setWorkspaceSanityTestFingerprint("");
     setDraft(null);
     setSavedDraft(null);
     setSelectedId("");
@@ -595,33 +737,143 @@ function App() {
     toast.success("Logged out");
   }
 
-  async function createWorkspace() {
-    if (!newWorkspaceName.trim() || !newWorkspaceSlug.trim()) {
-      toast.error("Nama dan slug workspace wajib diisi");
+  function resetWorkspaceEditor() {
+    setWorkspaceEditorSlug("");
+    setWorkspaceForm(createEmptyWorkspaceForm());
+    setWorkspaceSanitySettings(createEmptyWorkspaceSanitySettings());
+    setWorkspaceSanityTestFingerprint("");
+  }
+
+  async function loadSanitySettingsForEditorWorkspace(workspaceSlug: string) {
+    try {
+      const nextSettings = await notesApi.getSanitySettings(workspaceSlug);
+      setWorkspaceSanitySettings(nextSettings);
+      setWorkspaceSanityTestFingerprint("");
+    } catch (error) {
+      showLoadError(error, "Failed to load Sanity settings");
+    }
+  }
+
+  function loadWorkspaceIntoEditor(workspace: Workspace) {
+    setWorkspaceEditorSlug(workspace.slug);
+    setWorkspaceForm({
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      domain: workspace.domain ?? "",
+      description: workspace.description ?? "",
+      timezone: workspace.timezone ?? "Asia/Jakarta",
+      status: workspace.status,
+    });
+    void loadSanitySettingsForEditorWorkspace(workspace.slug);
+  }
+
+  async function testWorkspaceSanityBeforeSave() {
+    if (!isWorkspaceSanityComplete) {
+      toast.error("Lengkapi project ID, dataset, API version, dan write token dulu");
       return;
     }
 
-    setIsCreatingWorkspace(true);
+    setIsTestingWorkspaceSanity(true);
+    try {
+      const result = await notesApi.testSanitySettings(workspaceSanitySettings);
+      setWorkspaceSanityTestFingerprint(workspaceSanityFingerprint);
+      toast.success(`Sanity connected. ${result.categoryCount} categories found.`);
+    } catch (error) {
+      setWorkspaceSanityTestFingerprint("");
+      toast.error(error instanceof Error ? error.message : "Sanity test failed");
+    } finally {
+      setIsTestingWorkspaceSanity(false);
+    }
+  }
+
+  async function saveWorkspace() {
+    if (!isWorkspaceFormComplete) {
+      toast.error("Nama, slug, dan timezone workspace wajib diisi");
+      return;
+    }
+
+    if (!isWorkspaceSanityComplete) {
+      toast.error("Sanity settings workspace wajib diisi lengkap");
+      return;
+    }
+
+    if (!hasWorkspaceSanityTestPassed) {
+      toast.error("Jalankan test connection sampai sukses sebelum create atau update workspace");
+      return;
+    }
+
+    setIsSavingWorkspace(true);
+
+    const payload: WorkspacePayload = {
+      name: workspaceForm.name.trim(),
+      slug: workspaceForm.slug.trim(),
+      domain: workspaceForm.domain.trim(),
+      description: workspaceForm.description,
+      timezone: workspaceForm.timezone.trim(),
+      status: workspaceForm.status,
+      sanity: workspaceSanitySettings,
+    };
 
     try {
-      const created = await workspacesApi.create({
-        name: newWorkspaceName.trim(),
-        slug: newWorkspaceSlug.trim(),
-      });
-      setNewWorkspaceName("");
-      setNewWorkspaceSlug("");
-      await loadWorkspaces(created.slug);
-      toast.success("Workspace dibuat");
+      const wasEditingActiveWorkspace = workspaceForm.slug === activeWorkspaceSlug;
+      if (workspaceForm.id) {
+        const updated = await workspacesApi.update(workspaceForm.id, payload);
+        const refreshed = await loadWorkspaces(wasEditingActiveWorkspace ? updated.slug : undefined);
+        const refreshedWorkspace = refreshed.find((workspace) => workspace.id === updated.id);
+        if (refreshedWorkspace) {
+          loadWorkspaceIntoEditor(refreshedWorkspace);
+        }
+        toast.success("Workspace diperbarui");
+      } else {
+        const created = await workspacesApi.create(payload);
+        const refreshed = await loadWorkspaces();
+        const refreshedWorkspace = refreshed.find((workspace) => workspace.id === created.id);
+        if (refreshedWorkspace) {
+          loadWorkspaceIntoEditor(refreshedWorkspace);
+        }
+        toast.success("Workspace dibuat");
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create workspace");
+      toast.error(error instanceof Error ? error.message : "Failed to save workspace");
     } finally {
-      setIsCreatingWorkspace(false);
+      setIsSavingWorkspace(false);
+    }
+  }
+
+  async function deleteWorkspace() {
+    if (!workspaceForm.id) {
+      toast.error("Pilih workspace yang ingin dihapus dulu");
+      return;
+    }
+
+    if (workspaceForm.slug === "default") {
+      toast.error("Default workspace tidak bisa dihapus");
+      return;
+    }
+
+    if (!window.confirm(`Hapus workspace "${workspaceForm.name}" (${workspaceForm.slug}) beserta notes dan settings-nya?`)) {
+      return;
+    }
+
+    setIsDeletingWorkspace(true);
+    try {
+      const deletingActiveWorkspace = workspaceForm.slug === activeWorkspaceSlug;
+      await workspacesApi.remove(workspaceForm.id);
+      resetWorkspaceEditor();
+      await loadWorkspaces(deletingActiveWorkspace ? undefined : activeWorkspaceSlug);
+      toast.success("Workspace dihapus");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete workspace");
+    } finally {
+      setIsDeletingWorkspace(false);
     }
   }
 
   function switchWorkspace(slug: string) {
     setActiveWorkspaceSlug(slug);
     setStoredActiveWorkspaceSlug(slug);
+    setWorkspaceSanityTestFingerprint("");
     setDraft(null);
     setSavedDraft(null);
     setSelectedId("");
@@ -670,8 +922,18 @@ function App() {
       const nextConfig = await notesApi.config();
       setConfig(nextConfig);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load worker config");
+      showLoadError(error, "Failed to load worker config");
     }
+  }
+
+  async function loadWorkspaceData() {
+    await loadConfig();
+    await loadSanitySettings();
+    await loadAiSettings();
+    await loadOgBrandingSettings();
+    await loadAuthConfig();
+    await loadCategories();
+    await loadNotes();
   }
 
   async function loadCategories() {
@@ -679,7 +941,7 @@ function App() {
       const response = await notesApi.categories();
       setCategoryOptions(response.items);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load Sanity categories");
+      showLoadError(error, "Failed to load Sanity categories");
     }
   }
 
@@ -688,7 +950,7 @@ function App() {
       const nextSettings = await notesApi.getAiSettings();
       setAiSettings(nextSettings);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load AI settings");
+      showLoadError(error, "Failed to load AI settings");
     }
   }
 
@@ -697,7 +959,7 @@ function App() {
       const nextSettings = await notesApi.getSanitySettings();
       setSanitySettings(nextSettings);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load Sanity settings");
+      showLoadError(error, "Failed to load Sanity settings");
     }
   }
 
@@ -706,7 +968,7 @@ function App() {
       const nextSettings = await notesApi.getOgBrandingSettings();
       setOgBrandingSettings(nextSettings);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load OG branding settings");
+      showLoadError(error, "Failed to load OG branding settings");
     }
   }
 
@@ -715,7 +977,7 @@ function App() {
       const nextSettings = await authApi.settings();
       setAuthConfig(nextSettings);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load auth settings");
+      showLoadError(error, "Failed to load auth settings");
     }
   }
 
@@ -729,7 +991,7 @@ function App() {
       const targetId = nextSelectedId || selectedId || response.items[0]?.id || "";
       setSelectedId(targetId);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load notes");
+      showLoadError(error, "Failed to load notes");
     } finally {
       setIsLoading(false);
     }
@@ -1202,7 +1464,9 @@ function App() {
 
   function openNote(id: string) {
     setSelectedId(id);
-    navigate(`#/posts/${id}`);
+    if (activeWorkspaceSlug) {
+      navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts", id));
+    }
   }
 
   function renderStats() {
@@ -1441,7 +1705,7 @@ function App() {
           setIsCategoryDialogOpen={setIsCategoryDialogOpen}
           getSelectedCategoryLabel={getSelectedCategoryLabel}
           toggleCategory={toggleCategory}
-          navigateBack={() => navigate("#/posts")}
+          navigateBack={() => activeWorkspaceSlug && navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts"))}
           deleteSelectedNote={deleteSelectedNote}
           isAiRunning={isAiRunning}
           isGeneratingOg={isGeneratingOg}
@@ -1592,307 +1856,54 @@ function App() {
 
   function renderSettingsView() {
     return (
-      <section className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Frontend</CardTitle>
-            <CardDescription>Konfigurasi app web dan API endpoint yang sedang dipakai user.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="api-base-url">
-                API base override
-              </label>
-              <Input
-                id="api-base-url"
-                placeholder="https://your-worker.your-subdomain.workers.dev"
-                value={apiBaseUrlInput}
-                onChange={(event) => setApiBaseUrlInput(event.target.value)}
-              />
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={saveApiBaseOverride}>
-                  Save override
-                </Button>
-                <Button variant="outline" onClick={resetApiBaseOverride}>
-                  Reset default
-                </Button>
-              </div>
-            </div>
-            <span>
-              API base: <code>{apiBaseUrl}</code>
-            </span>
-            <span>
-              Default API base: <code>{getDefaultApiBaseUrl()}</code>
-            </span>
-            <span>Routing sekarang dipisah per hash route agar aman di Cloudflare Pages.</span>
-            <span>Halaman editor utama ada di route `#/posts`.</span>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Workspace</CardTitle>
-            <CardDescription>Setiap workspace punya notes, setting Sanity, AI, branding, dan queue publish sendiri.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
-            <div className="rounded-xl border border-border bg-muted/20 p-4">
-              Workspace aktif: <code>{activeWorkspaceSlug || "-"}</code>
-            </div>
-            <div className="grid gap-2">
-              {workspaces.map((workspace) => (
-                <button
-                  key={workspace.id}
-                  type="button"
-                  className={`rounded-xl border p-3 text-left ${workspace.slug === activeWorkspaceSlug ? "border-primary bg-primary/5" : "border-border"}`}
-                  onClick={() => switchWorkspace(workspace.slug)}
-                >
-                  <div className="font-medium text-foreground">{workspace.name}</div>
-                  <div className="text-xs text-muted-foreground">{workspace.slug}</div>
-                </button>
-              ))}
-            </div>
-            <div className="grid gap-2">
-              <Input placeholder="Workspace name" value={newWorkspaceName} onChange={(event) => setNewWorkspaceName(event.target.value)} />
-              <Input placeholder="workspace-slug" value={newWorkspaceSlug} onChange={(event) => setNewWorkspaceSlug(event.target.value)} />
-              <Button onClick={() => void createWorkspace()} disabled={isCreatingWorkspace}>
-                {isCreatingWorkspace ? "Creating..." : "Create workspace"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Sanity Settings</CardTitle>
-            <CardDescription>Form ini hanya kirim payload ke backend. Test connection tidak menyimpan token di frontend.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-            {sanitySettings ? (
-              <>
-                <Input
-                  placeholder="Sanity project ID"
-                  value={sanitySettings.projectId}
-                  onChange={(event) =>
-                    setSanitySettings((current) => (current ? { ...current, projectId: event.target.value } : current))
-                  }
-                />
-                <Input
-                  placeholder="development"
-                  value={sanitySettings.dataset}
-                  onChange={(event) =>
-                    setSanitySettings((current) => (current ? { ...current, dataset: event.target.value } : current))
-                  }
-                />
-                <Input
-                  placeholder="2026-03-29"
-                  value={sanitySettings.apiVersion}
-                  onChange={(event) =>
-                    setSanitySettings((current) => (current ? { ...current, apiVersion: event.target.value } : current))
-                  }
-                />
-                <Input
-                  placeholder={sanitySettings.hasWriteToken ? "********" : "Sanity write token"}
-                  value={sanitySettings.writeToken}
-                  onChange={(event) =>
-                    setSanitySettings((current) => (current ? { ...current, writeToken: event.target.value } : current))
-                  }
-                />
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => void testSanitySettings()} disabled={isTestingSanity}>
-                    {isTestingSanity ? "Testing..." : "Test connection"}
-                  </Button>
-                  <Button onClick={() => void saveSanitySettings()} disabled={isSavingSanity}>
-                    {isSavingSanity ? "Saving..." : "Save Sanity settings"}
-                  </Button>
-                </div>
-                <span>Sanity status: {config?.sanityConfigured ? "ready" : "not configured"}</span>
-              </>
-            ) : (
-              <span>Loading Sanity settings...</span>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Auth & API Token</CardTitle>
-            <CardDescription>
-              Gunakan integration token untuk AI atau app lain. Semua endpoint API menerima token ini melalui header `Authorization`.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
-            <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-4">
-              <span>
-                Admin email: <code>{authConfig?.adminEmail ?? authEmail}</code>
-              </span>
-              <span>Session TTL: {authConfig?.sessionTtlHours ?? "-"} jam</span>
-              <span>Integration token: {authConfig?.hasIntegrationToken ? "configured" : "not configured"}</span>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="session-token">
-                Current session token
-              </label>
-              <Textarea
-                id="session-token"
-                readOnly
-                value={getStoredAuthToken() ?? ""}
-                placeholder="Login dulu untuk melihat session token browser"
-                className="min-h-24 font-mono text-xs"
-              />
-              <Button
-                variant="outline"
-                onClick={() => void copyToken("session", getStoredAuthToken() ?? "")}
-                disabled={isCopyingToken !== null || !getStoredAuthToken()}
-              >
-                {isCopyingToken === "session" ? "Copying..." : "Copy session token"}
-              </Button>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="integration-token">
-                Static integration token
-              </label>
-              <Textarea
-                id="integration-token"
-                readOnly
-                value={authConfig?.integrationToken ?? ""}
-                placeholder="Set AUTH_INTEGRATION_TOKEN di Worker env agar token muncul di sini"
-                className="min-h-24 font-mono text-xs"
-              />
-              <Button
-                variant="outline"
-                onClick={() => void copyToken("integration", authConfig?.integrationToken ?? "")}
-                disabled={isCopyingToken !== null || !authConfig?.integrationToken}
-              >
-                {isCopyingToken === "integration" ? "Copying..." : "Copy integration token"}
-              </Button>
-              <span>
-                Header contoh: <code>Authorization: Bearer {authConfig?.integrationToken || "<your-token>"}</code>
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>AI Settings</CardTitle>
-            <CardDescription>Semua AI setting disimpan di aplikasi, bukan env Worker.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-            {aiSettings ? (
-              <>
-                <Input
-                  placeholder="https://api.openai.com/v1"
-                  value={aiSettings.apiBaseUrl}
-                  onChange={(event) =>
-                    setAiSettings((current) => (current ? { ...current, apiBaseUrl: event.target.value } : current))
-                  }
-                />
-                <Input
-                  placeholder={aiSettings.hasApiKey ? "********" : "API key"}
-                  value={aiSettings.apiKey}
-                  onChange={(event) =>
-                    setAiSettings((current) => (current ? { ...current, apiKey: event.target.value } : current))
-                  }
-                />
-                <Input
-                  placeholder="gpt-4.1-mini"
-                  value={aiSettings.model}
-                  onChange={(event) =>
-                    setAiSettings((current) => (current ? { ...current, model: event.target.value } : current))
-                  }
-                />
-                <Textarea
-                  placeholder="Global system prompt"
-                  value={aiSettings.systemPrompt}
-                  onChange={(event) =>
-                    setAiSettings((current) => (current ? { ...current, systemPrompt: event.target.value } : current))
-                  }
-                />
-                <Textarea
-                  placeholder="Prompt untuk AI metadata"
-                  value={aiSettings.metadataPrompt}
-                  onChange={(event) =>
-                    setAiSettings((current) => (current ? { ...current, metadataPrompt: event.target.value } : current))
-                  }
-                />
-                <Textarea
-                  placeholder="Prompt untuk AI draft"
-                  value={aiSettings.draftPrompt}
-                  onChange={(event) =>
-                    setAiSettings((current) => (current ? { ...current, draftPrompt: event.target.value } : current))
-                  }
-                />
-                <Textarea
-                  placeholder="Prompt untuk generate outline"
-                  value={aiSettings.outlinePrompt}
-                  onChange={(event) =>
-                    setAiSettings((current) => (current ? { ...current, outlinePrompt: event.target.value } : current))
-                  }
-                />
-                <Textarea
-                  placeholder="Prompt untuk ubah outline jadi post lengkap metadata + SEO"
-                  value={aiSettings.outlineToPostPrompt}
-                  onChange={(event) =>
-                    setAiSettings((current) =>
-                      current ? { ...current, outlineToPostPrompt: event.target.value } : current
-                    )
-                  }
-                />
-                <Button onClick={() => void saveAiSettings()}>Save AI settings</Button>
-                <span>AI status: {config?.aiConfigured ? `ready (${config.aiModel})` : "not configured"}</span>
-              </>
-            ) : (
-              <span>Loading AI settings...</span>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>OG Branding</CardTitle>
-            <CardDescription>Atur logo dan teks OG agar bisa dipakai untuk profile atau business berbeda.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-            {ogBrandingSettings ? (
-              <>
-                <Input
-                  placeholder="https://example.com/logo.png"
-                  value={ogBrandingSettings.logoUrl}
-                  onChange={(event) =>
-                    setOgBrandingSettings((current) =>
-                      current ? { ...current, logoUrl: event.target.value } : current
-                    )
-                  }
-                />
-                <Input
-                  placeholder="AI WORKFLOW"
-                  value={ogBrandingSettings.workflowLabel}
-                  onChange={(event) =>
-                    setOgBrandingSettings((current) =>
-                      current ? { ...current, workflowLabel: event.target.value } : current
-                    )
-                  }
-                />
-                <Input
-                  placeholder="WA 085799520350 · kotacom.id"
-                  value={ogBrandingSettings.footerText}
-                  onChange={(event) =>
-                    setOgBrandingSettings((current) =>
-                      current ? { ...current, footerText: event.target.value } : current
-                    )
-                  }
-                />
-                <Button onClick={() => void saveOgBrandingSettings()}>Save OG branding</Button>
-                <span>Kosongkan field untuk kembali pakai default bawaan worker.</span>
-              </>
-            ) : (
-              <span>Loading OG branding settings...</span>
-            )}
-          </CardContent>
-        </Card>
-      </section>
+      <SettingsPage
+        apiBaseUrl={apiBaseUrl}
+        apiBaseUrlInput={apiBaseUrlInput}
+        setApiBaseUrlInput={setApiBaseUrlInput}
+        saveApiBaseOverride={saveApiBaseOverride}
+        resetApiBaseOverride={resetApiBaseOverride}
+        getDefaultApiBaseUrl={getDefaultApiBaseUrl}
+        activeWorkspaceSlug={activeWorkspaceSlug}
+        currentWorkspace={currentWorkspace}
+        workspaces={workspaces}
+        workspaceEditorSlug={workspaceEditorSlug}
+        workspaceForm={workspaceForm}
+        setWorkspaceForm={setWorkspaceForm}
+        workspaceSanitySettings={workspaceSanitySettings}
+        setWorkspaceSanitySettings={setWorkspaceSanitySettings}
+        setWorkspaceSanityTestFingerprint={setWorkspaceSanityTestFingerprint}
+        loadWorkspaceIntoEditor={loadWorkspaceIntoEditor}
+        switchWorkspace={switchWorkspace}
+        testWorkspaceSanityBeforeSave={testWorkspaceSanityBeforeSave}
+        saveWorkspace={saveWorkspace}
+        resetWorkspaceEditor={resetWorkspaceEditor}
+        deleteWorkspace={deleteWorkspace}
+        isTestingWorkspaceSanity={isTestingWorkspaceSanity}
+        isSavingWorkspace={isSavingWorkspace}
+        isDeletingWorkspace={isDeletingWorkspace}
+        isWorkspaceFormComplete={isWorkspaceFormComplete}
+        isWorkspaceSanityComplete={isWorkspaceSanityComplete}
+        hasWorkspaceSanityTestPassed={hasWorkspaceSanityTestPassed}
+        sanitySettings={sanitySettings}
+        setSanitySettings={setSanitySettings}
+        testSanitySettings={testSanitySettings}
+        saveSanitySettings={saveSanitySettings}
+        isTestingSanity={isTestingSanity}
+        isSavingSanity={isSavingSanity}
+        config={config}
+        authConfig={authConfig}
+        authEmail={authEmail}
+        getStoredAuthToken={getStoredAuthToken}
+        copyToken={copyToken}
+        isCopyingToken={isCopyingToken}
+        aiSettings={aiSettings}
+        setAiSettings={setAiSettings}
+        saveAiSettings={saveAiSettings}
+        ogBrandingSettings={ogBrandingSettings}
+        setOgBrandingSettings={setOgBrandingSettings}
+        saveOgBrandingSettings={saveOgBrandingSettings}
+        slugify={slugify}
+      />
     );
   }
 

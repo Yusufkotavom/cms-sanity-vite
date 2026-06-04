@@ -144,6 +144,16 @@ export type Workspace = {
   updatedAt: string;
 };
 
+export type WorkspacePayload = {
+  name: string;
+  slug: string;
+  domain?: string;
+  description?: string;
+  timezone?: string;
+  status?: "active" | "archived";
+  sanity?: SanitySettings;
+};
+
 export type AiPromptTemplate = {
   id: string;
   name: string;
@@ -334,29 +344,56 @@ export function getDefaultApiBaseUrl() {
 async function request<T>(path: string, init?: RequestInit, options?: { skipAuth?: boolean }) {
   const token = options?.skipAuth ? null : getStoredAuthToken();
   const workspaceSlug = getStoredActiveWorkspaceSlug();
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : {}),
-      ...(init?.headers || {}),
-    },
-    ...init,
-  });
+  const baseUrl = getApiBaseUrl();
+  const mergedHeaders = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : {}),
+    ...((init?.headers as Record<string, string> | undefined) ?? {}),
+  };
+  let response: Response | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        ...init,
+        headers: mergedHeaders,
+      });
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+      }
+    }
+  }
+
+  if (!response) {
+    throw new ApiError(
+      lastError instanceof Error && lastError.message
+        ? `${lastError.message} on ${path}. API base sekarang: ${baseUrl}`
+        : `Failed to reach ${path}. API base sekarang: ${baseUrl}`,
+      0
+    );
+  }
 
   const json = (await response.json().catch(() => null)) as T | { message?: string } | null;
 
   if (!response.ok) {
     const message = (json as { message?: string } | null)?.message || `API request failed (${response.status})`;
 
-    if (response.status === 401) {
+    const shouldForceLogout = response.status === 401 && path === "/api/auth/me";
+
+    if (shouldForceLogout) {
       clearStoredAuthToken();
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+        window.dispatchEvent(new CustomEvent("auth:unauthorized", { detail: { path } }));
       }
     }
 
-    throw new ApiError(message, response.status);
+    throw new ApiError(`${message}${response.status === 401 ? ` on ${path}` : ""}`, response.status);
   }
 
   return json as T;
@@ -379,38 +416,28 @@ export const authApi = {
 
 export const workspacesApi = {
   list: () => request<{ items: Workspace[] }>("/api/workspaces"),
-  create: (payload: {
-    name: string;
-    slug: string;
-    domain?: string;
-    description?: string;
-    timezone?: string;
-    status?: "active" | "archived";
-  }) =>
+  create: (payload: WorkspacePayload) =>
     request<Workspace>("/api/workspaces", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  update: (
-    id: string,
-    payload: {
-      name: string;
-      slug: string;
-      domain?: string;
-      description?: string;
-      timezone?: string;
-      status?: "active" | "archived";
-    }
-  ) =>
+  update: (id: string, payload: WorkspacePayload) =>
     request<Workspace>(`/api/workspaces/${id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
+    }),
+  remove: (id: string) =>
+    request<{ ok: true }>(`/api/workspaces/${id}`, {
+      method: "DELETE",
     }),
 };
 
 export const notesApi = {
   config: () => request<ApiConfig>("/api/config"),
-  categories: () => request<{ items: ApiCategory[] }>("/api/sanity/categories"),
+  categories: (workspaceSlug?: string) =>
+    request<{ items: ApiCategory[] }>("/api/sanity/categories", {
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+    }),
   list: () => request<{ items: ApiNote[] }>("/api/notes"),
   get: (id: string) => request<ApiNote>(`/api/notes/${id}`),
   create: (payload: NoteInput) =>
@@ -444,7 +471,10 @@ export const notesApi = {
     request<ApiNote>(`/api/notes/${id}/generate-og`, {
       method: "POST",
     }),
-  getSanitySettings: () => request<SanitySettings>("/api/settings/sanity"),
+  getSanitySettings: (workspaceSlug?: string) =>
+    request<SanitySettings>("/api/settings/sanity", {
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+    }),
   saveSanitySettings: (payload: SanitySettings) =>
     request<SanitySettings>("/api/settings/sanity", {
       method: "PUT",
