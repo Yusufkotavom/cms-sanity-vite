@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2Icon, PlayIcon, RefreshCcwIcon, SparklesIcon } from "lucide-react";
+import { Loader2Icon, PauseIcon, PencilIcon, PlayIcon, RefreshCcwIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -47,6 +47,36 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function describeBatchStatus(status: AiBatchSummary["status"]) {
+  switch (status) {
+    case "queued":
+      return "Menunggu giliran. Worker belum mengambil keyword berikutnya.";
+    case "processing":
+      return "Worker sedang atau masih akan memproses keyword runnable satu per satu, bukan semua keyword sekaligus.";
+    case "paused":
+      return "Batch dihentikan sementara. Cron dan Process Now tidak akan mengambil keyword baru dari batch ini.";
+    case "completed":
+      return "Semua keyword di batch ini sudah selesai diproses.";
+    case "failed":
+      return "Tidak ada keyword runnable tersisa dan ada keyword yang gagal yang perlu diperiksa atau diedit.";
+  }
+}
+
+function describeItemStatus(status: AiBatchDetail["items"][number]["status"]) {
+  switch (status) {
+    case "pending":
+      return "Belum diproses.";
+    case "processing":
+      return "Sedang dikerjakan worker.";
+    case "outline_done":
+      return "Outline sudah jadi, menunggu step konten penuh bila mode mengharuskan.";
+    case "completed":
+      return "Keyword ini sudah menghasilkan draft note.";
+    case "failed":
+      return "Proses terakhir gagal. Edit akan mengembalikan item ke pending.";
+  }
+}
+
 export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | null; workspaceSlug: string }) {
   const [templates, setTemplates] = useState<AiPromptTemplate[]>([]);
   const [batches, setBatches] = useState<AiBatchSummary[]>([]);
@@ -67,12 +97,54 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
     outlinePrompt: "",
     contentPrompt: "",
   });
+  const [editingBatch, setEditingBatch] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    mode: AiBatchMode;
+    templateId: string;
+    status: "queued" | "paused";
+  }>({
+    name: "",
+    mode: "outline_then_content",
+    templateId: "",
+    status: "queued",
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
+  const [isSavingBatch, setIsSavingBatch] = useState(false);
+  const [togglingBatchId, setTogglingBatchId] = useState<string | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [itemForm, setItemForm] = useState({ keyword: "", description: "" });
+  const [isSavingItem, setIsSavingItem] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const parsedItems = useMemo(() => parseBatchLines(batchLines), [batchLines]);
 
   useEffect(() => {
     void loadAll();
   }, [workspaceSlug]);
+
+  function syncEditForm(batch: AiBatchDetail | null) {
+    if (!batch) {
+      setEditingBatch(null);
+      setEditingItemId(null);
+      setEditForm({
+        name: "",
+        mode: "outline_then_content",
+        templateId: "",
+        status: "queued",
+      });
+      return;
+    }
+
+    setEditingBatch(batch.id);
+    setEditForm({
+      name: batch.name,
+      mode: batch.mode,
+      templateId: batch.templateId,
+      status: batch.status === "paused" ? "paused" : "queued",
+    });
+  }
 
   async function loadAll(selectedBatchId?: string) {
     setIsLoading(true);
@@ -102,6 +174,7 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
         await loadBatch(nextBatchId);
       } else {
         setSelectedBatch(null);
+        syncEditForm(null);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load AI batch data");
@@ -114,9 +187,24 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
     try {
       const batch = await notesApi.getAiBatch(id);
       setSelectedBatch(batch);
+      syncEditForm(batch);
+      if (editingItemId) {
+        const activeItem = batch.items.find((item) => item.id === editingItemId);
+        if (activeItem) {
+          setItemForm({ keyword: activeItem.keyword, description: activeItem.description });
+        } else {
+          setEditingItemId(null);
+          setItemForm({ keyword: "", description: "" });
+        }
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load batch detail");
     }
+  }
+
+  function startEditingItem(item: AiBatchDetail["items"][number]) {
+    setEditingItemId(item.id);
+    setItemForm({ keyword: item.keyword, description: item.description });
   }
 
   function applyTemplate(id: string) {
@@ -191,6 +279,29 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
     }
   }
 
+  async function removeBatch(batchId: string, batchName: string) {
+    if (!window.confirm(`Hapus batch "${batchName}" beserta semua item-nya?`)) {
+      return;
+    }
+
+    setDeletingBatchId(batchId);
+    setIsDeleting(true);
+    try {
+      await notesApi.deleteAiBatch(batchId);
+      toast.success(`Batch "${batchName}" dihapus`);
+      if (selectedBatch?.id === batchId) {
+        setSelectedBatch(null);
+        syncEditForm(null);
+      }
+      await loadAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete batch");
+    } finally {
+      setDeletingBatchId(null);
+      setIsDeleting(false);
+    }
+  }
+
   async function saveTemplate() {
     if (!templateDraft.name.trim()) {
       toast.error("Nama template wajib diisi");
@@ -238,6 +349,113 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
       toast.error(error instanceof Error ? error.message : "Failed to save template");
     } finally {
       setIsSavingTemplate(false);
+    }
+  }
+
+  async function saveBatch() {
+    if (!selectedBatch || editingBatch !== selectedBatch.id) {
+      return;
+    }
+
+    if (!editForm.name.trim()) {
+      toast.error("Nama batch wajib diisi");
+      return;
+    }
+
+    if (!editForm.templateId) {
+      toast.error("Pilih template prompt untuk batch");
+      return;
+    }
+
+    setIsSavingBatch(true);
+    try {
+      await notesApi.updateAiBatch(selectedBatch.id, {
+        name: editForm.name.trim(),
+        mode: editForm.mode,
+        templateId: editForm.templateId,
+        status: editForm.status,
+      });
+      toast.success("Batch diperbarui");
+      await loadAll(selectedBatch.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update batch");
+    } finally {
+      setIsSavingBatch(false);
+    }
+  }
+
+  async function toggleBatchStatus(batch: AiBatchSummary) {
+    const nextStatus = batch.status === "paused" ? "queued" : "paused";
+
+    setTogglingBatchId(batch.id);
+    try {
+      await notesApi.updateAiBatch(batch.id, { status: nextStatus });
+      toast.success(nextStatus === "paused" ? `Batch "${batch.name}" dipause` : `Batch "${batch.name}" dilanjutkan`);
+      await loadAll(selectedBatch?.id === batch.id ? batch.id : selectedBatch?.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update batch status");
+    } finally {
+      setTogglingBatchId(null);
+    }
+  }
+
+  async function saveItem() {
+    if (!selectedBatch || !editingItemId) {
+      return;
+    }
+
+    if (selectedBatch.status !== "paused") {
+      toast.error("Pause batch dulu sebelum edit keyword");
+      return;
+    }
+
+    if (!itemForm.keyword.trim()) {
+      toast.error("Keyword wajib diisi");
+      return;
+    }
+
+    setIsSavingItem(true);
+    try {
+      await notesApi.updateAiBatchItem(selectedBatch.id, editingItemId, {
+        keyword: itemForm.keyword.trim(),
+        description: itemForm.description,
+      });
+      toast.success("Keyword diperbarui dan di-reset ke pending");
+      await loadAll(selectedBatch.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update keyword");
+    } finally {
+      setIsSavingItem(false);
+    }
+  }
+
+  async function removeItem(itemId: string, keyword: string) {
+    if (!selectedBatch) {
+      return;
+    }
+
+    if (selectedBatch.status !== "paused") {
+      toast.error("Pause batch dulu sebelum hapus keyword");
+      return;
+    }
+
+    if (!window.confirm(`Hapus keyword "${keyword}" dari batch ini?`)) {
+      return;
+    }
+
+    setDeletingItemId(itemId);
+    try {
+      await notesApi.deleteAiBatchItem(selectedBatch.id, itemId);
+      toast.success(`Keyword "${keyword}" dihapus`);
+      if (editingItemId === itemId) {
+        setEditingItemId(null);
+        setItemForm({ keyword: "", description: "" });
+      }
+      await loadAll(selectedBatch.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete keyword");
+    } finally {
+      setDeletingItemId(null);
     }
   }
 
@@ -297,6 +515,23 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
               <CardDescription>
                 Format input: `keyword | description`. Maksimal 20 item per batch.
               </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs leading-relaxed">
+                <p className="font-medium text-foreground">Cara kerja New Batch:</p>
+                <ol className="mt-2 ml-4 list-decimal space-y-1">
+                  <li>Tulis keyword dan deskripsi singkat per baris. Pisahkan keyword dan deskripsi dengan tanda <code>|</code>.</li>
+                  <li>Pilih <strong>mode</strong>: <code>outline_then_content</code> menghasilkan outline dulu lalu konten lengkap; <code>outline_only</code> hanya membuat outline.</li>
+                  <li>Pilih <strong>prompt template</strong> yang sesuai. Template menentukan gaya tulisan dan instruksi AI.</li>
+                  <li>Klik <strong>Create Batch</strong> untuk membuat antrean. Batch akan masuk ke tab <strong>Runs</strong> dengan status <code>queued</code>.</li>
+                  <li>Worker cron akan otomatis memproses beberapa item tiap 15 menit, atau gunakan tombol <strong>Process Now</strong> di atas untuk memproses manual.</li>
+                </ol>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Form Batch</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-4 md:grid-cols-3">
@@ -371,6 +606,19 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
         </TabsContent>
 
         <TabsContent value="runs">
+          <Card className="mb-6">
+            <CardContent className="p-4 text-xs leading-relaxed text-muted-foreground">
+              <p className="font-medium text-foreground">Cara kerja Runs:</p>
+              <ol className="mt-2 ml-4 list-decimal space-y-1">
+                <li>Setiap batch yang dibuat dari tab <strong>New Batch</strong> muncul di sini dengan status <code>queued</code>.</li>
+                <li>Klik tombol <strong>Process Now</strong> di atas untuk memproses item secara manual. Worker akan mengambil beberapa item dari batch <code>queued</code> atau <code>processing</code> dan menjalankan AI.</li>
+                <li>Item yang berhasil outline-nya akan berstatus <code>outline_done</code>. Pada mode <code>outline_then_content</code>, item akan diproses lagi untuk membuat konten lengkap dan otomatis menjadi draft note.</li>
+                <li>Item <code>completed</code> sudah punya draft note yang bisa dibuka di editor. Item <code>failed</code> akan di-retry otomatis pada run berikutnya.</li>
+                <li>Status <code>paused</code> membuat batch dilewati oleh cron dan tombol <strong>Process Now</strong> sampai Anda ubah lagi ke <code>queued</code>.</li>
+                <li>Gunakan tombol <strong>Delete</strong> untuk menghapus batch yang sudah tidak diperlukan beserta semua item-nya. Draft note yang sudah dibuat tidak ikut terhapus.</li>
+              </ol>
+            </CardContent>
+          </Card>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
             <Card>
               <CardHeader>
@@ -384,18 +632,19 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
                       <TableHead>Batch</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Progress</TableHead>
+                      <TableHead className="w-32 text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground">
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
                           Loading batches...
                         </TableCell>
                       </TableRow>
                     ) : batches.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground">
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
                           Belum ada batch.
                         </TableCell>
                       </TableRow>
@@ -413,6 +662,48 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {batch.completedItems}/{batch.totalItems} complete
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void toggleBatchStatus(batch);
+                                }}
+                                disabled={
+                                  togglingBatchId === batch.id ||
+                                  batch.status === "processing" ||
+                                  (batch.status !== "queued" && batch.status !== "paused")
+                                }
+                              >
+                                {togglingBatchId === batch.id ? (
+                                  <Loader2Icon className="size-3.5 animate-spin" />
+                                ) : batch.status === "paused" ? (
+                                  <PlayIcon className="size-3.5" />
+                                ) : (
+                                  <PauseIcon className="size-3.5" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void removeBatch(batch.id, batch.name);
+                                }}
+                                disabled={isDeleting || batch.status === "processing"}
+                              >
+                                {deletingBatchId === batch.id ? (
+                                  <Loader2Icon className="size-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2Icon className="size-3.5" />
+                                )}
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -434,12 +725,112 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
                   <>
                     <div className="grid gap-2">
                       <span>Status: {selectedBatch.status}</span>
+                      <span>{describeBatchStatus(selectedBatch.status)}</span>
                       <span>Mode: {selectedBatch.mode}</span>
                       <span>Total: {selectedBatch.totalItems}</span>
                       <span>Completed: {selectedBatch.completedItems}</span>
                       <span>Failed: {selectedBatch.failedItems}</span>
+                      <span>Pending: {selectedBatch.pendingItems}</span>
+                      <span>Outline Ready: {selectedBatch.outlineReadyItems}</span>
+                      <span>Processing Items: {selectedBatch.processingItems}</span>
                       <span>Updated: {formatDate(selectedBatch.updatedAt)}</span>
                       {selectedBatch.lastError ? <span>Error: {selectedBatch.lastError}</span> : null}
+                    </div>
+                    <div className="grid gap-4 rounded-xl border border-border p-4">
+                      <div className="grid gap-2">
+                        <span className="text-sm font-medium text-foreground">Edit Batch</span>
+                        <span className="text-xs">
+                          Ubah nama, mode, template, dan status antrean. Pilih <code>paused</code> untuk menghentikan sementara.
+                        </span>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-2">
+                          <span className="text-sm font-medium text-foreground">Nama batch</span>
+                          <Input
+                            value={editForm.name}
+                            onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                            disabled={selectedBatch.status === "processing"}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <span className="text-sm font-medium text-foreground">Mode</span>
+                          <Select
+                            value={editForm.mode}
+                            onValueChange={(value) => {
+                              if (value) {
+                                setEditForm((current) => ({ ...current, mode: value as AiBatchMode }));
+                              }
+                            }}
+                            disabled={selectedBatch.status === "processing"}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="outline_then_content">Outline then Content</SelectItem>
+                              <SelectItem value="outline_only">Outline Only</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <span className="text-sm font-medium text-foreground">Prompt template</span>
+                          <Select
+                            value={editForm.templateId}
+                            onValueChange={(value) => setEditForm((current) => ({ ...current, templateId: value ?? "" }))}
+                            disabled={selectedBatch.status === "processing"}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Pilih template" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {templates.map((template) => (
+                                <SelectItem key={template.id} value={template.id}>
+                                  {template.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <span className="text-sm font-medium text-foreground">Status antrean</span>
+                          <Select
+                            value={editForm.status}
+                            onValueChange={(value) => {
+                              if (value === "queued" || value === "paused") {
+                                setEditForm((current) => ({ ...current, status: value }));
+                              }
+                            }}
+                            disabled={selectedBatch.status === "processing"}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="queued">queued</SelectItem>
+                              <SelectItem value="paused">paused</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button onClick={() => void saveBatch()} disabled={isSavingBatch || selectedBatch.status === "processing"}>
+                          {isSavingBatch ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+                          Save Batch
+                        </Button>
+                        {selectedBatch.status === "processing" ? (
+                          <span className="text-xs">Batch sedang diproses, ubahan status dikunci sampai run selesai.</span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs leading-relaxed">
+                      <p className="font-medium text-foreground">Generator status</p>
+                      <ol className="mt-2 ml-4 list-decimal space-y-1">
+                        <li><code>queued</code>: batch menunggu giliran. Worker belum mengambil keyword berikutnya.</li>
+                        <li><code>processing</code>: worker memproses keyword satu per satu. Satu batch tidak memproses semua keyword sekaligus.</li>
+                        <li><code>paused</code>: batch di-skip oleh cron dan Process Now sampai di-resume ke <code>queued</code>.</li>
+                        <li><code>outline_done</code>: keyword sudah punya outline, lalu menunggu step konten penuh bila mode batch adalah <code>outline_then_content</code>.</li>
+                        <li>Edit atau hapus keyword hanya diizinkan saat batch <code>paused</code> agar worker tidak mengambil data yang sedang diubah.</li>
+                      </ol>
                     </div>
                     <div className="max-h-[420px] overflow-y-auto rounded-xl border border-border">
                       <Table>
@@ -447,6 +838,7 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
                           <TableRow>
                             <TableHead>Keyword</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead className="w-24 text-right">Action</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -461,6 +853,7 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
                               <TableCell>
                                 <div className="flex flex-col gap-1">
                                   <Badge variant="outline">{item.status}</Badge>
+                                  <span className="text-xs text-muted-foreground">{describeItemStatus(item.status)}</span>
                                   {item.noteId ? (
                                     <a className="text-xs underline" href={`#/posts/${item.noteId}`}>
                                       Open draft
@@ -468,11 +861,81 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
                                   ) : null}
                                 </div>
                               </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    disabled={selectedBatch.status !== "paused" || item.status === "processing"}
+                                    onClick={() => startEditingItem(item)}
+                                  >
+                                    <PencilIcon className="size-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                    disabled={selectedBatch.status !== "paused" || item.status === "processing" || deletingItemId === item.id}
+                                    onClick={() => void removeItem(item.id, item.keyword)}
+                                  >
+                                    {deletingItemId === item.id ? (
+                                      <Loader2Icon className="size-3.5 animate-spin" />
+                                    ) : (
+                                      <Trash2Icon className="size-3.5" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </div>
+                    {editingItemId ? (
+                      <div className="grid gap-4 rounded-xl border border-border p-4">
+                        <div className="grid gap-2">
+                          <span className="text-sm font-medium text-foreground">Edit Keyword</span>
+                          <span className="text-xs">
+                            Mengubah keyword atau deskripsi akan mereset item ini ke <code>pending</code> agar generator memulai ulang item tersebut secara konsisten.
+                          </span>
+                        </div>
+                        <div className="grid gap-4">
+                          <div className="grid gap-2">
+                            <span className="text-sm font-medium text-foreground">Keyword</span>
+                            <Input
+                              value={itemForm.keyword}
+                              onChange={(event) => setItemForm((current) => ({ ...current, keyword: event.target.value }))}
+                              disabled={selectedBatch.status !== "paused" || isSavingItem}
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <span className="text-sm font-medium text-foreground">Description</span>
+                            <Textarea
+                              value={itemForm.description}
+                              onChange={(event) => setItemForm((current) => ({ ...current, description: event.target.value }))}
+                              disabled={selectedBatch.status !== "paused" || isSavingItem}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button onClick={() => void saveItem()} disabled={selectedBatch.status !== "paused" || isSavingItem}>
+                            {isSavingItem ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+                            Save Keyword
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setEditingItemId(null);
+                              setItemForm({ keyword: "", description: "" });
+                            }}
+                            disabled={isSavingItem}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <span>Belum ada batch yang dipilih.</span>

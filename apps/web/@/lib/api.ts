@@ -192,7 +192,7 @@ export type AiBatchSummary = {
   id: string;
   name: string;
   mode: AiBatchMode;
-  status: "queued" | "processing" | "completed" | "failed";
+  status: "queued" | "processing" | "paused" | "completed" | "failed";
   templateId: string;
   templateName: string;
   totalItems: number;
@@ -532,5 +532,26 @@ export const notesApi = {
     request<{ processed: number; failed: number }>("/api/ai/batches/process", {
       method: "POST",
       body: JSON.stringify({ limit }),
+    }),
+  deleteAiBatch: (id: string) =>
+    request<{ ok: true }>(`/api/ai/batches/${id}`, {
+      method: "DELETE",
+    }),
+  updateAiBatch: (
+    id: string,
+    payload: { name?: string; mode?: AiBatchMode; status?: "queued" | "paused"; templateId?: string }
+  ) =>
+    request<AiBatchSummary>(`/api/ai/batches/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  updateAiBatchItem: (batchId: string, itemId: string, payload: { keyword: string; description: string }) =>
+    request<AiBatchDetail>(`/api/ai/batches/${batchId}/items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteAiBatchItem: (batchId: string, itemId: string) =>
+    request<AiBatchDetail>(`/api/ai/batches/${batchId}/items/${itemId}`, {
+      method: "DELETE",
     }),
 };

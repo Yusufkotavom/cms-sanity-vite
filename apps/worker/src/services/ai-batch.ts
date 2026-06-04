@@ -308,6 +308,10 @@ async function refreshBatchStatus(db: D1Database, workspaceId: string, batchId: 
     return null;
   }
 
+  if (batch.status === "paused") {
+    return { completedItems: batch.completed_items, failedItems: batch.failed_items, status: "paused" as const };
+  }
+
   const items = await listAiBatchItemsByBatchId(db, workspaceId, batchId);
   const completedItems = items.filter((item) => item.status === "completed").length;
   const failedItems = items.filter((item) => item.status === "failed").length;

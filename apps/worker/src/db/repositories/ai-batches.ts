@@ -4,7 +4,7 @@ import { getDb } from "../client";
 import { aiBatchItems, aiBatches } from "../schema";
 
 export type AiBatchMode = "outline_only" | "outline_then_content";
-export type AiBatchStatus = "queued" | "processing" | "completed" | "failed";
+export type AiBatchStatus = "queued" | "processing" | "paused" | "completed" | "failed";
 export type AiBatchItemStatus = "pending" | "outline_done" | "processing" | "completed" | "failed";
 
 export type AiBatchRecord = {
@@ -118,6 +118,23 @@ export async function findAiBatchById(db: D1Database, workspaceId: string, id: s
     .limit(1);
   const batch = rows[0];
   return batch ? toBatchRecord(batch) : null;
+}
+
+export async function findAiBatchItemById(db: D1Database, workspaceId: string, batchId: string, itemId: string) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb
+    .select()
+    .from(aiBatchItems)
+    .where(
+      and(
+        eq(aiBatchItems.workspaceId, workspaceId),
+        eq(aiBatchItems.batchId, batchId),
+        eq(aiBatchItems.id, itemId)
+      )
+    )
+    .limit(1);
+  const item = rows[0];
+  return item ? toBatchItemRecord(item) : null;
 }
 
 export async function listAiBatchItemsByBatchId(db: D1Database, workspaceId: string, batchId: string) {
@@ -343,4 +360,129 @@ export async function markAiBatchItemFailed(
       updatedAt: input.updatedAt,
     })
     .where(eq(aiBatchItems.id, input.itemId));
+}
+
+export async function updateAiBatchItem(
+  db: D1Database,
+  workspaceId: string,
+  batchId: string,
+  itemId: string,
+  input: { keyword: string; description: string; updatedAt: string }
+) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(aiBatchItems)
+    .set({
+      keyword: input.keyword,
+      description: input.description,
+      status: "pending",
+      attempts: 0,
+      title: null,
+      slug: null,
+      outlineMd: null,
+      contentMd: null,
+      excerpt: null,
+      seoTitle: null,
+      seoDescription: null,
+      seoKeywords: null,
+      ogTitle: null,
+      ogDescription: null,
+      noteId: null,
+      lastError: null,
+      updatedAt: input.updatedAt,
+    })
+    .where(
+      and(
+        eq(aiBatchItems.workspaceId, workspaceId),
+        eq(aiBatchItems.batchId, batchId),
+        eq(aiBatchItems.id, itemId)
+      )
+    );
+}
+
+export async function deleteAiBatchItem(db: D1Database, workspaceId: string, batchId: string, itemId: string) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .delete(aiBatchItems)
+    .where(
+      and(
+        eq(aiBatchItems.workspaceId, workspaceId),
+        eq(aiBatchItems.batchId, batchId),
+        eq(aiBatchItems.id, itemId)
+      )
+    );
+}
+
+export async function syncAiBatchAggregates(
+  db: D1Database,
+  workspaceId: string,
+  batchId: string,
+  updatedAt: string
+) {
+  const drizzleDb = getDb(db);
+  const batch = await findAiBatchById(db, workspaceId, batchId);
+  if (!batch) {
+    return null;
+  }
+
+  const items = await listAiBatchItemsByBatchId(db, workspaceId, batchId);
+  const totalItems = items.length;
+  const completedItems = items.filter((item) => item.status === "completed").length;
+  const failedItems = items.filter((item) => item.status === "failed").length;
+  const hasRunnableItems = items.some(
+    (item) => item.status === "pending" || item.status === "outline_done" || item.status === "processing"
+  );
+  const status =
+    batch.status === "paused"
+      ? "paused"
+      : hasRunnableItems
+        ? "processing"
+        : failedItems > 0 && completedItems < totalItems
+          ? "failed"
+          : "completed";
+
+  await drizzleDb
+    .update(aiBatches)
+    .set({
+      totalItems,
+      completedItems,
+      failedItems,
+      status,
+      lastError: failedItems > 0 ? "Some items failed" : null,
+      updatedAt,
+    })
+    .where(and(eq(aiBatches.workspaceId, workspaceId), eq(aiBatches.id, batchId)));
+
+  return { totalItems, completedItems, failedItems, status };
+}
+
+export async function deleteAiBatch(db: D1Database, workspaceId: string, batchId: string) {
+  const drizzleDb = getDb(db);
+  await drizzleDb.delete(aiBatchItems).where(and(eq(aiBatchItems.workspaceId, workspaceId), eq(aiBatchItems.batchId, batchId)));
+  await drizzleDb.delete(aiBatches).where(and(eq(aiBatches.workspaceId, workspaceId), eq(aiBatches.id, batchId)));
+}
+
+export async function updateAiBatch(
+  db: D1Database,
+  workspaceId: string,
+  batchId: string,
+  input: {
+    name?: string;
+    mode?: AiBatchMode;
+    status?: AiBatchStatus;
+    templateId?: string;
+    updatedAt: string;
+  }
+) {
+  const drizzleDb = getDb(db);
+  const setFields: Record<string, string> = { updatedAt: input.updatedAt };
+  if (input.name !== undefined) setFields.name = input.name;
+  if (input.mode !== undefined) setFields.mode = input.mode;
+  if (input.status !== undefined) setFields.status = input.status;
+  if (input.templateId !== undefined) setFields.templateId = input.templateId;
+
+  await drizzleDb
+    .update(aiBatches)
+    .set(setFields)
+    .where(and(eq(aiBatches.workspaceId, workspaceId), eq(aiBatches.id, batchId)));
 }

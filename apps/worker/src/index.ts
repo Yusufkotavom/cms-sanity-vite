@@ -5,9 +5,15 @@ import { z } from "zod";
 import {
   createAiBatch,
   createAiBatchItems,
+  deleteAiBatch,
+  deleteAiBatchItem,
   findAiBatchById,
+  findAiBatchItemById,
   listAiBatchItemsByBatchId,
   listAiBatches,
+  syncAiBatchAggregates,
+  updateAiBatch,
+  updateAiBatchItem,
   type AiBatchMode,
 } from "./db/repositories/ai-batches";
 import {
@@ -154,6 +160,18 @@ const aiBatchSchema = z.object({
 
 const aiBatchProcessSchema = z.object({
   limit: z.number().int().min(1).max(5).optional(),
+});
+
+const aiBatchUpdateSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  mode: z.enum(["outline_only", "outline_then_content"]).optional(),
+  status: z.enum(["queued", "paused"]).optional(),
+  templateId: z.string().uuid().optional(),
+});
+
+const aiBatchItemUpdateSchema = z.object({
+  keyword: z.string().trim().min(1),
+  description: z.string().default(""),
 });
 
 const authLoginSchema = z.object({
@@ -921,6 +939,152 @@ app.post("/api/ai/batches/process", async (c) => {
   const payload = aiBatchProcessSchema.parse((await c.req.json().catch(() => ({}))) as unknown);
   const result = await processAiBatchWork(c.env, workspaceId, aiSettings, payload.limit ?? 2);
   return c.json(result);
+});
+
+app.delete("/api/ai/batches/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const batch = await findAiBatchById(c.env.DB, workspaceId, id);
+
+  if (!batch) {
+    return c.json({ message: "Batch not found" }, 404);
+  }
+
+  if (batch.status === "processing") {
+    return c.json({ message: "Cannot delete a batch that is currently processing" }, 409);
+  }
+
+  await deleteAiBatch(c.env.DB, workspaceId, id);
+  return c.json({ ok: true });
+});
+
+app.patch("/api/ai/batches/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const payload = aiBatchUpdateSchema.parse(await c.req.json());
+  const batch = await findAiBatchById(c.env.DB, workspaceId, id);
+
+  if (!batch) {
+    return c.json({ message: "Batch not found" }, 404);
+  }
+
+  if (batch.status === "processing" && payload.status) {
+    return c.json({ message: "Cannot change status of a batch that is currently processing" }, 409);
+  }
+
+  if (payload.templateId) {
+    const template = await findAiPromptTemplateById(c.env.DB, workspaceId, payload.templateId);
+    if (!template) {
+      return c.json({ message: "Template not found" }, 404);
+    }
+  }
+
+  await updateAiBatch(c.env.DB, workspaceId, id, {
+    name: payload.name,
+    mode: payload.mode as AiBatchMode | undefined,
+    status: payload.status,
+    templateId: payload.templateId,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const updated = await findAiBatchById(c.env.DB, workspaceId, id);
+  if (!updated) {
+    return c.json({ message: "Batch not found after update" }, 404);
+  }
+
+  const items = await listAiBatchItemsByBatchId(c.env.DB, workspaceId, id);
+  const template = await findAiPromptTemplateById(c.env.DB, workspaceId, updated.template_id);
+  return c.json(mapAiBatchSummary(updated, items, template ? { id: template.id, name: template.name } : null));
+});
+
+app.patch("/api/ai/batches/:id/items/:itemId", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const itemId = c.req.param("itemId");
+  const payload = aiBatchItemUpdateSchema.parse(await c.req.json());
+  const batch = await findAiBatchById(c.env.DB, workspaceId, id);
+
+  if (!batch) {
+    return c.json({ message: "Batch not found" }, 404);
+  }
+
+  if (batch.status !== "paused") {
+    return c.json({ message: "Pause batch before editing keywords" }, 409);
+  }
+
+  const item = await findAiBatchItemById(c.env.DB, workspaceId, id, itemId);
+  if (!item) {
+    return c.json({ message: "Batch item not found" }, 404);
+  }
+
+  if (item.status === "processing") {
+    return c.json({ message: "Cannot edit an item that is currently processing" }, 409);
+  }
+
+  const now = new Date().toISOString();
+  await updateAiBatchItem(c.env.DB, workspaceId, id, itemId, {
+    keyword: payload.keyword,
+    description: payload.description,
+    updatedAt: now,
+  });
+  await syncAiBatchAggregates(c.env.DB, workspaceId, id, now);
+
+  const updated = await findAiBatchById(c.env.DB, workspaceId, id);
+  if (!updated) {
+    return c.json({ message: "Batch not found after item update" }, 404);
+  }
+
+  const items = await listAiBatchItemsByBatchId(c.env.DB, workspaceId, id);
+  const template = await findAiPromptTemplateById(c.env.DB, workspaceId, updated.template_id);
+  return c.json({
+    ...mapAiBatchSummary(updated, items, template ? { id: template.id, name: template.name } : null),
+    items: items.map(mapAiBatchItem),
+  });
+});
+
+app.delete("/api/ai/batches/:id/items/:itemId", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const itemId = c.req.param("itemId");
+  const batch = await findAiBatchById(c.env.DB, workspaceId, id);
+
+  if (!batch) {
+    return c.json({ message: "Batch not found" }, 404);
+  }
+
+  if (batch.status !== "paused") {
+    return c.json({ message: "Pause batch before deleting keywords" }, 409);
+  }
+
+  const items = await listAiBatchItemsByBatchId(c.env.DB, workspaceId, id);
+  if (items.length <= 1) {
+    return c.json({ message: "Batch must keep at least one keyword. Delete the batch instead." }, 409);
+  }
+
+  const item = items.find((entry) => entry.id === itemId);
+  if (!item) {
+    return c.json({ message: "Batch item not found" }, 404);
+  }
+
+  if (item.status === "processing") {
+    return c.json({ message: "Cannot delete an item that is currently processing" }, 409);
+  }
+
+  const now = new Date().toISOString();
+  await deleteAiBatchItem(c.env.DB, workspaceId, id, itemId);
+  await syncAiBatchAggregates(c.env.DB, workspaceId, id, now);
+
+  const updated = await findAiBatchById(c.env.DB, workspaceId, id);
+  if (!updated) {
+    return c.json({ message: "Batch not found after item delete" }, 404);
+  }
+
+  const nextItems = await listAiBatchItemsByBatchId(c.env.DB, workspaceId, id);
+  const template = await findAiPromptTemplateById(c.env.DB, workspaceId, updated.template_id);
+  return c.json({
+    ...mapAiBatchSummary(updated, nextItems, template ? { id: template.id, name: template.name } : null),
+    items: nextItems.map(mapAiBatchItem),
+  });
 });
 
 app.get("/api/notes", async (c) => {
