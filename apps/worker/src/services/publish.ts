@@ -1,10 +1,35 @@
 import { markdownToPortableText } from "../markdown-to-portable-text";
+import { portableTextToMarkdown } from "../portable-text-to-markdown";
 import type { NoteRecord } from "../db/repositories/notes";
 
 export type SanityCategory = {
   id: string;
   title: string;
   slug: string | null;
+};
+
+export type SanityPostSnapshot = {
+  sanityDocumentId: string;
+  revision: string | null;
+  title: string;
+  slug: string;
+  excerpt: string;
+  contentMd: string;
+  seoTitle: string;
+  seoDescription: string;
+  seoKeywords: string;
+  ogTitle: string;
+  ogDescription: string;
+  categoryIds: string[];
+};
+
+export type SanityPostSummary = {
+  sanityDocumentId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  updatedAt: string | null;
+  categoryTitles: string[];
 };
 
 type SanityImageField = {
@@ -164,6 +189,214 @@ export async function fetchSanityMetaImage({
   return json.result?.meta?.image ?? null;
 }
 
+export async function fetchSanityPostSnapshot({
+  sanityDocumentId,
+  projectId,
+  dataset,
+  apiVersion,
+  token,
+  fetchImpl = fetch,
+}: {
+  sanityDocumentId: string;
+  projectId: string;
+  dataset: string;
+  apiVersion: string;
+  token?: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const safeDocumentId = sanityDocumentId.replace(/"/g, '\\"');
+  const query = encodeURIComponent(
+    `*[_id == "${safeDocumentId}"][0]{_id,_rev,title,"slug": slug.current,excerpt,body,meta,categories[]{"id": @->_id}}`
+  );
+  const url = `https://${projectId}.api.sanity.io/v${apiVersion}/data/query/${dataset}?query=${query}`;
+  const response = await fetchImpl(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  const json = (await response.json().catch(() => ({}))) as {
+    result?: {
+      _id?: string;
+      _rev?: string;
+      title?: string;
+      slug?: string;
+      excerpt?: string;
+      body?: unknown[];
+      meta?: {
+        title?: string;
+        description?: string;
+        keywords?: string;
+        openGraph?: { title?: string; description?: string };
+      };
+      categories?: Array<{ id?: string }>;
+    } | null;
+  };
+
+  if (!response.ok) {
+    throw new Error(`Failed to load Sanity post (${response.status})`);
+  }
+
+  const result = json.result;
+  if (!result?._id) {
+    throw new Error("Sanity post not found");
+  }
+
+  return {
+    sanityDocumentId: result._id,
+    revision: result._rev ?? null,
+    title: result.title ?? "",
+    slug: result.slug ?? "",
+    excerpt: result.excerpt ?? "",
+    contentMd: portableTextToMarkdown(Array.isArray(result.body) ? (result.body as never[]) : []),
+    seoTitle: result.meta?.title ?? "",
+    seoDescription: result.meta?.description ?? "",
+    seoKeywords: result.meta?.keywords ?? "",
+    ogTitle: result.meta?.openGraph?.title ?? "",
+    ogDescription: result.meta?.openGraph?.description ?? "",
+    categoryIds: (result.categories ?? []).map((item) => item.id).filter((item): item is string => Boolean(item)),
+  } satisfies SanityPostSnapshot;
+}
+
+export async function fetchSanityPosts({
+  projectId,
+  dataset,
+  apiVersion,
+  token,
+  fetchImpl = fetch,
+}: {
+  projectId: string;
+  dataset: string;
+  apiVersion: string;
+  token?: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const query = encodeURIComponent(
+    '*[_type == "post"] | order(_updatedAt desc){"sanityDocumentId": _id, title, "slug": slug.current, excerpt, _updatedAt, categories[]->{title}}'
+  );
+  const url = `https://${projectId}.api.sanity.io/v${apiVersion}/data/query/${dataset}?query=${query}`;
+  const response = await fetchImpl(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  const json = (await response.json().catch(() => ({}))) as {
+    result?: Array<{
+      sanityDocumentId?: string;
+      title?: string;
+      slug?: string;
+      excerpt?: string;
+      _updatedAt?: string;
+      categories?: Array<{ title?: string }>;
+    }>;
+  };
+
+  if (!response.ok) {
+    throw new Error(`Failed to load Sanity posts (${response.status})`);
+  }
+
+  return (json.result ?? [])
+    .filter((item) => item.sanityDocumentId && item.title)
+    .map((item) => ({
+      sanityDocumentId: item.sanityDocumentId!,
+      title: item.title!,
+      slug: item.slug ?? "",
+      excerpt: item.excerpt ?? "",
+      updatedAt: item._updatedAt ?? null,
+      categoryTitles: (item.categories ?? []).map((category) => category.title).filter((title): title is string => Boolean(title)),
+    })) satisfies SanityPostSummary[];
+}
+
+export async function patchNoteToSanity({
+  note,
+  categoryIds,
+  projectId,
+  dataset,
+  apiVersion,
+  token,
+  fetchImpl = fetch,
+}: {
+  note: NoteRecord;
+  categoryIds: string[];
+  projectId: string;
+  dataset: string;
+  apiVersion: string;
+  token: string;
+  fetchImpl?: typeof fetch;
+}) {
+  if (!note.sanity_document_id) {
+    throw new Error("Sanity document ID is required for patch updates");
+  }
+
+  const body = await markdownToPortableText(note.content_md, {
+    uploadImage: ({ url: imageUrl, alt }) =>
+      uploadImageToSanity({
+        projectId,
+        dataset,
+        apiVersion,
+        token,
+        imageUrl,
+        alt,
+        fetchImpl,
+      }),
+  });
+
+  const payload = {
+    mutations: [
+      {
+        patch: {
+          id: note.sanity_document_id,
+          ...(note.sanity_revision ? { ifRevisionID: note.sanity_revision } : {}),
+          set: {
+            title: note.title,
+            slug: {
+              _type: "slug",
+              current: note.slug,
+            },
+            excerpt: note.excerpt || undefined,
+            body,
+            categories: categoryIds.map((categoryId) => ({
+              _type: "reference",
+              _ref: categoryId,
+              _key: crypto.randomUUID().slice(0, 12),
+            })),
+            meta: {
+              title: note.seo_title || note.title,
+              description: note.seo_description || note.excerpt || undefined,
+              keywords: note.seo_keywords || undefined,
+              openGraph: {
+                title: note.og_title || note.seo_title || note.title,
+                description: note.og_description || note.seo_description || note.excerpt || undefined,
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+
+  const url = `https://${projectId}.api.sanity.io/v${apiVersion}/data/mutate/${dataset}`;
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseJson = (await response.json().catch(() => ({}))) as {
+    error?: { description?: string };
+    results?: Array<{ id?: string; document?: { _rev?: string } }>;
+  };
+
+  if (!response.ok) {
+    throw new Error(responseJson.error?.description || `Sanity patch failed (${response.status})`);
+  }
+
+  return {
+    sanityDocumentId: note.sanity_document_id,
+    sanityRevision: responseJson.results?.[0]?.document?._rev ?? null,
+  };
+}
+
 export async function publishNoteToSanity({
   note,
   categoryIds,
@@ -264,11 +497,12 @@ export async function publishNoteToSanity({
 
   const responseJson = (await response.json().catch(() => ({}))) as {
     error?: { description?: string };
+    results?: Array<{ document?: { _rev?: string } }>;
   };
 
   if (!response.ok) {
     throw new Error(responseJson.error?.description || `Sanity publish failed (${response.status})`);
   }
 
-  return { sanityDocumentId };
+  return { sanityDocumentId, sanityRevision: responseJson.results?.[0]?.document?._rev ?? null };
 }

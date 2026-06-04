@@ -34,15 +34,20 @@ import {
   deleteNote,
   findNoteById,
   findNoteByIdInWorkspace,
+  findNoteBySanityDocumentId,
+  findNoteBySlug,
   getCategoryIdsByNoteIds,
   getNoteCategoryIds,
+  clearNoteAiRewriteCandidate,
   listNotes,
   markNoteFailed,
   markNotePublished,
   markNoteScheduled,
   replaceNoteCategories,
+  saveNoteAiRewriteCandidate,
   setNoteOgImageAssetId,
   type NoteRecord,
+  updateNoteSanityMirror,
   updateNoteDraft,
 } from "./db/repositories/notes";
 import {
@@ -70,6 +75,9 @@ import {
 } from "./services/notes";
 import {
   fetchSanityCategories,
+  fetchSanityPosts,
+  fetchSanityPostSnapshot,
+  patchNoteToSanity,
   publishNoteToSanity,
   type SanityCategory,
 } from "./services/publish";
@@ -146,6 +154,14 @@ const scheduleSchema = z.object({
 
 const sanityPublishSchema = z.object({
   noteId: z.string().uuid(),
+});
+
+const sanityOpenPostSchema = z.object({
+  sanityDocumentId: z.string().trim().min(1),
+});
+
+const aiRewritePreviewSchema = z.object({
+  prompt: z.string().trim().min(1),
 });
 
 const aiPromptTemplateSchema = z.object({
@@ -388,6 +404,22 @@ async function getSanitySettings(db: D1Database, workspaceId: string, env?: Env)
     apiVersion: settings.get("sanity.apiVersion") ?? env?.SANITY_API_VERSION ?? "2026-03-29",
     writeToken: settings.get("sanity.writeToken") ?? env?.SANITY_WRITE_TOKEN ?? "",
   };
+}
+
+async function resolveUniqueNoteSlug(db: D1Database, workspaceId: string, baseSlug: string, ignoreNoteId?: string) {
+  const normalizedBase = baseSlug.trim() || `sanity-post-${Date.now()}`;
+  let attempt = normalizedBase;
+  let index = 2;
+
+  while (true) {
+    const existing = await findNoteBySlug(db, workspaceId, attempt);
+    if (!existing || existing.id === ignoreNoteId) {
+      return attempt;
+    }
+
+    attempt = `${normalizedBase}-${index}`;
+    index += 1;
+  }
 }
 
 function normalizeSanitySettings(
@@ -1260,6 +1292,98 @@ app.get("/api/sanity/categories", async (c) => {
   }
 });
 
+app.get("/api/sanity/posts", async (c) => {
+  const sanitySettings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset) {
+    return c.json({ items: [] });
+  }
+
+  try {
+    return c.json({
+      items: await fetchSanityPosts({
+        projectId: sanitySettings.projectId,
+        dataset: sanitySettings.dataset,
+        apiVersion: sanitySettings.apiVersion || "2026-03-29",
+        token: sanitySettings.writeToken || undefined,
+      }),
+    });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to load Sanity posts" }, 500);
+  }
+});
+
+app.post("/api/sanity/posts/open", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const payload = sanityOpenPostSchema.parse(await c.req.json());
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are not configured" }, 400);
+  }
+
+  try {
+    const snapshot = await fetchSanityPostSnapshot({
+      sanityDocumentId: payload.sanityDocumentId,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
+      apiVersion: sanitySettings.apiVersion || "2026-03-29",
+      token: sanitySettings.writeToken,
+    });
+
+    const now = new Date().toISOString();
+    let note = await findNoteBySanityDocumentId(c.env.DB, workspaceId, payload.sanityDocumentId);
+
+    if (note) {
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || note.slug, note.id);
+      await updateNoteSanityMirror(c.env.DB, {
+        workspaceId,
+        id: note.id,
+        title: snapshot.title || note.title,
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityRevision: snapshot.revision,
+        updatedAt: now,
+      });
+      await replaceNoteCategories(c.env.DB, workspaceId, note.id, snapshot.categoryIds);
+      await clearNoteAiRewriteCandidate(c.env.DB, workspaceId, note.id, now);
+    } else {
+      const id = crypto.randomUUID();
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || `sanity-post-${Date.now()}`);
+      await createNote(c.env.DB, {
+        id,
+        workspaceId,
+        title: snapshot.title || "Untitled Sanity Post",
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        outlineMd: "",
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityDocumentId: snapshot.sanityDocumentId,
+        sanityRevision: snapshot.revision,
+        createdAt: now,
+      });
+      await replaceNoteCategories(c.env.DB, workspaceId, id, snapshot.categoryIds);
+      note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+    }
+
+    const updated = note ? await findNoteByIdInWorkspace(c.env.DB, workspaceId, note.id) : null;
+    return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to open Sanity post" }, 500);
+  }
+});
+
 app.get("/api/sanity/status", async (c) => {
   const settings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
   const configured = Boolean(settings.projectId && settings.dataset && settings.apiVersion && settings.writeToken);
@@ -1309,6 +1433,136 @@ app.get("/api/notes/:id", async (c) => {
   }
 
   return c.json(await mapNote(c.env.DB, note));
+});
+
+app.post("/api/notes/:id/refresh-from-sanity", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+
+  if (!note) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  if (!note.sanity_document_id) {
+    return c.json({ message: "Note is not linked to a Sanity document" }, 409);
+  }
+
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are not configured" }, 400);
+  }
+
+  try {
+    const snapshot = await fetchSanityPostSnapshot({
+      sanityDocumentId: note.sanity_document_id,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
+      apiVersion: sanitySettings.apiVersion || "2026-03-29",
+      token: sanitySettings.writeToken,
+    });
+
+    const now = new Date().toISOString();
+    await updateNoteSanityMirror(c.env.DB, {
+      workspaceId,
+      id,
+      title: snapshot.title || note.title,
+      slug: snapshot.slug || note.slug,
+      contentMd: snapshot.contentMd,
+      excerpt: snapshot.excerpt,
+      seoTitle: snapshot.seoTitle,
+      seoDescription: snapshot.seoDescription,
+      seoKeywords: snapshot.seoKeywords,
+      ogTitle: snapshot.ogTitle,
+      ogDescription: snapshot.ogDescription,
+      sanityRevision: snapshot.revision,
+      updatedAt: now,
+    });
+    await replaceNoteCategories(c.env.DB, workspaceId, id, snapshot.categoryIds);
+    await clearNoteAiRewriteCandidate(c.env.DB, workspaceId, id, now);
+
+    const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+    return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to refresh note from Sanity" }, 500);
+  }
+});
+
+app.post("/api/notes/:id/ai-rewrite-preview", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const payload = aiRewritePreviewSchema.parse(await c.req.json());
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+
+  if (!note) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  if (!note.sanity_document_id) {
+    return c.json({ message: "Note is not linked to a Sanity document" }, 409);
+  }
+
+  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
+  const aiConfig = toAiConfig(aiSettings);
+  if (!aiConfig.apiBaseUrl || !aiConfig.apiKey || !aiConfig.model) {
+    return c.json({ message: "AI env is not configured" }, 400);
+  }
+
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are not configured" }, 400);
+  }
+
+  try {
+    const snapshot = await fetchSanityPostSnapshot({
+      sanityDocumentId: note.sanity_document_id,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
+      apiVersion: sanitySettings.apiVersion || "2026-03-29",
+      token: sanitySettings.writeToken,
+    });
+
+    const suggestion = await requestAiSuggestion(
+      {
+        mode: "draft",
+        note: {
+          title: snapshot.title,
+          slug: snapshot.slug,
+          excerpt: snapshot.excerpt,
+          seoTitle: snapshot.seoTitle,
+          seoDescription: snapshot.seoDescription,
+          seoKeywords: snapshot.seoKeywords,
+          ogTitle: snapshot.ogTitle,
+          ogDescription: snapshot.ogDescription,
+          outlineMd: note.outline_md || "",
+          contentMd: snapshot.contentMd,
+        },
+      },
+      {
+        ...aiConfig,
+        draftPrompt: payload.prompt,
+      }
+    );
+
+    const now = new Date().toISOString();
+    await saveNoteAiRewriteCandidate(c.env.DB, {
+      workspaceId,
+      id,
+      contentMd: suggestion.contentMd?.trim() || snapshot.contentMd,
+      excerpt: suggestion.excerpt?.trim() || snapshot.excerpt,
+      seoTitle: suggestion.seoTitle?.trim() || snapshot.seoTitle,
+      seoDescription: suggestion.seoDescription?.trim() || snapshot.seoDescription,
+      seoKeywords: suggestion.seoKeywords?.trim() || snapshot.seoKeywords,
+      ogTitle: suggestion.ogTitle?.trim() || snapshot.ogTitle,
+      ogDescription: suggestion.ogDescription?.trim() || snapshot.ogDescription,
+      updatedAt: now,
+    });
+
+    const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+    return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "AI rewrite preview failed" }, 500);
+  }
 });
 
 app.post("/api/notes", async (c) => {
@@ -1669,6 +1923,33 @@ async function publishNoteById(env: Env, noteId: string) {
   const categoryIds = await getNoteCategoryIds(env.DB, workspaceId, note.id);
   const apiVersion = sanitySettings.apiVersion || "2026-03-29";
   try {
+    if (note.sanity_document_id && !note.sanity_revision) {
+      const snapshot = await fetchSanityPostSnapshot({
+        sanityDocumentId: note.sanity_document_id,
+        projectId: sanitySettings.projectId,
+        dataset: sanitySettings.dataset,
+        apiVersion,
+        token: sanitySettings.writeToken,
+      });
+      const now = new Date().toISOString();
+      await updateNoteSanityMirror(env.DB, {
+        workspaceId,
+        id: note.id,
+        title: note.title,
+        slug: note.slug,
+        contentMd: note.content_md,
+        excerpt: note.excerpt ?? "",
+        seoTitle: note.seo_title ?? "",
+        seoDescription: note.seo_description ?? "",
+        seoKeywords: note.seo_keywords ?? "",
+        ogTitle: note.og_title ?? "",
+        ogDescription: note.og_description ?? "",
+        sanityRevision: snapshot.revision,
+        updatedAt: now,
+      });
+      note = (await findNoteById(env.DB, note.id)) ?? { ...note, sanity_revision: snapshot.revision, updated_at: now };
+    }
+
     if (!note.og_image_asset_id) {
       const ogTitle = note.og_title || note.seo_title || note.title;
       const ogExcerpt = note.og_description || note.seo_description || note.excerpt;
@@ -1698,23 +1979,34 @@ async function publishNoteById(env: Env, noteId: string) {
       };
     }
 
-    const { sanityDocumentId } = await publishNoteToSanity({
-      note,
-      categoryIds,
-      ogImageAssetId: note.og_image_asset_id,
-      projectId: sanitySettings.projectId,
-      dataset: sanitySettings.dataset,
-      apiVersion,
-      token: sanitySettings.writeToken,
-    });
+    const publishResult = note.sanity_document_id
+      ? await patchNoteToSanity({
+          note,
+          categoryIds,
+          projectId: sanitySettings.projectId,
+          dataset: sanitySettings.dataset,
+          apiVersion,
+          token: sanitySettings.writeToken,
+        })
+      : await publishNoteToSanity({
+          note,
+          categoryIds,
+          ogImageAssetId: note.og_image_asset_id,
+          projectId: sanitySettings.projectId,
+          dataset: sanitySettings.dataset,
+          apiVersion,
+          token: sanitySettings.writeToken,
+        });
 
     const now = new Date().toISOString();
     await markNotePublished(env.DB, {
       workspaceId,
       noteId: note.id,
       publishedAt: now,
-      sanityDocumentId,
+      sanityDocumentId: publishResult.sanityDocumentId,
+      sanityRevision: publishResult.sanityRevision,
     });
+    await clearNoteAiRewriteCandidate(env.DB, workspaceId, note.id, now);
     await markJobsPublished(env.DB, { workspaceId, noteId: note.id, updatedAt: now });
 
     const updated = await findNoteById(env.DB, note.id);

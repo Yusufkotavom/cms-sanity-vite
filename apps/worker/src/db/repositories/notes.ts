@@ -20,7 +20,16 @@ export type NoteRecord = {
   status: string;
   publish_at: string | null;
   sanity_document_id: string | null;
+  sanity_revision: string | null;
   last_error: string | null;
+  ai_rewrite_content_md: string | null;
+  ai_rewrite_excerpt: string | null;
+  ai_rewrite_seo_title: string | null;
+  ai_rewrite_seo_description: string | null;
+  ai_rewrite_seo_keywords: string | null;
+  ai_rewrite_og_title: string | null;
+  ai_rewrite_og_description: string | null;
+  ai_rewrite_updated_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -43,7 +52,16 @@ function toNoteRecord(note: typeof notes.$inferSelect): NoteRecord {
     status: note.status,
     publish_at: note.publishAt,
     sanity_document_id: note.sanityDocumentId,
+    sanity_revision: note.sanityRevision,
     last_error: note.lastError,
+    ai_rewrite_content_md: note.aiRewriteContentMd,
+    ai_rewrite_excerpt: note.aiRewriteExcerpt,
+    ai_rewrite_seo_title: note.aiRewriteSeoTitle,
+    ai_rewrite_seo_description: note.aiRewriteSeoDescription,
+    ai_rewrite_seo_keywords: note.aiRewriteSeoKeywords,
+    ai_rewrite_og_title: note.aiRewriteOgTitle,
+    ai_rewrite_og_description: note.aiRewriteOgDescription,
+    ai_rewrite_updated_at: note.aiRewriteUpdatedAt,
     created_at: note.createdAt,
     updated_at: note.updatedAt,
   };
@@ -85,6 +103,16 @@ export async function findNoteBySlug(db: D1Database, workspaceId: string, slug: 
   return rows[0] ? toNoteRecord(rows[0]) : null;
 }
 
+export async function findNoteBySanityDocumentId(db: D1Database, workspaceId: string, sanityDocumentId: string) {
+  const drizzleDb = getDb(db);
+  const rows = await drizzleDb
+    .select()
+    .from(notes)
+    .where(and(eq(notes.workspaceId, workspaceId), eq(notes.sanityDocumentId, sanityDocumentId)))
+    .limit(1);
+  return rows[0] ? toNoteRecord(rows[0]) : null;
+}
+
 export async function createNote(
   db: D1Database,
   input: {
@@ -101,6 +129,8 @@ export async function createNote(
     ogTitle: string;
     ogDescription: string;
     ogImageAssetId?: string;
+    sanityDocumentId?: string | null;
+    sanityRevision?: string | null;
     createdAt: string;
   }
 ) {
@@ -116,12 +146,14 @@ export async function createNote(
     seoTitle: input.seoTitle,
     seoDescription: input.seoDescription,
     seoKeywords: input.seoKeywords,
-    ogTitle: input.ogTitle,
-    ogDescription: input.ogDescription,
-    ogImageAssetId: input.ogImageAssetId ?? null,
-    status: "draft",
-    createdAt: input.createdAt,
-    updatedAt: input.createdAt,
+      ogTitle: input.ogTitle,
+      ogDescription: input.ogDescription,
+      ogImageAssetId: input.ogImageAssetId ?? null,
+      sanityDocumentId: input.sanityDocumentId ?? null,
+      sanityRevision: input.sanityRevision ?? null,
+      status: "draft",
+      createdAt: input.createdAt,
+      updatedAt: input.createdAt,
   });
 }
 
@@ -171,6 +203,94 @@ export async function deleteNote(db: D1Database, workspaceId: string, noteId: st
   const drizzleDb = getDb(db);
   await drizzleDb.delete(noteCategories).where(and(eq(noteCategories.workspaceId, workspaceId), eq(noteCategories.noteId, noteId)));
   await drizzleDb.delete(notes).where(and(eq(notes.workspaceId, workspaceId), eq(notes.id, noteId)));
+}
+
+export async function updateNoteSanityMirror(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    id: string;
+    title: string;
+    slug: string;
+    contentMd: string;
+    excerpt: string;
+    seoTitle: string;
+    seoDescription: string;
+    seoKeywords: string;
+    ogTitle: string;
+    ogDescription: string;
+    sanityRevision: string | null;
+    updatedAt: string;
+  }
+) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      title: input.title,
+      slug: input.slug,
+      contentMd: input.contentMd,
+      excerpt: input.excerpt,
+      seoTitle: input.seoTitle,
+      seoDescription: input.seoDescription,
+      seoKeywords: input.seoKeywords,
+      ogTitle: input.ogTitle,
+      ogDescription: input.ogDescription,
+      sanityRevision: input.sanityRevision,
+      lastError: null,
+      updatedAt: input.updatedAt,
+    })
+    .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.id)));
+}
+
+export async function saveNoteAiRewriteCandidate(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    id: string;
+    contentMd: string;
+    excerpt: string;
+    seoTitle: string;
+    seoDescription: string;
+    seoKeywords: string;
+    ogTitle: string;
+    ogDescription: string;
+    updatedAt: string;
+  }
+) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      aiRewriteContentMd: input.contentMd,
+      aiRewriteExcerpt: input.excerpt,
+      aiRewriteSeoTitle: input.seoTitle,
+      aiRewriteSeoDescription: input.seoDescription,
+      aiRewriteSeoKeywords: input.seoKeywords,
+      aiRewriteOgTitle: input.ogTitle,
+      aiRewriteOgDescription: input.ogDescription,
+      aiRewriteUpdatedAt: input.updatedAt,
+      updatedAt: input.updatedAt,
+    })
+    .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.id)));
+}
+
+export async function clearNoteAiRewriteCandidate(db: D1Database, workspaceId: string, noteId: string, updatedAt: string) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      aiRewriteContentMd: null,
+      aiRewriteExcerpt: null,
+      aiRewriteSeoTitle: null,
+      aiRewriteSeoDescription: null,
+      aiRewriteSeoKeywords: null,
+      aiRewriteOgTitle: null,
+      aiRewriteOgDescription: null,
+      aiRewriteUpdatedAt: null,
+      updatedAt,
+    })
+    .where(and(eq(notes.workspaceId, workspaceId), eq(notes.id, noteId)));
 }
 
 export async function getNoteCategoryIds(db: D1Database, workspaceId: string, noteId: string) {
@@ -252,6 +372,7 @@ export async function markNotePublished(
     noteId: string;
     publishedAt: string;
     sanityDocumentId: string;
+    sanityRevision?: string | null;
   }
 ) {
   const drizzleDb = getDb(db);
@@ -261,6 +382,7 @@ export async function markNotePublished(
       status: "published",
       publishAt: input.publishedAt,
       sanityDocumentId: input.sanityDocumentId,
+      sanityRevision: input.sanityRevision ?? null,
       lastError: null,
       updatedAt: input.publishedAt,
     })

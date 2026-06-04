@@ -33,7 +33,16 @@ export type ApiNote = {
   status: "draft" | "scheduled" | "published" | "failed";
   publishAt: string | null;
   sanityDocumentId: string | null;
+  sanityRevision: string | null;
   lastError: string | null;
+  aiRewriteContentMd: string | null;
+  aiRewriteExcerpt: string | null;
+  aiRewriteSeoTitle: string | null;
+  aiRewriteSeoDescription: string | null;
+  aiRewriteSeoKeywords: string | null;
+  aiRewriteOgTitle: string | null;
+  aiRewriteOgDescription: string | null;
+  aiRewriteUpdatedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -68,6 +77,15 @@ export type SanityConnectionTestResult = {
   ok: boolean;
   categoryCount: number;
   sample: ApiCategory[];
+};
+
+export type SanityPostSummary = {
+  sanityDocumentId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  updatedAt: string | null;
+  categoryTitles: string[];
 };
 
 export type AiAssistMode = "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only";
@@ -444,6 +462,16 @@ export const notesApi = {
     request<{ items: ApiCategory[] }>("/api/sanity/categories", {
       headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
     }),
+  sanityPosts: (workspaceSlug?: string) =>
+    request<{ items: SanityPostSummary[] }>("/api/sanity/posts", {
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+    }),
+  openSanityPost: (sanityDocumentId: string, workspaceSlug?: string) =>
+    request<ApiNote>("/api/sanity/posts/open", {
+      method: "POST",
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+      body: JSON.stringify({ sanityDocumentId }),
+    }),
   list: () => request<{ items: ApiNote[] }>("/api/notes"),
   get: (id: string) => request<ApiNote>(`/api/notes/${id}`),
   create: (payload: NoteInput) =>
@@ -476,6 +504,15 @@ export const notesApi = {
   generateOg: (id: string) =>
     request<ApiNote>(`/api/notes/${id}/generate-og`, {
       method: "POST",
+    }),
+  refreshFromSanity: (id: string) =>
+    request<ApiNote>(`/api/notes/${id}/refresh-from-sanity`, {
+      method: "POST",
+    }),
+  aiRewritePreview: (id: string, prompt: string) =>
+    request<ApiNote>(`/api/notes/${id}/ai-rewrite-preview`, {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
     }),
   getSanitySettings: (workspaceSlug?: string) =>
     request<SanitySettings>("/api/settings/sanity", {

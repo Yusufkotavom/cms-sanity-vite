@@ -1,12 +1,14 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import {
   CalendarClockIcon,
   Clock3Icon,
   FileTextIcon,
   ImagePlusIcon,
   Loader2Icon,
+  RefreshCcwIcon,
   SaveIcon,
   SendIcon,
+  SparklesIcon,
 } from "lucide-react";
 
 import type { ApiCategory, ApiConfig, ApiNote } from "@/lib/api";
@@ -68,6 +70,9 @@ type PostEditorPageProps = {
   runAiAssist: (mode: Exclude<AiRunMode, null>) => Promise<void>;
   generateOgImage: () => Promise<void>;
   saveDraft: () => Promise<ApiNote | undefined>;
+  refreshDraftFromSanity: () => Promise<void>;
+  runAiRewritePreview: (prompt: string) => Promise<void>;
+  applyAiRewriteCandidate: () => void;
   scheduleDraft: () => Promise<void>;
   publishDraft: () => Promise<void>;
   retryPublishDraft: () => Promise<void>;
@@ -83,11 +88,13 @@ type PostEditorPageProps = {
   deleteSelectedNote: () => void;
   isAiRunning: AiRunMode;
   isGeneratingOg: boolean;
+  isRefreshingFromSanity: boolean;
+  isAiRewritePreviewRunning: boolean;
   isSaving: boolean;
   isScheduling: boolean;
   isPublishing: boolean;
-  editorSectionTab: "overview" | "seo-og" | "outline" | "content";
-  setEditorSectionTab: (value: "overview" | "seo-og" | "outline" | "content") => void;
+  editorSectionTab: "overview" | "seo-og" | "outline" | "content" | "sanity";
+  setEditorSectionTab: (value: "overview" | "seo-og" | "outline" | "content" | "sanity") => void;
   contentTab: "editor" | "preview";
   setContentTab: (value: "editor" | "preview") => void;
 };
@@ -103,6 +110,9 @@ export function PostEditorPage({
   runAiAssist,
   generateOgImage,
   saveDraft,
+  refreshDraftFromSanity,
+  runAiRewritePreview,
+  applyAiRewriteCandidate,
   scheduleDraft,
   publishDraft,
   retryPublishDraft,
@@ -118,6 +128,8 @@ export function PostEditorPage({
   deleteSelectedNote,
   isAiRunning,
   isGeneratingOg,
+  isRefreshingFromSanity,
+  isAiRewritePreviewRunning,
   isSaving,
   isScheduling,
   isPublishing,
@@ -126,6 +138,10 @@ export function PostEditorPage({
   contentTab,
   setContentTab,
 }: PostEditorPageProps) {
+  const [aiRewritePrompt, setAiRewritePrompt] = useState(
+    "Rewrite konten post ini dalam bahasa Indonesia yang lebih rapi, lebih kuat secara SEO, dan tetap menjaga fakta asli. Perbaiki alur, kejelasan, transisi, excerpt, serta metadata SEO/OG. Jangan mengubah intent utama atau menambahkan klaim yang tidak ada di sumber."
+  );
+
   return (
     <section className="grid gap-6">
       <Card>
@@ -295,7 +311,7 @@ export function PostEditorPage({
             onValueChange={(value) => setEditorSectionTab(value as typeof editorSectionTab)}
           >
             <div className="-mx-4 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
-              <TabsList className="w-max min-w-full flex-nowrap md:grid md:w-full md:grid-cols-4">
+              <TabsList className="w-max min-w-full flex-nowrap md:grid md:w-full md:grid-cols-5">
                 <TabsTrigger className="shrink-0 md:flex-1" value="overview">
                   Overview
                 </TabsTrigger>
@@ -307,6 +323,9 @@ export function PostEditorPage({
                 </TabsTrigger>
                 <TabsTrigger className="shrink-0 md:flex-1" value="content">
                   Content
+                </TabsTrigger>
+                <TabsTrigger className="shrink-0 md:flex-1" value="sanity">
+                  Sanity Workflow
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -352,6 +371,8 @@ export function PostEditorPage({
                     <span>Status: {draft.status}</span>
                     <span>Publish ready: {config?.sanityConfigured ? "Ya" : "Belum"}</span>
                     <span>Kategori: {draft.categoryIds.length}</span>
+                    <span>Sanity link: {draft.sanityDocumentId ? "Terhubung" : "Belum terhubung"}</span>
+                    <span>Sanity revision: {draft.sanityRevision ?? "Belum ada"}</span>
                     <span>Jadwal: {scheduleAt ? `${getScheduleDate(scheduleAt)} ${getScheduleTime(scheduleAt)}` : "Belum diatur"}</span>
                     <span>Terakhir diubah: {formatRelativeDate(draft.updatedAt)}</span>
                     {draft.lastError ? <span>Error: {draft.lastError}</span> : null}
@@ -370,13 +391,14 @@ export function PostEditorPage({
                   </div>
                 </div>
               </div>
+
             </TabsContent>
 
             <TabsContent value="seo-og" className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium" htmlFor="note-seo-title">
-                    SEO Title
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium" htmlFor="note-seo-title">
+                  SEO Title
                   </label>
                   <Input
                     id="note-seo-title"
@@ -581,11 +603,32 @@ export function PostEditorPage({
                   </TabsList>
                 </div>
                 <TabsContent value="editor">
-                  <Textarea
-                    value={draft.contentMd}
-                    onChange={(event) => updateDraft({ contentMd: event.target.value })}
-                    className="min-h-[520px] resize-y font-mono text-sm"
-                  />
+                  {draft.aiRewriteContentMd ? (
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <div className="grid gap-2">
+                        <label className="text-sm font-medium">Current Draft Content</label>
+                        <Textarea
+                          value={draft.contentMd}
+                          onChange={(event) => updateDraft({ contentMd: event.target.value })}
+                          className="min-h-[520px] resize-y font-mono text-sm"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-sm font-medium">AI Rewrite Candidate</label>
+                        <Textarea
+                          value={draft.aiRewriteContentMd}
+                          readOnly
+                          className="min-h-[520px] resize-y font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <Textarea
+                      value={draft.contentMd}
+                      onChange={(event) => updateDraft({ contentMd: event.target.value })}
+                      className="min-h-[520px] resize-y font-mono text-sm"
+                    />
+                  )}
                 </TabsContent>
                 <TabsContent value="preview">
                   <Suspense fallback={<EditorFallback label="Loading preview..." />}>
@@ -593,6 +636,107 @@ export function PostEditorPage({
                   </Suspense>
                 </TabsContent>
               </Tabs>
+            </TabsContent>
+
+            <TabsContent value="sanity" className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  <div className="grid gap-2">
+                    <span>Sanity link: {draft.sanityDocumentId ? "Terhubung" : "Belum terhubung"}</span>
+                    <span>Sanity document: {draft.sanityDocumentId ?? "-"}</span>
+                    <span>Sanity revision: {draft.sanityRevision ?? "Belum ada"}</span>
+                    <span>Workflow: hanya field aman yang di-patch ke Sanity, block custom lain tidak disentuh.</span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  <div className="grid gap-2">
+                    <span>Current draft body: {draft.contentMd ? "Terisi" : "Kosong"}</span>
+                    <span>AI candidate body: {draft.aiRewriteContentMd ? "Siap dibandingkan" : "Belum ada"}</span>
+                    <span>AI candidate metadata: {draft.aiRewriteUpdatedAt ? `Dibuat ${formatRelativeDate(draft.aiRewriteUpdatedAt)}` : "Belum ada"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {!draft.sanityDocumentId ? (
+                <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  Buka post dari tab <strong>Sanity Posts</strong> untuk mengaktifkan workflow rewrite dan patch update ke Sanity.
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 rounded-xl border border-border bg-muted/20 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="grid gap-1">
+                        <span className="text-sm font-medium text-foreground">Sanity Rewrite Workflow</span>
+                        <span className="text-xs text-muted-foreground">
+                          Refresh konten dari Sanity dulu, generate kandidat rewrite AI, bandingkan, lalu apply ke draft utama jika cocok.
+                        </span>
+                      </div>
+                      <Button variant="outline" onClick={() => void refreshDraftFromSanity()} disabled={isRefreshingFromSanity}>
+                        {isRefreshingFromSanity ? (
+                          <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                        ) : (
+                          <RefreshCcwIcon data-icon="inline-start" />
+                        )}
+                        Refresh from Sanity
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium" htmlFor="ai-rewrite-prompt">
+                        Rewrite Prompt
+                      </label>
+                      <Textarea
+                        id="ai-rewrite-prompt"
+                        value={aiRewritePrompt}
+                        onChange={(event) => setAiRewritePrompt(event.target.value)}
+                        className="min-h-[140px]"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => void runAiRewritePreview(aiRewritePrompt)}
+                        disabled={isAiRewritePreviewRunning || !aiRewritePrompt.trim()}
+                      >
+                        {isAiRewritePreviewRunning ? (
+                          <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                        ) : (
+                          <SparklesIcon data-icon="inline-start" />
+                        )}
+                        Generate AI Rewrite Preview
+                      </Button>
+                      <Button
+                        onClick={applyAiRewriteCandidate}
+                        disabled={!draft.aiRewriteContentMd || isAiRewritePreviewRunning}
+                      >
+                        Apply AI Rewrite to Draft
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2">
+                    <div className="grid gap-2 text-sm">
+                      <span className="font-medium text-foreground">Current Draft Metadata</span>
+                      <span>Excerpt: {draft.excerpt || "-"}</span>
+                      <span>SEO Title: {draft.seoTitle || "-"}</span>
+                      <span>SEO Description: {draft.seoDescription || "-"}</span>
+                      <span>SEO Keywords: {draft.seoKeywords || "-"}</span>
+                      <span>OG Title: {draft.ogTitle || "-"}</span>
+                      <span>OG Description: {draft.ogDescription || "-"}</span>
+                    </div>
+                    <div className="grid gap-2 text-sm">
+                      <span className="font-medium text-foreground">AI Rewrite Candidate</span>
+                      <span>Excerpt: {draft.aiRewriteExcerpt || "-"}</span>
+                      <span>SEO Title: {draft.aiRewriteSeoTitle || "-"}</span>
+                      <span>SEO Description: {draft.aiRewriteSeoDescription || "-"}</span>
+                      <span>SEO Keywords: {draft.aiRewriteSeoKeywords || "-"}</span>
+                      <span>OG Title: {draft.aiRewriteOgTitle || "-"}</span>
+                      <span>OG Description: {draft.aiRewriteOgDescription || "-"}</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>

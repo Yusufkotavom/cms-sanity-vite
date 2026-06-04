@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { deriveFilename, fetchSanityCategories, fetchSanityMetaImage } from "./publish";
+import { deriveFilename, fetchSanityCategories, fetchSanityMetaImage, fetchSanityPosts } from "./publish";
 
 describe("publish service", () => {
   it("derives filename from source url", () => {
@@ -69,5 +69,42 @@ describe("publish service", () => {
       },
       alt: "Existing image",
     });
+  });
+
+  it("lists sanity posts for browser table", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        result: [
+          {
+            sanityDocumentId: "post.1",
+            title: "Post One",
+            slug: "post-one",
+            excerpt: "Excerpt one",
+            _updatedAt: "2026-06-04T10:00:00.000Z",
+            categories: [{ title: "SEO" }, { title: "Marketing" }],
+          },
+        ],
+      }),
+    });
+
+    await expect(
+      fetchSanityPosts({
+        projectId: "ww3aejg2",
+        dataset: "development",
+        apiVersion: "2026-03-29",
+        token: "token",
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      })
+    ).resolves.toEqual([
+      {
+        sanityDocumentId: "post.1",
+        title: "Post One",
+        slug: "post-one",
+        excerpt: "Excerpt one",
+        updatedAt: "2026-06-04T10:00:00.000Z",
+        categoryTitles: ["SEO", "Marketing"],
+      },
+    ]);
   });
 });

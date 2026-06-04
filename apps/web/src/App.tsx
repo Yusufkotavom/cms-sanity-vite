@@ -30,6 +30,7 @@ import {
   type AuthSettings,
   type AuthStatus,
   type OgBrandingSettings,
+  type SanityPostSummary,
   type SanitySettings,
   type Workspace,
   type WorkspacePayload,
@@ -48,6 +49,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import {
   Table,
@@ -359,8 +361,10 @@ function App() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [draft, setDraft] = useState<Note | null>(null);
   const [savedDraft, setSavedDraft] = useState<Note | null>(null);
+  const [sanityPosts, setSanityPosts] = useState<SanityPostSummary[]>([]);
+  const [postsSourceTab, setPostsSourceTab] = useState<"local" | "sanity">("local");
   const [scheduleAt, setScheduleAt] = useState("");
-  const [editorSectionTab, setEditorSectionTab] = useState<"overview" | "seo-og" | "outline" | "content">("overview");
+  const [editorSectionTab, setEditorSectionTab] = useState<"overview" | "seo-og" | "outline" | "content" | "sanity">("overview");
   const [contentTab, setContentTab] = useState<"editor" | "preview">("editor");
   const [config, setConfig] = useState<ApiConfig | null>(null);
   const [sanitySettings, setSanitySettings] = useState<SanitySettings | null>(null);
@@ -389,12 +393,16 @@ function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingSanityPosts, setIsLoadingSanityPosts] = useState(false);
+  const [openingSanityDocumentId, setOpeningSanityDocumentId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [retryingNoteId, setRetryingNoteId] = useState<string | null>(null);
   const [isAiRunning, setIsAiRunning] = useState<null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only">(null);
   const [isGeneratingOg, setIsGeneratingOg] = useState(false);
+  const [isRefreshingFromSanity, setIsRefreshingFromSanity] = useState(false);
+  const [isAiRewritePreviewRunning, setIsAiRewritePreviewRunning] = useState(false);
   const [isTestingSanity, setIsTestingSanity] = useState(false);
   const [isSavingSanity, setIsSavingSanity] = useState(false);
   const [isCopyingToken, setIsCopyingToken] = useState<null | "session" | "integration">(null);
@@ -557,6 +565,18 @@ function App() {
     void loadOgBrandingSettings();
     void loadAuthConfig();
   }, [activeWorkspaceSlug, authStatus, route]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !activeWorkspaceSlug) {
+      return;
+    }
+
+    if (route !== "posts" || postsSourceTab !== "sanity") {
+      return;
+    }
+
+    void loadSanityPosts();
+  }, [activeWorkspaceSlug, authStatus, postsSourceTab, route]);
 
   useEffect(() => {
     if (workspaces.length === 0) {
@@ -1025,6 +1045,42 @@ function App() {
     }
   }
 
+  async function loadSanityPosts() {
+    setIsLoadingSanityPosts(true);
+    try {
+      const response = await notesApi.sanityPosts(activeWorkspaceSlug || undefined);
+      setSanityPosts(response.items);
+    } catch (error) {
+      showLoadError(error, "Failed to load Sanity posts");
+    } finally {
+      setIsLoadingSanityPosts(false);
+    }
+  }
+
+  async function openSanityPost(sanityDocumentId: string) {
+    setOpeningSanityDocumentId(sanityDocumentId);
+    try {
+      const note = await notesApi.openSanityPost(sanityDocumentId, activeWorkspaceSlug || undefined);
+      setDraft(note);
+      setSavedDraft(note);
+      setNotes((current) => {
+        const exists = current.some((item) => item.id === note.id);
+        return exists ? current.map((item) => (item.id === note.id ? note : item)) : [note, ...current];
+      });
+      setSelectedId(note.id);
+      setScheduleAt(toJakartaScheduleValue(note.publishAt));
+      setEditorSectionTab("sanity");
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts", note.id));
+      }
+      toast.success("Sanity post loaded into editor");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open Sanity post");
+    } finally {
+      setOpeningSanityDocumentId(null);
+    }
+  }
+
   function updateDraft(patch: Partial<Note>) {
     setDraft((current) => (current ? { ...current, ...patch } : current));
   }
@@ -1338,28 +1394,41 @@ function App() {
         },
       });
 
-      setDraft((current) => {
-        if (!current) return current;
+      const nextTitle = response.suggestion.title?.trim() || draft.title;
+      const nextSlug = response.suggestion.slug?.trim() || draft.slug;
+      const nextDraft = {
+        ...draft,
+        title: nextTitle,
+        slug: nextSlug,
+        excerpt: response.suggestion.excerpt?.trim() ?? draft.excerpt,
+        seoTitle: response.suggestion.seoTitle?.trim() ?? draft.seoTitle,
+        seoDescription: response.suggestion.seoDescription?.trim() ?? draft.seoDescription,
+        seoKeywords: response.suggestion.seoKeywords?.trim() ?? draft.seoKeywords,
+        ogTitle: response.suggestion.ogTitle?.trim() ?? draft.ogTitle,
+        ogDescription: response.suggestion.ogDescription?.trim() ?? draft.ogDescription,
+        outlineMd: response.suggestion.outlineMd ?? draft.outlineMd,
+        contentMd: response.suggestion.contentMd ?? draft.contentMd,
+      };
 
-        const nextTitle = response.suggestion.title?.trim() || current.title;
-        const nextSlug = response.suggestion.slug?.trim() || current.slug;
-
-        return {
-          ...current,
-          title: nextTitle,
-          slug: nextSlug,
-          excerpt: response.suggestion.excerpt?.trim() ?? current.excerpt,
-          seoTitle: response.suggestion.seoTitle?.trim() ?? current.seoTitle,
-          seoDescription: response.suggestion.seoDescription?.trim() ?? current.seoDescription,
-          seoKeywords: response.suggestion.seoKeywords?.trim() ?? current.seoKeywords,
-          ogTitle: response.suggestion.ogTitle?.trim() ?? current.ogTitle,
-          ogDescription: response.suggestion.ogDescription?.trim() ?? current.ogDescription,
-          outlineMd: response.suggestion.outlineMd ?? current.outlineMd,
-          contentMd: response.suggestion.contentMd ?? current.contentMd,
-        };
+      const updated = await notesApi.update(draft.id, {
+        title: nextDraft.title.trim(),
+        slug: nextDraft.slug.trim(),
+        excerpt: nextDraft.excerpt.trim(),
+        seoTitle: nextDraft.seoTitle.trim(),
+        seoDescription: nextDraft.seoDescription.trim(),
+        seoKeywords: nextDraft.seoKeywords.trim(),
+        ogTitle: nextDraft.ogTitle.trim(),
+        ogDescription: nextDraft.ogDescription.trim(),
+        outlineMd: nextDraft.outlineMd,
+        contentMd: nextDraft.contentMd,
+        categoryIds: nextDraft.categoryIds,
       });
 
-      toast.success(`AI suggestion applied (${response.model})`);
+      setDraft(updated);
+      setSavedDraft(updated);
+      setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+
+      toast.success(`AI suggestion applied and saved (${response.model})`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "AI assist failed");
     } finally {
@@ -1390,6 +1459,72 @@ function App() {
     } finally {
       setIsGeneratingOg(false);
     }
+  }
+
+  async function refreshDraftFromSanity() {
+    if (!draft) return;
+    if (!draft.sanityDocumentId) {
+      toast.error("Note ini belum terhubung ke dokumen Sanity");
+      return;
+    }
+
+    setIsRefreshingFromSanity(true);
+    try {
+      const updated = await notesApi.refreshFromSanity(draft.id);
+      setDraft(updated);
+      setSavedDraft(updated);
+      setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      toast.success("Konten terbaru dari Sanity dimuat ke draft lokal");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to refresh from Sanity");
+    } finally {
+      setIsRefreshingFromSanity(false);
+    }
+  }
+
+  async function runAiRewritePreview(prompt: string) {
+    if (!draft) return;
+    if (!draft.sanityDocumentId) {
+      toast.error("Note ini belum terhubung ke dokumen Sanity");
+      return;
+    }
+    if (!config?.aiConfigured) {
+      toast.error("AI belum aktif karena settings AI belum diisi");
+      return;
+    }
+
+    setIsAiRewritePreviewRunning(true);
+    try {
+      const updated = await notesApi.aiRewritePreview(draft.id, prompt);
+      setDraft(updated);
+      setSavedDraft((current) => current ?? updated);
+      setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      toast.success("Preview rewrite AI siap dibandingkan dengan konten Sanity saat ini");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to generate AI rewrite preview");
+    } finally {
+      setIsAiRewritePreviewRunning(false);
+    }
+  }
+
+  function applyAiRewriteCandidate() {
+    setDraft((current) => {
+      if (!current || !current.aiRewriteContentMd) {
+        return current;
+      }
+
+      return {
+        ...current,
+        contentMd: current.aiRewriteContentMd,
+        excerpt: current.aiRewriteExcerpt ?? current.excerpt,
+        seoTitle: current.aiRewriteSeoTitle ?? current.seoTitle,
+        seoDescription: current.aiRewriteSeoDescription ?? current.seoDescription,
+        seoKeywords: current.aiRewriteSeoKeywords ?? current.seoKeywords,
+        ogTitle: current.aiRewriteOgTitle ?? current.ogTitle,
+        ogDescription: current.aiRewriteOgDescription ?? current.ogDescription,
+      };
+    });
+    toast.success("Preview AI dipindahkan ke field draft utama. Review lalu Save atau Publish.");
   }
 
   function saveApiBaseOverride() {
@@ -1661,21 +1796,100 @@ function App() {
     );
   }
 
+  function renderSanityPostsTable() {
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Title</TableHead>
+            <TableHead>Slug</TableHead>
+            <TableHead>Updated</TableHead>
+            <TableHead>Categories</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoadingSanityPosts ? (
+            <TableRow>
+              <TableCell colSpan={4} className="text-center text-muted-foreground">
+                Loading Sanity posts...
+              </TableCell>
+            </TableRow>
+          ) : sanityPosts.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={4} className="text-center text-muted-foreground">
+                Belum ada post Sanity atau koneksi belum siap.
+              </TableCell>
+            </TableRow>
+          ) : (
+            sanityPosts.map((post) => (
+              <TableRow key={post.sanityDocumentId} onClick={() => void openSanityPost(post.sanityDocumentId)}>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-medium text-foreground">{post.title}</span>
+                    <span className="truncate text-xs text-muted-foreground">{post.sanityDocumentId}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">/{post.slug}</TableCell>
+                <TableCell className="text-muted-foreground">{formatRelativeDate(post.updatedAt)}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {post.categoryTitles.length > 0 ? (
+                      post.categoryTitles.slice(0, 3).map((category) => (
+                        <Badge key={category} variant="outline">
+                          {category}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    );
+  }
+
   function renderPostsList() {
     return (
       <section className="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Notes</CardTitle>
-            <CardDescription>Daftar draft markdown yang tersimpan di D1.</CardDescription>
+            <CardDescription>Kelola draft lokal atau buka post Sanity di editor yang sama.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="flex gap-2">
-              <Button className="w-full md:w-auto" onClick={createNote}>
-                Note Baru
-              </Button>
-            </div>
-            {renderNotesTable(notes, "Belum ada note.")}
+            <Tabs value={postsSourceTab} onValueChange={(value) => setPostsSourceTab(value as typeof postsSourceTab)}>
+              <TabsList>
+                <TabsTrigger value="local">Local Notes</TabsTrigger>
+                <TabsTrigger value="sanity">Sanity Posts</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {postsSourceTab === "local" ? (
+              <>
+                <div className="flex gap-2">
+                  <Button className="w-full md:w-auto" onClick={createNote}>
+                    Note Baru
+                  </Button>
+                </div>
+                {renderNotesTable(notes, "Belum ada note.")}
+              </>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="w-full md:w-auto" onClick={() => void loadSanityPosts()}>
+                    Refresh Sanity Posts
+                  </Button>
+                  {openingSanityDocumentId ? (
+                    <span className="text-sm text-muted-foreground">Membuka post Sanity ke editor...</span>
+                  ) : null}
+                </div>
+                {renderSanityPostsTable()}
+              </>
+            )}
           </CardContent>
         </Card>
       </section>
@@ -1711,6 +1925,9 @@ function App() {
             runAiAssist={runAiAssist}
             generateOgImage={generateOgImage}
             saveDraft={saveDraft}
+            refreshDraftFromSanity={refreshDraftFromSanity}
+            runAiRewritePreview={runAiRewritePreview}
+            applyAiRewriteCandidate={applyAiRewriteCandidate}
             scheduleDraft={scheduleDraft}
             publishDraft={publishDraft}
             retryPublishDraft={retryPublishDraft}
@@ -1726,6 +1943,8 @@ function App() {
             deleteSelectedNote={deleteSelectedNote}
             isAiRunning={isAiRunning}
             isGeneratingOg={isGeneratingOg}
+            isRefreshingFromSanity={isRefreshingFromSanity}
+            isAiRewritePreviewRunning={isAiRewritePreviewRunning}
             isSaving={isSaving}
             isScheduling={isScheduling}
             isPublishing={isPublishing}
