@@ -1,5 +1,7 @@
 import type { SettingsPageProps } from "./types";
 
+import { ChevronDownIcon } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -212,14 +214,19 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                     aiSettings.models.map((model, index) => {
                       const isDefault = aiSettings.defaultModelId === model.id;
                       return (
-                        <div key={model.id} className="grid gap-4 rounded-xl border border-border p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-foreground">Model {index + 1}</span>
+                        <details key={model.id} className="group rounded-xl border border-border" open={isDefault || index === 0}>
+                          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <span className="font-medium text-foreground">{model.name || `Model ${index + 1}`}</span>
                               <Badge variant="outline">{model.providerPreset || "custom"}</Badge>
                               {isDefault ? <Badge>Default</Badge> : null}
+                              <span className="truncate text-xs">{model.model || "Model ID belum diisi"}</span>
                             </div>
-                            <div className="flex gap-2">
+                            <ChevronDownIcon className="size-4 transition-transform group-open:rotate-180" />
+                          </summary>
+
+                          <div className="grid gap-4 border-t border-border p-4 pt-4">
+                            <div className="flex flex-wrap justify-end gap-2">
                               <Button
                                 variant={isDefault ? "default" : "outline"}
                                 size="sm"
@@ -238,38 +245,38 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                                 Hapus
                               </Button>
                             </div>
-                          </div>
 
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div className="grid gap-2">
-                              <FieldInfo label="Profile name" description="Nama internal untuk membedakan model profile per workspace." />
-                              <Input value={model.name} onChange={(event) => updateModel(model.id, { name: event.target.value })} />
-                            </div>
-                            <div className="grid gap-2">
-                              <FieldInfo label="Provider preset" description="Label preset untuk memudahkan identifikasi. Tetap memakai endpoint OpenAI-compatible." />
-                              <Input
-                                value={model.providerPreset}
-                                onChange={(event) => updateModel(model.id, { providerPreset: event.target.value })}
-                              />
-                            </div>
-                            <div className="grid gap-2 md:col-span-2">
-                              <FieldInfo label="API base URL" description="Contoh: OpenRouter, Groq, Gemini OpenAI-compatible, atau provider kompatibel lain." />
-                              <Input value={model.apiBaseUrl} onChange={(event) => updateModel(model.id, { apiBaseUrl: event.target.value })} />
-                            </div>
-                            <div className="grid gap-2">
-                              <FieldInfo label="Model" description="ID model default untuk profile ini." />
-                              <Input value={model.model} onChange={(event) => updateModel(model.id, { model: event.target.value })} />
-                            </div>
-                            <div className="grid gap-2">
-                              <FieldInfo label="API key" description="Akan disimpan di backend app untuk profile model ini." />
-                              <Input
-                                value={model.apiKey}
-                                placeholder={model.hasApiKey ? "********" : "API key"}
-                                onChange={(event) => updateModel(model.id, { apiKey: event.target.value })}
-                              />
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="grid gap-2">
+                                <FieldInfo label="Profile name" description="Nama internal untuk membedakan model profile per workspace." />
+                                <Input value={model.name} onChange={(event) => updateModel(model.id, { name: event.target.value })} />
+                              </div>
+                              <div className="grid gap-2">
+                                <FieldInfo label="Provider preset" description="Label preset untuk memudahkan identifikasi. Tetap memakai endpoint OpenAI-compatible." />
+                                <Input
+                                  value={model.providerPreset}
+                                  onChange={(event) => updateModel(model.id, { providerPreset: event.target.value })}
+                                />
+                              </div>
+                              <div className="grid gap-2 md:col-span-2">
+                                <FieldInfo label="API base URL" description="Contoh: OpenRouter, Groq, Gemini OpenAI-compatible, atau provider kompatibel lain." />
+                                <Input value={model.apiBaseUrl} onChange={(event) => updateModel(model.id, { apiBaseUrl: event.target.value })} />
+                              </div>
+                              <div className="grid gap-2">
+                                <FieldInfo label="Model" description="ID model default untuk profile ini." />
+                                <Input value={model.model} onChange={(event) => updateModel(model.id, { model: event.target.value })} />
+                              </div>
+                              <div className="grid gap-2">
+                                <FieldInfo label="API key" description="Akan disimpan di backend app untuk profile model ini." />
+                                <Input
+                                  value={model.apiKey}
+                                  placeholder={model.hasApiKey ? "********" : "API key"}
+                                  onChange={(event) => updateModel(model.id, { apiKey: event.target.value })}
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        </details>
                       );
                     })
                   )}

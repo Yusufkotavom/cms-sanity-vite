@@ -29,7 +29,6 @@ export type SettingsPageProps = {
   activeWorkspaceSlug: string;
   currentWorkspace: Workspace | null;
   workspaces: Workspace[];
-  workspaceEditorSlug: string;
   workspaceForm: WorkspaceFormState;
   setWorkspaceForm: Dispatch<SetStateAction<WorkspaceFormState>>;
   workspaceSanitySettings: SanitySettings;
@@ -47,12 +46,6 @@ export type SettingsPageProps = {
   isWorkspaceFormComplete: boolean;
   isWorkspaceSanityComplete: boolean;
   hasWorkspaceSanityTestPassed: boolean;
-  sanitySettings: SanitySettings | null;
-  setSanitySettings: Dispatch<SetStateAction<SanitySettings | null>>;
-  testSanitySettings: () => Promise<void>;
-  saveSanitySettings: () => Promise<void>;
-  isTestingSanity: boolean;
-  isSavingSanity: boolean;
   config: ApiConfig | null;
   authConfig: AuthSettings | null;
   authEmail: string;
