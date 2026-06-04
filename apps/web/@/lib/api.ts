@@ -126,6 +126,7 @@ export type AiSettings = {
   }>;
   defaultModelId: string;
   systemPrompt: string;
+  companyInfo: string;
   metadataPrompt: string;
   draftPrompt: string;
   outlinePrompt: string;

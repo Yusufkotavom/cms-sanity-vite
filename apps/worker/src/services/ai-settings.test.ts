@@ -43,6 +43,7 @@ describe("ai settings service", () => {
         ],
         ["ai.defaultModelId", "model-a"],
         ["ai.systemPrompt", "system"],
+        ["ai.companyInfo", "company"],
       ])
     );
 
@@ -51,6 +52,7 @@ describe("ai settings service", () => {
       apiKey: "key-a",
       model: "model-a",
       systemPrompt: "system",
+      companyInfo: "company",
     });
   });
 
@@ -65,6 +67,7 @@ describe("ai settings service", () => {
     const workspaceSettings = normalizeAiWorkspaceSettings(
       new Map([
         ["ai.systemPrompt", "workspace-system"],
+        ["ai.companyInfo", "workspace-company"],
         ["ai.metadataPrompt", "workspace-metadata"],
       ])
     );
@@ -91,6 +94,7 @@ describe("ai settings service", () => {
     expect(mergeAiSettingsModelsOnly(workspaceSettings, defaultSettings)).toMatchObject({
       defaultModelId: "default-model",
       systemPrompt: "workspace-system",
+      companyInfo: "workspace-company",
       metadataPrompt: "workspace-metadata",
       models: [
         {
@@ -105,6 +109,7 @@ describe("ai settings service", () => {
     const settings = normalizeAiWorkspaceSettings(new Map());
 
     expect(settings.systemPrompt).toContain("editor senior B2B");
+    expect(settings.companyInfo).toContain("KOTACOM");
     expect(settings.metadataPrompt).toContain("audiens B2B");
     expect(settings.draftPrompt).toContain("content lead B2B");
     expect(settings.outlinePrompt).toContain("outline artikel SEO B2B");

@@ -1,0 +1,229 @@
+{
+  "company": {
+    "brand": "KOTACOM",
+    "legalName": "KOTACOM IT SERVICE & PERCETAKAN",
+    "website": "https://www.kotacom.id",
+    "positioning": "Solusi IT dan percetakan terintegrasi untuk bisnis yang membutuhkan website, software, support teknis, infrastruktur IT, dan materi promosi offline dalam satu partner.",
+    "shortDescription": "Solusi website, software, layanan IT, dan percetakan dengan implementasi rapi, cepat, serta mudah di-scale untuk kebutuhan bisnis.",
+    "mainHeadline": "Bangun fondasi digital bisnis yang rapi, stabil, dan siap untuk tumbuh.",
+    "primaryAudience": [
+      "bisnis",
+      "perusahaan",
+      "UMKM",
+      "institusi",
+      "sekolah",
+      "brand profesional",
+      "tim operasional",
+      "decision-maker bisnis"
+    ],
+    "serviceCategories": [
+      "Website Development",
+      "Software Development",
+      "IT Support & Infrastructure",
+      "Printing & Design"
+    ],
+    "coreServices": [
+      "pembuatan website company profile",
+      "landing page",
+      "toko online",
+      "custom web app",
+      "software bisnis",
+      "sistem POS",
+      "dashboard bisnis",
+      "CRM dan sistem operasional",
+      "mobile app development",
+      "e-commerce solutions",
+      "IT support",
+      "network setup",
+      "system administration",
+      "server maintenance",
+      "service komputer dan laptop",
+      "recovery data",
+      "instal aplikasi dan software",
+      "percetakan buku",
+      "brosur",
+      "kalender",
+      "seminar kit",
+      "materi promosi",
+      "graphic design",
+      "branding package"
+    ],
+    "valuePropositions": [
+      "one-stop solution untuk kebutuhan IT, digital, dan percetakan",
+      "berpengalaman sejak 2008",
+      "150+ proyek selesai",
+      "pendekatan konsultatif dari pemetaan kebutuhan sampai implementasi",
+      "eksekusi lintas layanan dalam satu alur kerja",
+      "support berkelanjutan setelah launch",
+      "harga transparan dan penawaran jelas di awal",
+      "solusi realistis sesuai scope, timeline, dan prioritas bisnis"
+    ],
+    "toneOfVoice": [
+      "profesional",
+      "jelas",
+      "tenang",
+      "kredibel",
+      "consultative",
+      "tidak lebay",
+      "fokus manfaat bisnis nyata",
+      "mudah dipahami pembaca Indonesia"
+    ],
+    "proofPoints": [
+      "Berdiri sejak 2008",
+      "150+ proyek selesai",
+      "berbasis di Surabaya dan Sidoarjo",
+      "melayani kebutuhan IT, software, website, dan percetakan",
+      "portfolio mencakup POS retail, infrastruktur IT, dan sistem koperasi digital"
+    ],
+    "locations": [
+      {
+        "name": "Kantor Sidoarjo",
+        "address": "Graha Indraprasta G7/15, Tulangan, Sidoarjo 61273, Jawa Timur, Indonesia"
+      },
+      {
+        "name": "Kantor Surabaya",
+        "address": "Jl. Tenggilis Mulya 76, Surabaya, Jawa Timur 60292, Indonesia"
+      }
+    ],
+    "serviceAreas": [
+      "Surabaya",
+      "Sidoarjo",
+      "Jawa Timur",
+      "Indonesia"
+    ],
+    "contacts": {
+      "phone": "+62 857-9952-0350",
+      "whatsappPrimary": "https://wa.me/6281335275219",
+      "whatsappSecondary": "https://wa.me/085799520350"
+    },
+    "defaultCta": [
+      "Konsultasi Gratis",
+      "Kirim Brief Kebutuhan",
+      "Hubungi Kami",
+      "Chat WhatsApp",
+      "Jelajahi Solusi"
+    ]
+  },
+  "generationRules": {
+    "global": {
+      "useWhen": "Dipakai sebagai konteks brand tambahan selain system prompt untuk AI assist, rewrite, batch generator, metadata, dan content generation.",
+      "guardrails": [
+        "Jangan mengarang data, angka, testimoni, klien, harga, garansi, atau klaim yang tidak ada di company info atau input user.",
+        "Jangan memakai gaya clickbait, hiperbola, atau janji berlebihan.",
+        "Prioritaskan bahasa Indonesia profesional yang jelas dan mudah dipahami.",
+        "Gunakan KOTACOM sebagai partner solusi IT, digital, dan percetakan terpadu.",
+        "Tekankan Surabaya dan Sidoarjo hanya saat relevan dengan keyword, halaman, atau intent lokal.",
+        "Jika konteks kurang lengkap, tulis defensif dan sarankan konsultasi atau brief kebutuhan."
+      ]
+    },
+    "moneyPage": {
+      "purpose": "Membuat atau rewrite halaman layanan yang fokus pada conversion, trust, dan local SEO.",
+      "useWhen": "Saat membuat landing page, service page, money page, atau rewrite halaman layanan KOTACOM.",
+      "requiredSections": [
+        "hero dengan value proposition jelas",
+        "masalah atau kebutuhan target audience",
+        "solusi KOTACOM",
+        "cakupan layanan",
+        "manfaat bisnis",
+        "cara kerja atau proses",
+        "alasan memilih KOTACOM",
+        "FAQ",
+        "CTA konsultasi atau kirim brief"
+      ],
+      "guardrails": [
+        "Fokus pada intent pembeli yang mencari vendor atau partner implementasi.",
+        "Gunakan proof point yang tersedia: sejak 2008, 150+ proyek, lokasi Surabaya/Sidoarjo, support berkelanjutan.",
+        "Jangan hard selling berlebihan.",
+        "Jangan membuat harga spesifik jika tidak diberikan.",
+        "Jangan membuat nama klien baru atau studi kasus baru tanpa input."
+      ]
+    },
+    "blogPost": {
+      "purpose": "Membuat artikel SEO informasional atau komersial yang tetap mengarah natural ke layanan KOTACOM.",
+      "useWhen": "Saat generate draft artikel, outline, outline-to-post, atau metadata blog.",
+      "guardrails": [
+        "Jawab intent pembaca dulu sebelum promosi.",
+        "CTA harus natural dan relevan dengan topik.",
+        "Gunakan pengalaman praktis dan pertimbangan bisnis, bukan fluff umum.",
+        "Hindari keyword stuffing."
+      ]
+    }
+  },
+  "links": [
+    {
+      "url": "https://www.kotacom.id/",
+      "title": "Homepage KOTACOM",
+      "description": "Halaman utama untuk positioning KOTACOM sebagai solusi IT, website, software, dan percetakan terintegrasi.",
+      "keywords": ["KOTACOM", "solusi IT Surabaya", "website software IT support percetakan"],
+      "use": "Referensi brand, positioning, layanan utama, CTA, proof point, dan tone umum."
+    },
+    {
+      "url": "https://www.kotacom.id/pembuatan-website",
+      "title": "Pembuatan Website / Website Development",
+      "description": "Halaman layanan website profesional untuk company profile, landing page, sekolah, toko online, dan kebutuhan promosi.",
+      "keywords": ["jasa pembuatan website", "website development", "jasa website Surabaya", "company profile", "landing page"],
+      "use": "Referensi saat generate/rewrite konten website development, landing page, atau halaman jasa website lokal."
+    },
+    {
+      "url": "https://www.kotacom.id/software",
+      "title": "Software Development",
+      "description": "Halaman layanan software custom untuk dashboard bisnis, POS, CRM, otomasi operasional, dan integrasi proses.",
+      "keywords": ["software development", "software custom", "sistem POS", "dashboard bisnis", "CRM"],
+      "use": "Referensi saat generate/rewrite konten software custom, POS, CRM, dashboard, atau sistem operasional."
+    },
+    {
+      "url": "https://www.kotacom.id/services",
+      "title": "IT Support & Services",
+      "description": "Halaman layanan support teknis dan infrastruktur seperti IT support, network setup, system administration, server maintenance, dan pengadaan alat IT.",
+      "keywords": ["IT support Surabaya", "network setup", "server maintenance", "system administration", "service komputer"],
+      "use": "Referensi saat generate/rewrite konten IT support, infrastruktur, service komputer, maintenance, dan layanan teknis."
+    },
+    {
+      "url": "https://www.kotacom.id/percetakan",
+      "title": "Percetakan / Printing & Design",
+      "description": "Halaman layanan percetakan dan materi promosi untuk buku, brosur, kalender, seminar kit, dan kebutuhan branding offline.",
+      "keywords": ["percetakan Surabaya", "jasa cetak buku", "printing services", "brosur", "seminar kit"],
+      "use": "Referensi saat generate/rewrite konten percetakan, cetak buku, materi promosi, dan desain."
+    },
+    {
+      "url": "https://www.kotacom.id/layanan",
+      "title": "Layanan KOTACOM",
+      "description": "Halaman agregat layanan IT service, sistem POS, software, dan popular services.",
+      "keywords": ["layanan KOTACOM", "IT service", "sistem POS", "jasa instal aplikasi", "recovery data"],
+      "use": "Referensi navigasi dan cakupan layanan lintas kategori."
+    },
+    {
+      "url": "https://www.kotacom.id/projects",
+      "title": "Portfolio & Case Studies",
+      "description": "Halaman portfolio proyek website, mobile app, system integration, POS retail, infrastruktur IT, dan sistem koperasi digital.",
+      "keywords": ["portfolio KOTACOM", "case study", "POS retail", "infrastruktur IT", "sistem koperasi"],
+      "use": "Referensi proof dan contoh tipe proyek, tanpa mengarang detail di luar data tersedia."
+    },
+    {
+      "url": "https://www.kotacom.id/products",
+      "title": "Produk Digital dan Perangkat IT",
+      "description": "Katalog produk software tools, templates, digital assets, perangkat IT, dan produk printing.",
+      "keywords": ["produk KOTACOM", "software tools", "template", "perangkat IT", "produk printing"],
+      "use": "Referensi produk dan katalog saat konten butuh konteks product commerce."
+    },
+    {
+      "url": "https://www.kotacom.id/blog",
+      "title": "Blog KOTACOM",
+      "description": "Artikel dan insights seputar teknologi, IT, rakit PC, percetakan, dan tips bisnis.",
+      "keywords": ["blog KOTACOM", "tips IT", "rakit PC", "percetakan", "insight teknologi"],
+      "use": "Referensi kategori konten editorial dan internal linking blog."
+    },
+    {
+      "url": "https://www.kotacom.id/contact",
+      "title": "Contact / Konsultasi",
+      "description": "Halaman kontak untuk konsultasi, brief kebutuhan, dan komunikasi awal dengan tim KOTACOM.",
+      "keywords": ["kontak KOTACOM", "konsultasi IT", "kirim brief"],
+      "use": "CTA utama untuk money page dan artikel komersial."
+    }
+  ],
+  "researchSource": {
+    "sourceUrl": "https://www.kotacom.id/",
+    "retrievedAt": "2026-06-04",
+    "notes": "Data diringkas dari homepage dan navigasi situs KOTACOM. Validasi ulang halaman detail bila ingin membuat klaim lebih spesifik per layanan."
+  }
+}

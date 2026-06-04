@@ -378,6 +378,15 @@ export function AiSettingsTab({
                     />
                   </div>
                   <div className="grid gap-2">
+                    <FieldInfo label="Company info" description="Konteks brand/workspace yang selalu dibawa ke semua mode AI sebelum prompt khusus task." />
+                    <Textarea
+                      value={aiSettings.companyInfo}
+                      onChange={(event) =>
+                        setAiSettings((current) => (current ? { ...current, companyInfo: event.target.value } : current))
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
                     <FieldInfo label="Metadata prompt" description="Khusus untuk judul, excerpt, SEO, dan OG metadata." />
                     <Textarea
                       value={aiSettings.metadataPrompt}

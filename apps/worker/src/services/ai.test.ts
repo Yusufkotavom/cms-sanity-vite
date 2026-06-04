@@ -84,6 +84,45 @@ describe("ai service", () => {
     ).rejects.toThrow("AI request failed (502): upstream gateway timeout");
   });
 
+  it("includes company info in the system prompt", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ outlineMd: "# Test" }) } }],
+        }),
+    } as Response);
+
+    await requestAiSuggestion(
+      {
+        mode: "outline",
+        note: {
+          title: "Test",
+          slug: "test",
+          excerpt: "",
+          seoTitle: "",
+          seoDescription: "",
+          seoKeywords: "",
+          ogTitle: "",
+          ogDescription: "",
+          outlineMd: "",
+          contentMd: "",
+        },
+      },
+      {
+        apiBaseUrl: "https://provider.example/v1",
+        apiKey: "secret",
+        model: "model-1",
+        companyInfo: "Brand: KOTACOM",
+      },
+      fetchMock
+    );
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.messages[0].content).toContain("Company info and brand guardrails");
+    expect(body.messages[0].content).toContain("Brand: KOTACOM");
+  });
+
   it("normalizes notes arrays from provider responses", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,

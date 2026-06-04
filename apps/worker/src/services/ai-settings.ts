@@ -5,6 +5,7 @@ export const AI_SETTING_KEYS = [
   "ai.apiKey",
   "ai.model",
   "ai.systemPrompt",
+  "ai.companyInfo",
   "ai.metadataPrompt",
   "ai.draftPrompt",
   "ai.outlinePrompt",
@@ -26,11 +27,23 @@ export type AiWorkspaceSettings = {
   models: AiModelSettings[];
   defaultModelId: string;
   systemPrompt: string;
+  companyInfo: string;
   metadataPrompt: string;
   draftPrompt: string;
   outlinePrompt: string;
   outlineToPostPrompt: string;
 };
+
+export const DEFAULT_COMPANY_INFO = `Brand: KOTACOM
+Website: https://www.kotacom.id
+Positioning: Solusi IT dan percetakan terintegrasi untuk bisnis: website, software, IT support, infrastruktur IT, dan percetakan dalam satu partner.
+Audience: bisnis, perusahaan, UMKM, institusi, sekolah, brand profesional, tim operasional, decision-maker bisnis.
+Layanan utama: Website Development, Software Development, IT Support & Infrastructure, Printing & Design.
+Core services: pembuatan website company profile, landing page, toko online, custom web app, software bisnis, sistem POS, dashboard bisnis, CRM, mobile app, e-commerce, IT support, network setup, system administration, server maintenance, service komputer/laptop, recovery data, instal aplikasi/software, percetakan buku, brosur, kalender, seminar kit, materi promosi, graphic design, branding package.
+Value: one-stop solution, berdiri sejak 2008, 150+ proyek selesai, pendekatan konsultatif, support berkelanjutan, harga transparan, eksekusi realistis sesuai scope/timeline/prioritas.
+Area: Surabaya, Sidoarjo, Jawa Timur, Indonesia.
+Tone: profesional, jelas, tenang, kredibel, consultative, tidak lebay, fokus manfaat bisnis nyata.
+Guardrails: jangan mengarang data, angka, testimoni, klien, harga, garansi, atau klaim yang tidak diberikan; jangan clickbait; gunakan CTA natural seperti Konsultasi Gratis, Kirim Brief Kebutuhan, Hubungi Kami, Chat WhatsApp.`;
 
 export const DEFAULT_AI_PROMPTS = {
   systemPrompt:
@@ -107,6 +120,7 @@ export function normalizeAiWorkspaceSettings(settings: Map<string, string>): AiW
     models: parsedModels,
     defaultModelId,
     systemPrompt: withDefaultPrompt(settings.get("ai.systemPrompt"), DEFAULT_AI_PROMPTS.systemPrompt),
+    companyInfo: settings.get("ai.companyInfo")?.trim() || DEFAULT_COMPANY_INFO,
     metadataPrompt: withDefaultPrompt(settings.get("ai.metadataPrompt"), DEFAULT_AI_PROMPTS.metadataPrompt),
     draftPrompt: withDefaultPrompt(settings.get("ai.draftPrompt"), DEFAULT_AI_PROMPTS.draftPrompt),
     outlinePrompt: withDefaultPrompt(settings.get("ai.outlinePrompt"), DEFAULT_AI_PROMPTS.outlinePrompt),
@@ -128,6 +142,7 @@ export function toAiConfig(settings: AiWorkspaceSettings) {
     apiKey: model?.apiKey ?? "",
     model: model?.model ?? "",
     systemPrompt: settings.systemPrompt,
+    companyInfo: settings.companyInfo,
     metadataPrompt: settings.metadataPrompt,
     draftPrompt: settings.draftPrompt,
     outlinePrompt: settings.outlinePrompt,
@@ -143,6 +158,7 @@ export function mergeAiSettingsModelsOnly(
     models: defaultSettings.models,
     defaultModelId: defaultSettings.defaultModelId,
     systemPrompt: workspaceSettings.systemPrompt,
+    companyInfo: workspaceSettings.companyInfo,
     metadataPrompt: workspaceSettings.metadataPrompt,
     draftPrompt: workspaceSettings.draftPrompt,
     outlinePrompt: workspaceSettings.outlinePrompt,

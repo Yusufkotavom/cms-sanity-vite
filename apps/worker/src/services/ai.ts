@@ -57,6 +57,7 @@ export type AiConfig = {
   apiKey: string;
   model: string;
   systemPrompt?: string;
+  companyInfo?: string;
   metadataPrompt?: string;
   draftPrompt?: string;
   outlinePrompt?: string;
@@ -151,9 +152,12 @@ function buildSystemPrompt(mode: AiAssistRequest["mode"], config: AiConfig) {
             ? config.outlineToPostPrompt
             : config.metadataPrompt;
 
-  const mergedPrompt = [basePrompt.join(" "), config.systemPrompt?.trim(), modePrompt?.trim()]
+  const companyInfoPrompt = config.companyInfo?.trim()
+    ? `Company info and brand guardrails:\n${config.companyInfo.trim()}`
+    : "";
+  const mergedPrompt = [basePrompt.join(" "), config.systemPrompt?.trim(), companyInfoPrompt, modePrompt?.trim()]
     .filter(Boolean)
-    .join(" ");
+    .join("\n\n");
 
   return mergedPrompt;
 }
