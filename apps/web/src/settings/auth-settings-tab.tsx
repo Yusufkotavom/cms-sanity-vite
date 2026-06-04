@@ -98,6 +98,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
       { method: "PUT", path: "/api/settings/sanity", description: "Update pengaturan Sanity" },
       { method: "GET", path: "/api/settings/ai", description: "Pengaturan AI" },
       { method: "PUT", path: "/api/settings/ai", description: "Update pengaturan AI" },
+      { method: "POST", path: "/api/settings/ai/test", description: "Test koneksi model AI aktif" },
       { method: "GET", path: "/api/settings/og-branding", description: "Pengaturan OG branding" },
       { method: "PUT", path: "/api/settings/og-branding", description: "Update OG branding" },
     ],

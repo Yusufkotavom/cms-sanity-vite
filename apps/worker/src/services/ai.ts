@@ -55,6 +55,13 @@ export type AiConfig = {
   outlineToPostPrompt?: string;
 };
 
+export type AiConnectionTestResult = {
+  ok: true;
+  provider: string;
+  model: string;
+  message: string;
+};
+
 function stripCodeFence(value: string) {
   const trimmed = value.trim();
   const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -202,4 +209,58 @@ export async function requestAiSuggestion(
 
   const parsed = JSON.parse(extractJsonObject(content)) as unknown;
   return aiSuggestionSchema.parse(parsed);
+}
+
+export async function testAiConnection(
+  config: AiConfig,
+  fetchImpl: typeof fetch = fetch
+): Promise<AiConnectionTestResult> {
+  if (!config.apiBaseUrl || !config.apiKey || !config.model) {
+    throw new Error("AI model profile is incomplete");
+  }
+
+  const baseUrl = config.apiBaseUrl.replace(/\/+$/, "");
+  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: config.model,
+      temperature: 0,
+      max_tokens: 8,
+      messages: [
+        {
+          role: "system",
+          content: "You are a connection test. Reply with OK.",
+        },
+        {
+          role: "user",
+          content: "Connection test. Reply with OK.",
+        },
+      ],
+    }),
+  });
+
+  const json = (await response.json().catch(() => ({}))) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    error?: { message?: string };
+  };
+
+  if (!response.ok) {
+    throw new Error(json.error?.message || `AI connection test failed (${response.status})`);
+  }
+
+  const content = json.choices?.[0]?.message?.content?.trim();
+  if (!content) {
+    throw new Error("AI connection test returned an empty response");
+  }
+
+  return {
+    ok: true,
+    provider: config.apiBaseUrl,
+    model: config.model,
+    message: "AI connection successful",
+  };
 }

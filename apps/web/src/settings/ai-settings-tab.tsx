@@ -1,16 +1,26 @@
 import type { SettingsPageProps } from "./types";
 
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, Loader2Icon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { FieldInfo } from "./field-info";
 
-type AiSettingsTabProps = Pick<SettingsPageProps, "aiSettings" | "setAiSettings" | "saveAiSettings" | "config">;
+type AiSettingsTabProps = Pick<
+  SettingsPageProps,
+  | "aiSettings"
+  | "setAiSettings"
+  | "saveAiSettings"
+  | "testAiSettings"
+  | "isTestingAiSettings"
+  | "aiConnectionTestResult"
+  | "config"
+>;
 
 const MODEL_PRESETS = [
   {
@@ -133,7 +143,18 @@ function createModelFromPreset(preset: (typeof MODEL_PRESETS)[number]) {
   };
 }
 
-export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, config }: AiSettingsTabProps) {
+export function AiSettingsTab({
+  aiSettings,
+  setAiSettings,
+  saveAiSettings,
+  testAiSettings,
+  isTestingAiSettings,
+  aiConnectionTestResult,
+  config,
+}: AiSettingsTabProps) {
+  const isInheritMode = Boolean(aiSettings && !aiSettings.isDefaultWorkspace && aiSettings.inheritFromDefault);
+  const isModelsReadonly = isInheritMode;
+
   function updateModel(
     modelId: string,
     patch: Partial<NonNullable<AiSettingsTabProps["aiSettings"]>["models"][number]>
@@ -178,18 +199,62 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
     setAiSettings((current) => (current ? { ...current, ...values } : current));
   }
 
+  function setInheritMode(checked: boolean) {
+    setAiSettings((current) =>
+      current
+        ? {
+            ...current,
+            inheritFromDefault: checked,
+          }
+        : current
+    );
+  }
+
   return (
     <TabsContent value="ai" className="grid gap-6">
       <Card>
         <CardHeader>
           <CardTitle>AI Settings</CardTitle>
           <CardDescription>
-            Model profile dan global prompt disimpan per workspace di database aplikasi. Provider preset hanya prefill untuk endpoint OpenAI-compatible.
+            Workspace `default` menjadi sumber model AI utama. Workspace lain bisa mewarisi model dari `default`, tetapi prompt tetap dikelola per workspace.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6 text-sm text-muted-foreground">
           {aiSettings ? (
             <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Mode</CardTitle>
+                  <CardDescription>
+                    Tentukan apakah workspace ini memakai model AI dari `default` atau model khusus workspace aktif.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  {aiSettings.isDefaultWorkspace ? (
+                    <div className="rounded-xl border border-border bg-muted/30 p-4">
+                      Workspace ini adalah sumber model AI utama untuk workspace lain. Model default, provider, endpoint, dan API key dari sini bisa dipakai workspace yang memilih inherit.
+                    </div>
+                  ) : (
+                    <label className="flex items-start gap-3 rounded-xl border border-border p-4">
+                      <Checkbox checked={aiSettings.inheritFromDefault} onCheckedChange={(checked) => setInheritMode(Boolean(checked))} />
+                      <div className="grid gap-1">
+                        <span className="font-medium text-foreground">Use default workspace AI settings</span>
+                        <span>
+                          Jika aktif, AI assist, batch, cron, dan rewrite preview akan memakai model aktif dari workspace `{aiSettings.sourceWorkspaceSlug}`. Prompt tetap milik workspace ini.
+                        </span>
+                      </div>
+                    </label>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span>Source:</span>
+                    <Badge variant="outline">{aiSettings.sourceWorkspaceSlug}</Badge>
+                    <span>{aiSettings.sourceWorkspaceName}</span>
+                    {isInheritMode ? <Badge>Inherited</Badge> : <Badge variant="outline">Custom / Active</Badge>}
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">AI Models</CardTitle>
@@ -200,7 +265,7 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                 <CardContent className="grid gap-4">
                   <div className="flex flex-wrap gap-2">
                     {MODEL_PRESETS.map((preset) => (
-                      <Button key={preset.label} variant="outline" onClick={() => addModel(preset)}>
+                      <Button key={preset.label} variant="outline" onClick={() => addModel(preset)} disabled={isModelsReadonly}>
                         Tambah {preset.label}
                       </Button>
                     ))}
@@ -230,6 +295,7 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                               <Button
                                 variant={isDefault ? "default" : "outline"}
                                 size="sm"
+                                disabled={isModelsReadonly}
                                 onClick={() =>
                                   setAiSettings((current) => (current ? { ...current, defaultModelId: model.id } : current))
                                 }
@@ -240,7 +306,7 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => removeModel(model.id)}
-                                disabled={aiSettings.models.length === 1}
+                                disabled={isModelsReadonly || aiSettings.models.length === 1}
                               >
                                 Hapus
                               </Button>
@@ -249,26 +315,28 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="grid gap-2">
                                 <FieldInfo label="Profile name" description="Nama internal untuk membedakan model profile per workspace." />
-                                <Input value={model.name} onChange={(event) => updateModel(model.id, { name: event.target.value })} />
+                                <Input disabled={isModelsReadonly} value={model.name} onChange={(event) => updateModel(model.id, { name: event.target.value })} />
                               </div>
                               <div className="grid gap-2">
                                 <FieldInfo label="Provider preset" description="Label preset untuk memudahkan identifikasi. Tetap memakai endpoint OpenAI-compatible." />
                                 <Input
+                                  disabled={isModelsReadonly}
                                   value={model.providerPreset}
                                   onChange={(event) => updateModel(model.id, { providerPreset: event.target.value })}
                                 />
                               </div>
                               <div className="grid gap-2 md:col-span-2">
                                 <FieldInfo label="API base URL" description="Contoh: OpenRouter, Groq, Gemini OpenAI-compatible, atau provider kompatibel lain." />
-                                <Input value={model.apiBaseUrl} onChange={(event) => updateModel(model.id, { apiBaseUrl: event.target.value })} />
+                                <Input disabled={isModelsReadonly} value={model.apiBaseUrl} onChange={(event) => updateModel(model.id, { apiBaseUrl: event.target.value })} />
                               </div>
                               <div className="grid gap-2">
                                 <FieldInfo label="Model" description="ID model default untuk profile ini." />
-                                <Input value={model.model} onChange={(event) => updateModel(model.id, { model: event.target.value })} />
+                                <Input disabled={isModelsReadonly} value={model.model} onChange={(event) => updateModel(model.id, { model: event.target.value })} />
                               </div>
                               <div className="grid gap-2">
                                 <FieldInfo label="API key" description="Akan disimpan di backend app untuk profile model ini." />
                                 <Input
+                                  disabled={isModelsReadonly}
                                   value={model.apiKey}
                                   placeholder={model.hasApiKey ? "********" : "API key"}
                                   onChange={(event) => updateModel(model.id, { apiKey: event.target.value })}
@@ -287,7 +355,7 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                 <CardHeader>
                   <CardTitle className="text-base">Global Prompts</CardTitle>
                   <CardDescription>
-                    Prompt ini berlaku sebagai default global per workspace. Untuk AI Batch, prompt template batch tetap bisa override outline dan content prompt.
+                    Prompt ini tetap lokal per workspace, bahkan saat model diwarisi dari `default`. AI Batch template tetap bisa override outline dan content prompt sendiri.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4">
@@ -297,7 +365,7 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                         {preset.label}
                       </Button>
                     ))}
-                    <span className="text-xs">Pilih preset prompt global sesuai jenis output yang ingin dijadikan default workspace.</span>
+                    <span className="text-xs">Pilih preset prompt sesuai gaya output default yang diinginkan.</span>
                   </div>
 
                   <div className="grid gap-2">
@@ -350,11 +418,54 @@ export function AiSettingsTab({ aiSettings, setAiSettings, saveAiSettings, confi
                 </CardContent>
               </Card>
 
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Connection Test</CardTitle>
+                  <CardDescription>
+                    Tes ini mencoba model AI yang sedang efektif dipakai workspace sekarang. Saat mode inherit aktif, model diuji dari workspace `default`, tetapi prompt lokal workspace ini tetap dipertahankan.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button variant="outline" onClick={() => void testAiSettings()} disabled={isTestingAiSettings}>
+                      {isTestingAiSettings ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+                      {isTestingAiSettings ? "Testing..." : "Test AI connection"}
+                    </Button>
+                    <div className="text-xs text-muted-foreground">
+                      AI status: <Badge variant="outline">{config?.aiConfigured ? `ready (${config.aiModel})` : "not configured"}</Badge>
+                    </div>
+                  </div>
+
+                  {aiConnectionTestResult ? (
+                    <div className="rounded-xl border border-border bg-muted/30 p-4 text-xs text-foreground">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge>Success</Badge>
+                        <Badge variant="outline">{aiConnectionTestResult.model}</Badge>
+                        <Badge variant="outline">{aiConnectionTestResult.sourceWorkspaceSlug}</Badge>
+                      </div>
+                      <div className="mt-2 grid gap-1 text-muted-foreground">
+                        <span>{aiConnectionTestResult.message}</span>
+                        <span>Provider: {aiConnectionTestResult.provider}</span>
+                        <span>Source workspace: {aiConnectionTestResult.sourceWorkspaceName}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border p-4 text-xs">
+                      Belum ada hasil test. Jalankan test setelah memilih model default dan mengisi API key yang diperlukan.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <div className="flex flex-wrap items-center gap-3">
                 <Button onClick={() => void saveAiSettings()}>Save AI settings</Button>
-                <div className="text-xs text-muted-foreground">
-                  AI status: <Badge variant="outline">{config?.aiConfigured ? `ready (${config.aiModel})` : "not configured"}</Badge>
-                </div>
+                {isInheritMode ? (
+                  <span className="text-xs">
+                    Mode inherit aktif. Save menyimpan prompt workspace ini dan flag agar model memakai source dari workspace `{aiSettings.sourceWorkspaceSlug}`.
+                  </span>
+                ) : (
+                  <span className="text-xs">Mode custom aktif. Save akan menyimpan model dan prompt untuk workspace ini.</span>
+                )}
               </div>
             </>
           ) : (

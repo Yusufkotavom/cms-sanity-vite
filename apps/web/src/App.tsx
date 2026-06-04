@@ -18,6 +18,7 @@ import {
   setStoredAuthToken,
   setStoredApiBaseUrlOverride,
   type AiSettings,
+  type AiConnectionTestResult,
   type ApiCategory,
   type ApiConfig,
   type ApiNote,
@@ -326,6 +327,7 @@ function App() {
   const [contentTab, setContentTab] = useState<"editor" | "preview">("editor");
   const [config, setConfig] = useState<ApiConfig | null>(null);
   const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  const [aiConnectionTestResult, setAiConnectionTestResult] = useState<AiConnectionTestResult | null>(null);
   const [ogBrandingSettings, setOgBrandingSettings] = useState<OgBrandingSettings | null>(null);
   const [categoryOptions, setCategoryOptions] = useState<ApiCategory[]>([]);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
@@ -360,6 +362,7 @@ function App() {
   const [isGeneratingOg, setIsGeneratingOg] = useState(false);
   const [isRefreshingFromSanity, setIsRefreshingFromSanity] = useState(false);
   const [isAiRewritePreviewRunning, setIsAiRewritePreviewRunning] = useState(false);
+  const [isTestingAiSettings, setIsTestingAiSettings] = useState(false);
   const [isCopyingToken, setIsCopyingToken] = useState<null | "session" | "integration">(null);
   const lastErrorToastRef = useRef<{ message: string; at: number } | null>(null);
 
@@ -938,6 +941,7 @@ function App() {
     try {
       const nextSettings = await notesApi.getAiSettings();
       setAiSettings(nextSettings);
+      setAiConnectionTestResult(null);
     } catch (error) {
       showLoadError(error, "Failed to load AI settings");
     }
@@ -1505,10 +1509,29 @@ function App() {
     try {
       const saved = await notesApi.saveAiSettings(aiSettings);
       setAiSettings(saved);
+      setAiConnectionTestResult(null);
       toast.success("AI settings saved");
       void loadConfig();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save AI settings");
+    }
+  }
+
+  async function testAiSettings() {
+    if (!aiSettings) return;
+
+    setIsTestingAiSettings(true);
+    setAiConnectionTestResult(null);
+
+    try {
+      const result = await notesApi.testAiSettings(aiSettings);
+      setAiConnectionTestResult(result);
+      toast.success(`AI connection OK: ${result.model}`);
+    } catch (error) {
+      setAiConnectionTestResult(null);
+      toast.error(error instanceof Error ? error.message : "AI connection test failed");
+    } finally {
+      setIsTestingAiSettings(false);
     }
   }
 
@@ -1630,6 +1653,9 @@ function App() {
           aiSettings={aiSettings}
           setAiSettings={setAiSettings}
           saveAiSettings={saveAiSettings}
+          testAiSettings={testAiSettings}
+          isTestingAiSettings={isTestingAiSettings}
+          aiConnectionTestResult={aiConnectionTestResult}
           ogBrandingSettings={ogBrandingSettings}
           setOgBrandingSettings={setOgBrandingSettings}
           saveOgBrandingSettings={saveOgBrandingSettings}

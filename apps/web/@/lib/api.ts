@@ -130,6 +130,20 @@ export type AiSettings = {
   draftPrompt: string;
   outlinePrompt: string;
   outlineToPostPrompt: string;
+  inheritFromDefault: boolean;
+  sourceWorkspaceSlug: string;
+  sourceWorkspaceName: string;
+  isDefaultWorkspace: boolean;
+};
+
+export type AiConnectionTestResult = {
+  ok: true;
+  provider: string;
+  model: string;
+  message: string;
+  inheritFromDefault: boolean;
+  sourceWorkspaceSlug: string;
+  sourceWorkspaceName: string;
 };
 
 export type OgBrandingSettings = {
@@ -537,6 +551,11 @@ export const notesApi = {
   saveAiSettings: (payload: AiSettings) =>
     request<AiSettings>("/api/settings/ai", {
       method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  testAiSettings: (payload: AiSettings) =>
+    request<AiConnectionTestResult>("/api/settings/ai/test", {
+      method: "POST",
       body: JSON.stringify(payload),
     }),
   getOgBrandingSettings: () => request<OgBrandingSettings>("/api/settings/og-branding"),

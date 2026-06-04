@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import type {
   AiSettings,
+  AiConnectionTestResult,
   ApiConfig,
   AuthSettings,
   OgBrandingSettings,
@@ -55,6 +56,9 @@ export type SettingsPageProps = {
   aiSettings: AiSettings | null;
   setAiSettings: Dispatch<SetStateAction<AiSettings | null>>;
   saveAiSettings: () => Promise<void>;
+  testAiSettings: () => Promise<void>;
+  isTestingAiSettings: boolean;
+  aiConnectionTestResult: AiConnectionTestResult | null;
   ogBrandingSettings: OgBrandingSettings | null;
   setOgBrandingSettings: Dispatch<SetStateAction<OgBrandingSettings | null>>;
   saveOgBrandingSettings: () => Promise<void>;
