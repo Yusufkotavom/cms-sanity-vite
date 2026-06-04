@@ -605,8 +605,7 @@ pnpm deploy:web
 
 Workflow GitHub Actions sudah disiapkan:
 
-- `.github/workflows/deploy-worker.yml`
-- `.github/workflows/deploy-web.yml`
+- `.github/workflows/deploy-cloudflare.yml`
 
 Secrets GitHub yang perlu diisi:
 
@@ -616,8 +615,11 @@ Secrets GitHub yang perlu diisi:
 
 Catatan:
 
-- workflow deploy Worker menjalankan `wrangler deploy`
-- workflow deploy Web menjalankan build Vite lalu `wrangler pages deploy`
+- workflow ini jalan otomatis setiap ada push ke `main`
+- job `Deploy Worker` jalan lebih dulu
+- job `Deploy Web` menunggu worker sukses dulu
+- build web selalu memakai `VITE_API_BASE_URL` dari GitHub Secrets
+- deploy Pages menandai branch `main` dan commit SHA yang sedang dideploy
 - saya sengaja tidak menambahkan tombol `Deploy to Cloudflare` karena repo ini masih monorepo Vite + Worker + shared packages, sedangkan tombol resmi Cloudflare ditujukan untuk Workers app yang terisolasi
 
 ## Verifikasi Saat Ini
