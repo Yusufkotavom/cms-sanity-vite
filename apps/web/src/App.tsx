@@ -18,6 +18,7 @@ import {
   setStoredAuthToken,
   setStoredApiBaseUrlOverride,
   type AiSettings,
+  type AiAssistJob,
   type AiConnectionTestResult,
   type ApiCategory,
   type ApiConfig,
@@ -359,6 +360,7 @@ function App() {
   const [isScheduling, setIsScheduling] = useState(false);
   const [retryingNoteId, setRetryingNoteId] = useState<string | null>(null);
   const [isAiRunning, setIsAiRunning] = useState<null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only">(null);
+  const [activeAiAssistJob, setActiveAiAssistJob] = useState<AiAssistJob | null>(null);
   const [isGeneratingOg, setIsGeneratingOg] = useState(false);
   const [isRefreshingFromSanity, setIsRefreshingFromSanity] = useState(false);
   const [isAiRewritePreviewRunning, setIsAiRewritePreviewRunning] = useState(false);
@@ -576,11 +578,78 @@ function App() {
       setDraft(null);
       setSavedDraft(null);
       setScheduleAt("");
+      setActiveAiAssistJob(null);
+      setIsAiRunning(null);
       return;
     }
 
     void loadNote(selectedId);
   }, [authStatus, isEditorRoute, selectedId]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !draft?.id || !isEditorRoute) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadLatestAiAssistJob() {
+      try {
+        const response = await notesApi.getLatestAiAssistJob(draft.id);
+        if (cancelled) {
+          return;
+        }
+
+        setActiveAiAssistJob(response.job);
+        if (response.job?.status === "processing" || response.job?.status === "queued") {
+          setIsAiRunning(response.job.mode);
+        } else if (response.job?.status === "completed") {
+          setIsAiRunning(null);
+        }
+      } catch {
+      }
+    }
+
+    void loadLatestAiAssistJob();
+    return () => {
+      cancelled = true;
+    };
+  }, [authStatus, draft?.id, isEditorRoute]);
+
+  useEffect(() => {
+    if (!activeAiAssistJob || !draft?.id) {
+      return;
+    }
+
+    if (activeAiAssistJob.noteId !== draft.id) {
+      return;
+    }
+
+    if (activeAiAssistJob.status === "completed") {
+      applyCompletedAiAssistJob(activeAiAssistJob, false);
+      return;
+    }
+
+    if (activeAiAssistJob.status === "failed") {
+      setIsAiRunning(null);
+      toast.error(activeAiAssistJob.error || "AI assist failed");
+      return;
+    }
+
+    if (activeAiAssistJob.status !== "queued" && activeAiAssistJob.status !== "processing") {
+      return;
+    }
+
+    const timer = window.setInterval(async () => {
+      try {
+        const nextJob = await notesApi.getAiAssistJob(activeAiAssistJob.id);
+        setActiveAiAssistJob(nextJob);
+      } catch {
+      }
+    }, 2000);
+
+    return () => window.clearInterval(timer);
+  }, [activeAiAssistJob, draft?.id]);
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -1316,6 +1385,25 @@ function App() {
     }
   }
 
+  function applyCompletedAiAssistJob(job: AiAssistJob, showToast = true) {
+    const updated = job.suggestion;
+    if (!updated) {
+      return;
+    }
+
+    setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    if (draft?.id === updated.id) {
+      setDraft(updated);
+      setSavedDraft(updated);
+      setScheduleAt(toJakartaScheduleValue(updated.publishAt));
+    }
+    setActiveAiAssistJob((current) => (current?.id === job.id ? job : current));
+    setIsAiRunning(null);
+    if (showToast) {
+      toast.success("AI suggestion applied and saved");
+    }
+  }
+
   async function runAiAssist(mode: "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only") {
     if (!draft) return;
     if (!config?.aiConfigured) {
@@ -1323,64 +1411,31 @@ function App() {
       return;
     }
 
+    const targetDraft = draft;
     setIsAiRunning(mode);
 
     try {
-      const response = await notesApi.aiAssist({
+      const job = await notesApi.createAiAssistJob({
         mode,
+        noteId: targetDraft.id,
         note: {
-          title: draft.title,
-          slug: draft.slug,
-          excerpt: draft.excerpt,
-          seoTitle: draft.seoTitle,
-          seoDescription: draft.seoDescription,
-          seoKeywords: draft.seoKeywords,
-          ogTitle: draft.ogTitle,
-          ogDescription: draft.ogDescription,
-          outlineMd: draft.outlineMd,
-          contentMd: draft.contentMd,
+          title: targetDraft.title,
+          slug: targetDraft.slug,
+          excerpt: targetDraft.excerpt,
+          seoTitle: targetDraft.seoTitle,
+          seoDescription: targetDraft.seoDescription,
+          seoKeywords: targetDraft.seoKeywords,
+          ogTitle: targetDraft.ogTitle,
+          ogDescription: targetDraft.ogDescription,
+          outlineMd: targetDraft.outlineMd,
+          contentMd: targetDraft.contentMd,
         },
       });
-
-      const nextTitle = response.suggestion.title?.trim() || draft.title;
-      const nextSlug = response.suggestion.slug?.trim() || draft.slug;
-      const nextDraft = {
-        ...draft,
-        title: nextTitle,
-        slug: nextSlug,
-        excerpt: response.suggestion.excerpt?.trim() ?? draft.excerpt,
-        seoTitle: response.suggestion.seoTitle?.trim() ?? draft.seoTitle,
-        seoDescription: response.suggestion.seoDescription?.trim() ?? draft.seoDescription,
-        seoKeywords: response.suggestion.seoKeywords?.trim() ?? draft.seoKeywords,
-        ogTitle: response.suggestion.ogTitle?.trim() ?? draft.ogTitle,
-        ogDescription: response.suggestion.ogDescription?.trim() ?? draft.ogDescription,
-        outlineMd: response.suggestion.outlineMd ?? draft.outlineMd,
-        contentMd: response.suggestion.contentMd ?? draft.contentMd,
-      };
-
-      const updated = await notesApi.update(draft.id, {
-        title: nextDraft.title.trim(),
-        slug: nextDraft.slug.trim(),
-        excerpt: nextDraft.excerpt.trim(),
-        seoTitle: nextDraft.seoTitle.trim(),
-        seoDescription: nextDraft.seoDescription.trim(),
-        seoKeywords: nextDraft.seoKeywords.trim(),
-        ogTitle: nextDraft.ogTitle.trim(),
-        ogDescription: nextDraft.ogDescription.trim(),
-        outlineMd: nextDraft.outlineMd,
-        contentMd: nextDraft.contentMd,
-        categoryIds: nextDraft.categoryIds,
-      });
-
-      setDraft(updated);
-      setSavedDraft(updated);
-      setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-
-      toast.success(`AI suggestion applied and saved (${response.model})`);
+      setActiveAiAssistJob(job);
+      toast.success("AI job queued. Aman jika ganti note, refresh, atau keluar tab.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "AI assist failed");
-    } finally {
       setIsAiRunning(null);
+      toast.error(error instanceof Error ? error.message : "AI assist failed");
     }
   }
 

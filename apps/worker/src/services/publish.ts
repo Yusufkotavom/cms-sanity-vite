@@ -397,6 +397,10 @@ export async function patchNoteToSanity({
   };
 }
 
+export function createSanityPostDocumentId(noteId: string) {
+  return `post-${noteId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
 export async function publishNoteToSanity({
   note,
   categoryIds,
@@ -416,7 +420,7 @@ export async function publishNoteToSanity({
   token: string;
   fetchImpl?: typeof fetch;
 }) {
-  const sanityDocumentId = note.sanity_document_id || `post.${note.id}`;
+  const sanityDocumentId = note.sanity_document_id || createSanityPostDocumentId(note.id);
   const body = await markdownToPortableText(note.content_md, {
     uploadImage: ({ url: imageUrl, alt }) =>
       uploadImageToSanity({

@@ -3,6 +3,16 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 
 import {
+  createAiAssistJob,
+  findAiAssistJobById,
+  findLatestAiAssistJobByNoteId,
+  findNextQueuedAiAssistJob,
+  markAiAssistJobCompleted,
+  markAiAssistJobFailed,
+  markAiAssistJobProcessing,
+  type AiAssistJobRecord,
+} from "./db/repositories/ai-assist-jobs";
+import {
   createAiBatch,
   createAiBatchItems,
   deleteAiBatch,
@@ -83,7 +93,7 @@ import {
 } from "./services/publish";
 import { generateAndUploadOgImage, type OgBranding } from "./services/og-image";
 import { processAiBatchWork } from "./services/ai-batch";
-import { aiAssistRequestSchema, requestAiSuggestion, testAiConnection } from "./services/ai";
+import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, testAiConnection, type AiAssistRequest } from "./services/ai";
 import {
   AI_INHERIT_FROM_DEFAULT_KEY,
   AI_SETTING_KEYS,
@@ -170,6 +180,23 @@ const sanityPublishSchema = z.object({
 });
 
 const aiConnectionTestSchema = aiSettingsSchema;
+
+const aiAssistJobCreateSchema = z.object({
+  mode: aiAssistModeSchema,
+  noteId: z.string().uuid(),
+  note: z.object({
+    title: z.string().default(""),
+    slug: z.string().default(""),
+    excerpt: z.string().default(""),
+    seoTitle: z.string().default(""),
+    seoDescription: z.string().default(""),
+    seoKeywords: z.string().default(""),
+    ogTitle: z.string().default(""),
+    ogDescription: z.string().default(""),
+    outlineMd: z.string().default(""),
+    contentMd: z.string().default(""),
+  }),
+});
 
 const sanityOpenPostSchema = z.object({
   sanityDocumentId: z.string().trim().min(1),
@@ -1844,15 +1871,101 @@ app.post("/api/sanity/publish", async (c) => {
   return c.json(result.note);
 });
 
+function toAiAssistJobResponse(job: AiAssistJobRecord) {
+  return {
+    id: job.id,
+    noteId: job.note_id,
+    mode: job.mode,
+    status: job.status,
+    suggestion: job.result_json ? JSON.parse(job.result_json) : null,
+    error: job.error,
+    attempts: job.attempts,
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
+  };
+}
+
+function truncateJobError(value: string, maxLength = 800) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
+}
+
+async function processAiAssistJobs(env: Env, workspaceId: string, limit = 2) {
+  let processed = 0;
+  for (let index = 0; index < limit; index += 1) {
+    const job = await findNextQueuedAiAssistJob(env.DB, workspaceId);
+    if (!job) {
+      break;
+    }
+
+    const now = new Date().toISOString();
+    await markAiAssistJobProcessing(env.DB, job.id, now);
+
+    try {
+      const note = await findNoteByIdInWorkspace(env.DB, workspaceId, job.note_id);
+      if (!note) {
+        throw new Error("Note not found");
+      }
+
+      const aiSettings = await getAiSettings(env.DB, workspaceId);
+      const aiConfig = toAiConfig(aiSettings.settings);
+      if (!aiConfig.apiBaseUrl || !aiConfig.apiKey || !aiConfig.model) {
+        throw new Error("AI env is not configured");
+      }
+
+      const request = JSON.parse(job.request_json) as AiAssistRequest;
+      const suggestion = await requestAiSuggestion(request, aiConfig);
+      const nextTitle = suggestion.title?.trim() || note.title;
+      const nextSlug = suggestion.slug?.trim() || note.slug;
+      await updateNoteDraft(env.DB, {
+        id: note.id,
+        workspaceId,
+        title: nextTitle,
+        slug: nextSlug,
+        excerpt: suggestion.excerpt?.trim() ?? note.excerpt ?? "",
+        seoTitle: suggestion.seoTitle?.trim() ?? note.seo_title ?? "",
+        seoDescription: suggestion.seoDescription?.trim() ?? note.seo_description ?? "",
+        seoKeywords: suggestion.seoKeywords?.trim() ?? note.seo_keywords ?? "",
+        ogTitle: suggestion.ogTitle?.trim() ?? note.og_title ?? "",
+        ogDescription: suggestion.ogDescription?.trim() ?? note.og_description ?? "",
+        outlineMd: suggestion.outlineMd ?? note.outline_md ?? "",
+        contentMd: suggestion.contentMd ?? note.content_md,
+        currentStatus: note.status,
+        updatedAt: new Date().toISOString(),
+      });
+
+      const refreshed = await findNoteByIdInWorkspace(env.DB, workspaceId, note.id);
+      if (!refreshed) {
+        throw new Error("Updated note not found");
+      }
+
+      await markAiAssistJobCompleted(env.DB, {
+        id: job.id,
+        resultJson: JSON.stringify(await mapNote(env.DB, refreshed)),
+        now: new Date().toISOString(),
+      });
+      processed += 1;
+    } catch (error) {
+      await markAiAssistJobFailed(env.DB, {
+        id: job.id,
+        error: truncateJobError(error instanceof Error ? error.message : "AI assist job failed"),
+        now: new Date().toISOString(),
+      });
+    }
+  }
+
+  return { processed };
+}
+
 app.post("/api/ai/assist", async (c) => {
-  const aiSettings = await getAiSettings(c.env.DB, c.get("workspaceId"));
+  const workspaceId = c.get("workspaceId");
+  const payload = aiAssistRequestSchema.parse(await c.req.json());
+  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
   const aiConfig = toAiConfig(aiSettings.settings);
 
   if (!aiConfig.apiBaseUrl || !aiConfig.apiKey || !aiConfig.model) {
     return c.json({ message: "AI env is not configured" }, 400);
   }
-
-  const payload = aiAssistRequestSchema.parse(await c.req.json());
 
   try {
     const suggestion = await requestAiSuggestion(payload, aiConfig);
@@ -1868,6 +1981,51 @@ app.post("/api/ai/assist", async (c) => {
       500
     );
   }
+});
+
+app.post("/api/ai/assist/jobs", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const payload = aiAssistJobCreateSchema.parse(await c.req.json());
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, payload.noteId);
+
+  if (!note) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await createAiAssistJob(c.env.DB, {
+    id,
+    workspaceId,
+    noteId: note.id,
+    mode: payload.mode,
+    requestJson: JSON.stringify({ mode: payload.mode, note: payload.note } satisfies AiAssistRequest),
+    now,
+  });
+
+  const job = await findAiAssistJobById(c.env.DB, workspaceId, id);
+  c.executionCtx.waitUntil(processAiAssistJobs(c.env, workspaceId, 1));
+  return c.json(toAiAssistJobResponse(job!), 202);
+});
+
+app.get("/api/ai/assist/jobs/:id", async (c) => {
+  const job = await findAiAssistJobById(c.env.DB, c.get("workspaceId"), c.req.param("id"));
+  if (!job) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  return c.json(toAiAssistJobResponse(job));
+});
+
+app.get("/api/notes/:id/ai-assist/latest", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, c.req.param("id"));
+  if (!note) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  const job = await findLatestAiAssistJobByNoteId(c.env.DB, workspaceId, note.id);
+  return c.json({ job: job ? toAiAssistJobResponse(job) : null });
 });
 
 function mapNoteSummary(note: Partial<NoteRecord>, categoryIds: string[]) {
@@ -2173,6 +2331,7 @@ export default {
       const aiConfig = toAiConfig(aiSettings.settings);
       if (aiConfig.apiBaseUrl && aiConfig.apiKey && aiConfig.model) {
         await processAiBatchWork(env, workspace.id, aiConfig, 10);
+        await processAiAssistJobs(env, workspace.id, 5);
       }
     }
   },

@@ -114,6 +114,18 @@ export type AiAssistResponse = {
   model: string;
 };
 
+export type AiAssistJob = {
+  id: string;
+  noteId: string;
+  mode: AiAssistMode;
+  status: "queued" | "processing" | "completed" | "failed";
+  suggestion: ApiNote | null;
+  error: string | null;
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AiSettings = {
   models: Array<{
     id: string;
@@ -561,6 +573,13 @@ export const notesApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  createAiAssistJob: (payload: AiAssistRequest & { noteId: string }) =>
+    request<AiAssistJob>("/api/ai/assist/jobs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getAiAssistJob: (id: string) => request<AiAssistJob>(`/api/ai/assist/jobs/${id}`),
+  getLatestAiAssistJob: (noteId: string) => request<{ job: AiAssistJob | null }>(`/api/notes/${noteId}/ai-assist/latest`),
   getAiSettings: () => request<AiSettings>("/api/settings/ai"),
   saveAiSettings: (payload: AiSettings) =>
     request<AiSettings>("/api/settings/ai", {

@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { deriveFilename, fetchSanityCategories, fetchSanityMetaImage, fetchSanityPosts } from "./publish";
+import { createSanityPostDocumentId, deriveFilename, fetchSanityCategories, fetchSanityMetaImage, fetchSanityPosts } from "./publish";
 
 describe("publish service", () => {
+  it("creates public-safe Sanity post document IDs", () => {
+    expect(createSanityPostDocumentId("33a4ea2d-30de-43b6-b8cd-d01252de161b")).toBe("post-33a4ea2d-30de-43b6-b8cd-d01252de161b");
+    expect(createSanityPostDocumentId("note.with.dot")).toBe("post-note-with-dot");
+  });
+
   it("derives filename from source url", () => {
     expect(deriveFilename("https://example.com/images/photo.png", "image/png")).toBe("photo.png");
     expect(deriveFilename("https://example.com/images/photo", "image/webp")).toBe("photo.webp");
