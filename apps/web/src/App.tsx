@@ -60,6 +60,11 @@ const SettingsPage = lazy(async () => {
   return { default: module.SettingsPage };
 });
 
+const WorkerLogsPage = lazy(async () => {
+  const module = await import("./worker-logs-page");
+  return { default: module.WorkerLogsPage };
+});
+
 type Note = ApiNote;
 type LoginState = "checking" | "authenticated" | "unauthenticated";
 type AppRoute =
@@ -68,6 +73,7 @@ type AppRoute =
   | "scheduled"
   | "sanity-sync"
   | "ai-batch"
+  | "worker-logs"
   | "settings"
   | "api-status";
 
@@ -111,6 +117,10 @@ const routeMeta: Record<AppRoute, { title: string; description: string }> = {
   "ai-batch": {
     title: "AI Batch",
     description: "Generate outline dan konten secara bertahap dari banyak keyword.",
+  },
+  "worker-logs": {
+    title: "Worker Logs",
+    description: "Pantau semua proses AI assist, AI batch, dan publish worker.",
   },
   settings: {
     title: "Settings",
@@ -174,6 +184,7 @@ function getRouteFromHash(hash: string): RouteState {
     "scheduled",
     "sanity-sync",
     "ai-batch",
+    "worker-logs",
     "settings",
     "api-status",
   ];
@@ -1820,6 +1831,18 @@ function App() {
             }
           >
             <AiBatchPage config={config} workspaceSlug={activeWorkspaceSlug} />
+          </Suspense>
+        );
+      case "worker-logs":
+        return (
+          <Suspense
+            fallback={
+              <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border bg-card/60 text-sm text-muted-foreground">
+                Loading worker logs...
+              </div>
+            }
+          >
+            <WorkerLogsPage />
           </Suspense>
         );
       case "settings":

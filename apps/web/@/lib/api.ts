@@ -289,6 +289,42 @@ export type AiBatchProcessResult = {
   }>;
 };
 
+export type WorkerLogSnapshot = {
+  aiAssistJobs: AiAssistJob[];
+  aiBatches: Array<{
+    id: string;
+    name: string;
+    mode: AiBatchMode;
+    status: "queued" | "processing" | "paused" | "completed" | "failed";
+    totalItems: number;
+    completedItems: number;
+    failedItems: number;
+    lastError: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  aiBatchItems: Array<{
+    id: string;
+    batchId: string;
+    keyword: string;
+    status: string;
+    attempts: number;
+    lastError: string | null;
+    noteId: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  publishJobs: Array<{
+    id: string;
+    noteId: string;
+    status: string;
+    message: string | null;
+    runAt: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
 function resolveApiBaseUrl() {
   const overrideBaseUrl = getStoredApiBaseUrlOverride();
   if (overrideBaseUrl) {
@@ -599,6 +635,7 @@ export const notesApi = {
       method: "POST",
     }),
   getLatestAiAssistJob: (noteId: string) => request<{ job: AiAssistJob | null }>(`/api/notes/${noteId}/ai-assist/latest`),
+  getWorkerLogs: () => request<WorkerLogSnapshot>("/api/worker-logs"),
   getAiSettings: () => request<AiSettings>("/api/settings/ai"),
   saveAiSettings: (payload: AiSettings) =>
     request<AiSettings>("/api/settings/ai", {

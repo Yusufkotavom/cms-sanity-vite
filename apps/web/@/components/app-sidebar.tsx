@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  ActivityIcon,
   CalendarClockIcon,
   CommandIcon,
   DatabaseIcon,
@@ -62,6 +63,11 @@ const data = {
       title: "Settings",
       route: "settings",
       icon: <Settings2Icon />,
+    },
+    {
+      title: "Worker Logs",
+      route: "worker-logs",
+      icon: <ActivityIcon />,
     },
     {
       title: "API Status",

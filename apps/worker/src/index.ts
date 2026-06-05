@@ -8,6 +8,7 @@ import {
   findAiAssistJobById,
   findLatestAiAssistJobByNoteId,
   findNextQueuedAiAssistJob,
+  listRecentAiAssistJobs,
   markAiAssistJobCompleted,
   markAiAssistJobFailed,
   markAiAssistJobProcessing,
@@ -292,6 +293,23 @@ export interface Env {
   AUTH_TOKEN_SECRET?: string;
   AUTH_SESSION_TTL_HOURS?: string;
   AUTH_INTEGRATION_TOKEN?: string;
+}
+
+let appBootstrapPromise: Promise<void> | null = null;
+
+async function ensureAppBootstrap(env: Env) {
+  if (!appBootstrapPromise) {
+    appBootstrapPromise = (async () => {
+      await ensureSchema(env.DB);
+      await ensureDefaultWorkspace(env.DB);
+      await copyLegacyAppSettingsToWorkspace(env.DB, "default");
+    })().catch((error) => {
+      appBootstrapPromise = null;
+      throw error;
+    });
+  }
+
+  await appBootstrapPromise;
 }
 
 function toAiSettingsResponse(settings: AiWorkspaceSettings) {
@@ -595,9 +613,7 @@ app.use(
   })
 );
 app.use("/api/*", async (c, next) => {
-  await ensureSchema(c.env.DB);
-  await ensureDefaultWorkspace(c.env.DB);
-  await copyLegacyAppSettingsToWorkspace(c.env.DB, "default");
+  await ensureAppBootstrap(c.env);
   await next();
 });
 app.use("/api/*", async (c, next) => {
@@ -2223,6 +2239,61 @@ app.get("/api/notes/:id/ai-assist/latest", async (c) => {
   return c.json({ job: job ? toAiAssistJobResponse(job) : null });
 });
 
+app.get("/api/worker-logs", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  await failTimedOutAiAssistJobs(c.env, workspaceId);
+  const aiAssistJobs = await listRecentAiAssistJobs(c.env.DB, workspaceId, 50);
+  const aiBatches = await listAiBatches(c.env.DB, workspaceId);
+  const publishRows = await c.env.DB
+    .prepare("select id, note_id, status, message, run_at, created_at, updated_at from publish_jobs where workspace_id = ? order by updated_at desc limit 50")
+    .bind(workspaceId)
+    .all<Record<string, unknown>>();
+  const aiBatchRows = await c.env.DB
+    .prepare("select id, batch_id, keyword, status, attempts, last_error, note_id, created_at, updated_at from ai_batch_items where workspace_id = ? order by updated_at desc limit 50")
+    .bind(workspaceId)
+    .all<Record<string, unknown>>();
+
+  return c.json({
+    aiAssistJobs: aiAssistJobs.map(toAiAssistJobResponse),
+    aiBatches: aiBatches
+      .slice()
+      .sort((left, right) => right.updated_at.localeCompare(left.updated_at))
+      .slice(0, 25)
+      .map((batch) => ({
+        id: batch.id,
+        name: batch.name,
+        mode: batch.mode,
+        status: batch.status,
+        totalItems: batch.total_items,
+        completedItems: batch.completed_items,
+        failedItems: batch.failed_items,
+        lastError: batch.last_error,
+        createdAt: batch.created_at,
+        updatedAt: batch.updated_at,
+      })),
+    aiBatchItems: aiBatchRows.results.map((row) => ({
+      id: String(row.id),
+      batchId: String(row.batch_id),
+      keyword: String(row.keyword),
+      status: String(row.status),
+      attempts: Number(row.attempts ?? 0),
+      lastError: row.last_error ? String(row.last_error) : null,
+      noteId: row.note_id ? String(row.note_id) : null,
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    })),
+    publishJobs: publishRows.results.map((row) => ({
+      id: String(row.id),
+      noteId: String(row.note_id),
+      status: String(row.status),
+      message: row.message ? String(row.message) : null,
+      runAt: String(row.run_at),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    })),
+  });
+});
+
 function ogAssetKey(workspaceId: string, noteId: string) {
   return `workspaces/${workspaceId}/notes/${noteId}/og.png`;
 }
@@ -2601,9 +2672,7 @@ async function runScheduledPublishes(env: Env) {
 export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env) {
-    await ensureSchema(env.DB);
-    await ensureDefaultWorkspace(env.DB);
-    await copyLegacyAppSettingsToWorkspace(env.DB, "default");
+    await ensureAppBootstrap(env);
     await runScheduledPublishes(env);
     const workspaces = await listWorkspaces(env.DB);
     for (const workspace of workspaces) {

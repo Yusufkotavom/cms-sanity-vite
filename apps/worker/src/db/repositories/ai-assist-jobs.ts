@@ -88,3 +88,11 @@ export async function cancelAiAssistJob(db: D1Database, input: { workspaceId: st
     .bind(input.now, input.workspaceId, input.id)
     .run();
 }
+
+export async function listRecentAiAssistJobs(db: D1Database, workspaceId: string, limit = 50) {
+  const rows = await db
+    .prepare("select * from ai_assist_jobs where workspace_id = ? order by updated_at desc limit ?")
+    .bind(workspaceId, limit)
+    .all<Record<string, unknown>>();
+  return rows.results.map(toRecord);
+}
