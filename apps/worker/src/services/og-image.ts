@@ -149,9 +149,9 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   const safeFooterText = (branding.footerText ?? DEFAULT_FOOTER_TEXT).trim().slice(0, 72) || DEFAULT_FOOTER_TEXT;
   const logoDataUri = branding.logoDataUri?.trim() || kotacomLogoDataUri;
   const sideImageUrl = branding.sideImageDataUri?.trim() || null;
-  const titleLines = truncateLines(wrapText(safeTitle, 29), 4).map(escapeXml);
+  const titleLines = truncateLines(wrapText(safeTitle, 26), 4).map(escapeXml);
   const excerptLines = excerpt
-    ? truncateLines(wrapText(safeExcerpt, 44), 3).map(escapeXml)
+    ? truncateLines(wrapText(safeExcerpt, 39), 3).map(escapeXml)
     : [];
 
   const titleFontSize = titleLines.length >= 4 ? 38 : titleLines.length === 3 ? 46 : titleLines.length === 2 ? 54 : 60;
