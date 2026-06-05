@@ -247,7 +247,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   ${titleLines
     .map(
       (line, i) =>
-        `<text x="${leftPanelX + 38}" y="${titleStartY + i * titleLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${titleFontSize}" font-weight="900" letter-spacing="${titleFontSize > 54 ? "-1.6" : "-1.0"}" fill="#111827">${line}</text>`
+        `<text x="${leftPanelX + 32}" y="${titleStartY + i * titleLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${titleFontSize}" font-weight="900" letter-spacing="${titleFontSize > 54 ? "-1.6" : "-1.0"}" fill="#111827">${line}</text>`
     )
     .join("\n  ")}
 
@@ -256,7 +256,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
       ? excerptLines
           .map(
             (line, i) =>
-              `<text x="${leftPanelX + 38}" y="${excerptStartY + i * excerptLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${excerptFontSize}" font-weight="700" fill="#64748b">${line}</text>`
+              `<text x="${leftPanelX + 32}" y="${excerptStartY + i * excerptLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${excerptFontSize}" font-weight="700" fill="#64748b">${line}</text>`
           )
           .join("\n  ")
       : ""
