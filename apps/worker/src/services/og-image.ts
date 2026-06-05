@@ -138,7 +138,6 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   const safeFooterText = (branding.footerText ?? DEFAULT_FOOTER_TEXT).trim().slice(0, 72) || DEFAULT_FOOTER_TEXT;
   const logoDataUri = branding.logoDataUri?.trim() || kotacomLogoDataUri;
   const sideImageUrl = branding.sideImageDataUri?.trim() || null;
-  const rightArtOpacity = sideImageUrl ? 0.16 : 1;
   const titleLines = truncateLines(wrapText(safeTitle, 23), 4).map(escapeXml);
   const excerptLines = excerpt
     ? truncateLines(wrapText(safeExcerpt, 36), 3).map(escapeXml)
@@ -163,10 +162,6 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   const connectorY = 176;
   const connectorWidth = 56;
   const connectorHeight = 272;
-  const hashSeed = [...safeTitle].reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const accentX = rightPanelX + 66 + (hashSeed % 3) * 24;
-  const accentY = rightPanelY + 82 + (hashSeed % 4) * 10;
-  const nodeOffset = hashSeed % 5;
 
   const gridLines: string[] = [];
   for (let x = 0; x <= OG_WIDTH; x += 44) {
@@ -233,39 +228,8 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX}" y="${rightPanelY}" width="${rightPanelWidth}" height="${rightPanelHeight}" rx="30" fill="#0f172a" fill-opacity="0.96" stroke="#1e293b" stroke-opacity="0.9"/>
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#111827" stroke="#334155" stroke-opacity="0.7"/>
   ${sideImageUrl ? `<image x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" href="${escapeXml(sideImageUrl)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#rightImageClip)"/>` : ""}
-  <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#020617" fill-opacity="${sideImageUrl ? "0.28" : "0.08"}"/>
-  <rect x="${rightPanelX + 56}" y="${rightPanelY + 62}" width="${rightPanelWidth - 112}" height="166" rx="22" fill="#0f172a" fill-opacity="0.76" stroke="#334155" stroke-opacity="0.7"/>
-  <rect x="${rightPanelX + 56}" y="${rightPanelY + 62}" width="${rightPanelWidth - 112}" height="32" rx="22" fill="#111827" fill-opacity="0.88"/>
-  <circle cx="${rightPanelX + 82}" cy="${rightPanelY + 78}" r="4.5" fill="#22c55e"/>
-  <circle cx="${rightPanelX + 100}" cy="${rightPanelY + 78}" r="4.5" fill="#f59e0b"/>
-  <circle cx="${rightPanelX + 118}" cy="${rightPanelY + 78}" r="4.5" fill="#3b82f6"/>
-  <rect x="${rightPanelX + 82}" y="${rightPanelY + 118}" width="136" height="12" rx="6" fill="#e2e8f0" fill-opacity="0.96"/>
-  <rect x="${rightPanelX + 82}" y="${rightPanelY + 143}" width="226" height="8" rx="4" fill="#64748b" fill-opacity="0.78"/>
-  <rect x="${rightPanelX + 82}" y="${rightPanelY + 161}" width="182" height="8" rx="4" fill="#64748b" fill-opacity="0.58"/>
-  <rect x="${rightPanelX + 82}" y="${rightPanelY + 184}" width="112" height="18" rx="9" fill="#0070f3"/>
-  <text x="${rightPanelX + 102}" y="${rightPanelY + 198}" font-family="${OG_FONT_FAMILY}" font-size="12" font-weight="700" fill="#ffffff">${escapeXml(safeWorkflowLabel)}</text>
+  <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#020617" fill-opacity="${sideImageUrl ? "0.06" : "0.08"}"/>
 
-  <g opacity="${rightArtOpacity}">
-  <rect x="${accentX}" y="${accentY + 212}" width="176" height="136" rx="24" fill="#111827" stroke="#334155"/>
-  <circle cx="${accentX + 42}" cy="${accentY + 254}" r="18" fill="#0070f3" fill-opacity="0.16" stroke="#60a5fa"/>
-  <rect x="${accentX + 76}" y="${accentY + 236}" width="70" height="10" rx="5" fill="#e2e8f0"/>
-  <rect x="${accentX + 76}" y="${accentY + 256}" width="52" height="8" rx="4" fill="#94a3b8"/>
-  <rect x="${accentX + 28}" y="${accentY + 294}" width="118" height="8" rx="4" fill="#1d4ed8"/>
-  <rect x="${accentX + 28}" y="${accentY + 310}" width="92" height="8" rx="4" fill="#475569"/>
-
-  <rect x="${rightPanelX + 276}" y="${rightPanelY + 290}" width="188" height="182" rx="26" fill="#111827" stroke="#334155"/>
-  <rect x="${rightPanelX + 304}" y="${rightPanelY + 324}" width="126" height="10" rx="5" fill="#e2e8f0"/>
-  <rect x="${rightPanelX + 304}" y="${rightPanelY + 346}" width="78" height="8" rx="4" fill="#64748b"/>
-  <path d="M ${rightPanelX + 308} ${rightPanelY + 420} C ${rightPanelX + 342} ${rightPanelY + 396}, ${rightPanelX + 366} ${rightPanelY + 432}, ${rightPanelX + 392} ${rightPanelY + 396} S ${rightPanelX + 432} ${rightPanelY + 378}, ${rightPanelX + 452} ${rightPanelY + 350}" fill="none" stroke="#60a5fa" stroke-width="6" stroke-linecap="round"/>
-  <circle cx="${rightPanelX + 308}" cy="${rightPanelY + 420}" r="${7 + (nodeOffset % 2)}" fill="#38bdf8"/>
-  <circle cx="${rightPanelX + 392}" cy="${rightPanelY + 396}" r="${8 + (nodeOffset % 3)}" fill="#22c55e"/>
-  <circle cx="${rightPanelX + 452}" cy="${rightPanelY + 350}" r="7" fill="#f59e0b"/>
-
-  <rect x="${rightPanelX + 90}" y="${rightPanelY + 388}" width="126" height="116" rx="24" fill="#111827" stroke="#334155"/>
-  <rect x="${rightPanelX + 120}" y="${rightPanelY + 420}" width="66" height="46" rx="13" fill="#0f172a" stroke="#475569"/>
-  <rect x="${rightPanelX + 134}" y="${rightPanelY + 433}" width="38" height="20" rx="6" fill="#0070f3" fill-opacity="0.16" stroke="#60a5fa"/>
-  <rect x="${rightPanelX + 126}" y="${rightPanelY + 480}" width="54" height="8" rx="4" fill="#94a3b8"/>
-  </g>
  
    <image x="${leftPanelX + 18}" y="${leftPanelY + 12}" width="234" height="52" href="${logoDataUri}" preserveAspectRatio="xMinYMid meet"/>
   <rect x="${leftPanelX + 18}" y="${leftPanelY + 82}" width="64" height="4" rx="2" fill="#0070f3"/>
