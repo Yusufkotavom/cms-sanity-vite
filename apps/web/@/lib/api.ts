@@ -600,6 +600,10 @@ export const notesApi = {
     request<ApiNote>(`/api/notes/${id}/refresh-from-sanity`, {
       method: "POST",
     }),
+  deleteSanityPost: (id: string) =>
+    request<ApiNote>(`/api/notes/${id}/sanity-post`, {
+      method: "DELETE",
+    }),
   aiRewritePreview: (id: string, prompt: string) =>
     request<ApiNote>(`/api/notes/${id}/ai-rewrite-preview`, {
       method: "POST",

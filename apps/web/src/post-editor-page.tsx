@@ -2,10 +2,12 @@ import { lazy, Suspense, useState } from "react";
 import {
   CalendarClockIcon,
   Clock3Icon,
+  ExternalLinkIcon,
   FileTextIcon,
   ImagePlusIcon,
   Loader2Icon,
   RefreshCcwIcon,
+  Trash2Icon,
   XCircleIcon,
   SaveIcon,
   SendIcon,
@@ -97,6 +99,7 @@ type PostEditorPageProps = {
   generateOgImage: () => Promise<void>;
   saveDraft: () => Promise<ApiNote | undefined>;
   refreshDraftFromSanity: () => Promise<void>;
+  deleteDraftSanityPost: () => Promise<void>;
   runAiRewritePreview: (prompt: string) => Promise<void>;
   applyAiRewriteCandidate: () => void;
   scheduleDraft: () => Promise<void>;
@@ -115,6 +118,7 @@ type PostEditorPageProps = {
   isAiRunning: AiRunMode;
   isGeneratingOg: boolean;
   isRefreshingFromSanity: boolean;
+  isDeletingSanityPost: boolean;
   isAiRewritePreviewRunning: boolean;
   isSaving: boolean;
   isScheduling: boolean;
@@ -140,6 +144,7 @@ export function PostEditorPage({
   generateOgImage,
   saveDraft,
   refreshDraftFromSanity,
+  deleteDraftSanityPost,
   runAiRewritePreview,
   applyAiRewriteCandidate,
   scheduleDraft,
@@ -158,6 +163,7 @@ export function PostEditorPage({
   isAiRunning,
   isGeneratingOg,
   isRefreshingFromSanity,
+  isDeletingSanityPost,
   isAiRewritePreviewRunning,
   isSaving,
   isScheduling,
@@ -170,6 +176,14 @@ export function PostEditorPage({
   const [aiRewritePrompt, setAiRewritePrompt] = useState(
     "Rewrite konten post ini dalam bahasa Indonesia yang lebih rapi, lebih kuat secara SEO, dan tetap menjaga fakta asli. Perbaiki alur, kejelasan, transisi, excerpt, serta metadata SEO/OG. Jangan mengubah intent utama atau menambahkan klaim yang tidak ada di sumber."
   );
+  const sanityDocumentUrl = draft.sanityDocumentId && config?.sanityProjectId && config.sanityDataset
+    ? `https://${config.sanityProjectId}.api.sanity.io/v2026-03-29/data/doc/${config.sanityDataset}/${encodeURIComponent(draft.sanityDocumentId)}`
+    : null;
+
+  function openSanityDocument() {
+    if (!sanityDocumentUrl) return;
+    window.open(sanityDocumentUrl, "_blank", "noopener,noreferrer");
+  }
 
   return (
     <section className="grid gap-6">
@@ -745,14 +759,30 @@ export function PostEditorPage({
                           Refresh konten dari Sanity dulu, generate kandidat rewrite AI, bandingkan, lalu apply ke draft utama jika cocok.
                         </span>
                       </div>
-                      <Button variant="outline" onClick={() => void refreshDraftFromSanity()} disabled={isRefreshingFromSanity}>
-                        {isRefreshingFromSanity ? (
-                          <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                        ) : (
-                          <RefreshCcwIcon data-icon="inline-start" />
-                        )}
-                        Refresh from Sanity
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        {sanityDocumentUrl ? (
+                          <Button variant="outline" onClick={openSanityDocument}>
+                            <ExternalLinkIcon data-icon="inline-start" />
+                            Open Sanity JSON
+                          </Button>
+                        ) : null}
+                        <Button variant="outline" onClick={() => void refreshDraftFromSanity()} disabled={isRefreshingFromSanity || isDeletingSanityPost}>
+                          {isRefreshingFromSanity ? (
+                            <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                          ) : (
+                            <RefreshCcwIcon data-icon="inline-start" />
+                          )}
+                          Refresh from Sanity
+                        </Button>
+                        <Button variant="destructive" onClick={() => void deleteDraftSanityPost()} disabled={isRefreshingFromSanity || isDeletingSanityPost}>
+                          {isDeletingSanityPost ? (
+                            <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                          ) : (
+                            <Trash2Icon data-icon="inline-start" />
+                          )}
+                          Delete Sanity Post
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="grid gap-2">

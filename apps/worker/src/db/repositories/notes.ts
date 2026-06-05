@@ -207,6 +207,20 @@ export async function deleteNote(db: D1Database, workspaceId: string, noteId: st
   await drizzleDb.delete(notes).where(and(eq(notes.workspaceId, workspaceId), eq(notes.id, noteId)));
 }
 
+export async function clearNoteSanityLink(db: D1Database, workspaceId: string, id: string, updatedAt: string) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      sanityDocumentId: null,
+      sanityRevision: null,
+      status: "draft",
+      lastError: null,
+      updatedAt,
+    })
+    .where(and(eq(notes.workspaceId, workspaceId), eq(notes.id, id)));
+}
+
 export async function updateNoteSanityMirror(
   db: D1Database,
   input: {

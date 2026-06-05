@@ -374,6 +374,7 @@ function App() {
   const [activeAiAssistJob, setActiveAiAssistJob] = useState<AiAssistJob | null>(null);
   const [isGeneratingOg, setIsGeneratingOg] = useState(false);
   const [isRefreshingFromSanity, setIsRefreshingFromSanity] = useState(false);
+  const [isDeletingSanityPost, setIsDeletingSanityPost] = useState(false);
   const [isAiRewritePreviewRunning, setIsAiRewritePreviewRunning] = useState(false);
   const [isTestingAiSettings, setIsTestingAiSettings] = useState(false);
   const [isCopyingToken, setIsCopyingToken] = useState<null | "session" | "integration">(null);
@@ -1532,6 +1533,31 @@ function App() {
     }
   }
 
+  async function deleteDraftSanityPost() {
+    if (!draft) return;
+    if (!draft.sanityDocumentId) {
+      toast.error("Note ini belum terhubung ke dokumen Sanity");
+      return;
+    }
+
+    if (!window.confirm(`Hapus post Sanity untuk "${draft.title}"? Draft lokal tetap disimpan.`)) {
+      return;
+    }
+
+    setIsDeletingSanityPost(true);
+    try {
+      const updated = await notesApi.deleteSanityPost(draft.id);
+      setDraft(updated);
+      setSavedDraft(updated);
+      setNotes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      toast.success("Sanity post deleted. Local draft kept.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete Sanity post");
+    } finally {
+      setIsDeletingSanityPost(false);
+    }
+  }
+
   async function runAiRewritePreview(prompt: string) {
     if (!draft) return;
     if (!draft.sanityDocumentId) {
@@ -1685,6 +1711,7 @@ function App() {
             generateOgImage={generateOgImage}
             saveDraft={saveDraft}
             refreshDraftFromSanity={refreshDraftFromSanity}
+            deleteDraftSanityPost={deleteDraftSanityPost}
             runAiRewritePreview={runAiRewritePreview}
             applyAiRewriteCandidate={applyAiRewriteCandidate}
             scheduleDraft={scheduleDraft}
@@ -1703,6 +1730,7 @@ function App() {
             isAiRunning={isAiRunning}
             isGeneratingOg={isGeneratingOg}
             isRefreshingFromSanity={isRefreshingFromSanity}
+            isDeletingSanityPost={isDeletingSanityPost}
             isAiRewritePreviewRunning={isAiRewritePreviewRunning}
             isSaving={isSaving}
             isScheduling={isScheduling}

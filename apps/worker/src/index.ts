@@ -55,6 +55,7 @@ import {
   getCategoryIdsByNoteIds,
   getNoteCategoryIds,
   clearNoteAiRewriteCandidate,
+  clearNoteSanityLink,
   listNotes,
   markNoteFailed,
   markNotePublished,
@@ -92,6 +93,7 @@ import {
   mapNoteSummary as mapNoteSummaryService,
 } from "./services/notes";
 import {
+  deleteSanityPost,
   fetchSanityCategories,
   fetchSanityPosts,
   fetchSanityPostSnapshot,
@@ -1762,6 +1764,40 @@ app.post("/api/notes/:id/refresh-from-sanity", async (c) => {
     return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
   } catch (error) {
     return c.json({ message: error instanceof Error ? error.message : "Failed to refresh note from Sanity" }, 500);
+  }
+});
+
+app.delete("/api/notes/:id/sanity-post", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+
+  if (!note) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  if (!note.sanity_document_id) {
+    return c.json({ message: "Note is not linked to a Sanity document" }, 409);
+  }
+
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are not configured" }, 400);
+  }
+
+  try {
+    await deleteSanityPost({
+      sanityDocumentId: note.sanity_document_id,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
+      apiVersion: sanitySettings.apiVersion || "2026-03-29",
+      token: sanitySettings.writeToken,
+    });
+    await clearNoteSanityLink(c.env.DB, workspaceId, id, new Date().toISOString());
+    const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+    return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to delete Sanity post" }, 500);
   }
 });
 

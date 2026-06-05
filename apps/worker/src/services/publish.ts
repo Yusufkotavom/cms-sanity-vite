@@ -424,6 +424,50 @@ export function createSanityPostDocumentId(noteId: string) {
   return `post-${noteId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
+export async function deleteSanityPost({
+  sanityDocumentId,
+  projectId,
+  dataset,
+  apiVersion,
+  token,
+  fetchImpl = fetch,
+}: {
+  sanityDocumentId: string;
+  projectId: string;
+  dataset: string;
+  apiVersion: string;
+  token: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const payload = {
+    mutations: [
+      {
+        delete: {
+          id: sanityDocumentId,
+        },
+      },
+    ],
+  };
+
+  const url = `https://${projectId}.api.sanity.io/v${apiVersion}/data/mutate/${dataset}`;
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseJson = (await response.json().catch(() => ({}))) as {
+    error?: { description?: string };
+  };
+
+  if (!response.ok) {
+    throw new Error(responseJson.error?.description || `Sanity delete failed (${response.status})`);
+  }
+}
+
 export async function publishNoteToSanity({
   note,
   categoryIds,
