@@ -110,18 +110,19 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   const safeFooterText = (branding.footerText ?? DEFAULT_FOOTER_TEXT).trim().slice(0, 72) || DEFAULT_FOOTER_TEXT;
   const logoDataUri = branding.logoDataUri?.trim() || kotacomLogoDataUri;
   const sideImageUrl = resolveOgSideImage(safeTitle, branding);
-  const titleLines = truncateLines(wrapText(safeTitle, 22), 4).map(escapeXml);
+  const rightArtOpacity = sideImageUrl ? 0.16 : 1;
+  const titleLines = truncateLines(wrapText(safeTitle, 23), 4).map(escapeXml);
   const excerptLines = excerpt
     ? truncateLines(wrapText(safeExcerpt, 36), 3).map(escapeXml)
     : [];
 
-  const titleFontSize = titleLines.length >= 4 ? 42 : titleLines.length === 3 ? 48 : titleLines.length === 2 ? 56 : 62;
-  const titleLineHeight = Math.round(titleFontSize * 1.1);
-  const titleStartY = 240;
+  const titleFontSize = titleLines.length >= 4 ? 44 : titleLines.length === 3 ? 50 : titleLines.length === 2 ? 58 : 64;
+  const titleLineHeight = Math.round(titleFontSize * 1.08);
+  const titleStartY = 232;
 
-  const excerptFontSize = 23;
-  const excerptLineHeight = Math.round(excerptFontSize * 1.45);
-  const excerptStartY = titleStartY + titleLines.length * titleLineHeight + 32;
+  const excerptFontSize = 24;
+  const excerptLineHeight = Math.round(excerptFontSize * 1.42);
+  const excerptStartY = titleStartY + titleLines.length * titleLineHeight + 30;
   const leftPanelX = 34;
   const leftPanelY = 42;
   const leftPanelWidth = 630;
@@ -205,8 +206,8 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#111827" stroke="#334155" stroke-opacity="0.7"/>
   ${sideImageUrl ? `<image x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" href="${escapeXml(sideImageUrl)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#rightImageClip)"/>` : ""}
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#020617" fill-opacity="${sideImageUrl ? "0.28" : "0.08"}"/>
-  <rect x="${rightPanelX + 56}" y="${rightPanelY + 62}" width="${rightPanelWidth - 112}" height="166" rx="22" fill="#0f172a" stroke="#334155"/>
-  <rect x="${rightPanelX + 56}" y="${rightPanelY + 62}" width="${rightPanelWidth - 112}" height="32" rx="22" fill="#111827"/>
+  <rect x="${rightPanelX + 56}" y="${rightPanelY + 62}" width="${rightPanelWidth - 112}" height="166" rx="22" fill="#0f172a" fill-opacity="0.76" stroke="#334155" stroke-opacity="0.7"/>
+  <rect x="${rightPanelX + 56}" y="${rightPanelY + 62}" width="${rightPanelWidth - 112}" height="32" rx="22" fill="#111827" fill-opacity="0.88"/>
   <circle cx="${rightPanelX + 82}" cy="${rightPanelY + 78}" r="4.5" fill="#22c55e"/>
   <circle cx="${rightPanelX + 100}" cy="${rightPanelY + 78}" r="4.5" fill="#f59e0b"/>
   <circle cx="${rightPanelX + 118}" cy="${rightPanelY + 78}" r="4.5" fill="#3b82f6"/>
@@ -216,6 +217,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX + 82}" y="${rightPanelY + 184}" width="112" height="18" rx="9" fill="#0070f3"/>
   <text x="${rightPanelX + 102}" y="${rightPanelY + 198}" font-family="${OG_FONT_FAMILY}" font-size="12" font-weight="700" fill="#ffffff">${escapeXml(safeWorkflowLabel)}</text>
 
+  <g opacity="${rightArtOpacity}">
   <rect x="${accentX}" y="${accentY + 212}" width="176" height="136" rx="24" fill="#111827" stroke="#334155"/>
   <circle cx="${accentX + 42}" cy="${accentY + 254}" r="18" fill="#0070f3" fill-opacity="0.16" stroke="#60a5fa"/>
   <rect x="${accentX + 76}" y="${accentY + 236}" width="70" height="10" rx="5" fill="#e2e8f0"/>
@@ -235,8 +237,9 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX + 120}" y="${rightPanelY + 420}" width="66" height="46" rx="13" fill="#0f172a" stroke="#475569"/>
   <rect x="${rightPanelX + 134}" y="${rightPanelY + 433}" width="38" height="20" rx="6" fill="#0070f3" fill-opacity="0.16" stroke="#60a5fa"/>
   <rect x="${rightPanelX + 126}" y="${rightPanelY + 480}" width="54" height="8" rx="4" fill="#94a3b8"/>
-
-  <image x="${leftPanelX + 18}" y="${leftPanelY + 12}" width="234" height="52" href="${logoDataUri}" preserveAspectRatio="xMinYMid meet"/>
+  </g>
+ 
+   <image x="${leftPanelX + 18}" y="${leftPanelY + 12}" width="234" height="52" href="${logoDataUri}" preserveAspectRatio="xMinYMid meet"/>
   <rect x="${leftPanelX + 18}" y="${leftPanelY + 82}" width="64" height="4" rx="2" fill="#0070f3"/>
   ${titleLines
     .map(
