@@ -2320,7 +2320,9 @@ async function publishNoteById(env: Env, noteId: string) {
     const updated = await findNoteById(env.DB, note.id);
     return {
       ok: true as const,
-      note: updated ? await mapNote(env.DB, updated) : await mapNote(env.DB, note),
+      note: updated
+        ? await mapNote(env.DB, updated, sanitySettings)
+        : await mapNote(env.DB, note, sanitySettings),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sanity publish failed";
