@@ -109,7 +109,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   const safeWorkflowLabel = (branding.workflowLabel ?? DEFAULT_WORKFLOW_LABEL).trim().slice(0, 28) || DEFAULT_WORKFLOW_LABEL;
   const safeFooterText = (branding.footerText ?? DEFAULT_FOOTER_TEXT).trim().slice(0, 72) || DEFAULT_FOOTER_TEXT;
   const logoDataUri = branding.logoDataUri?.trim() || kotacomLogoDataUri;
-  const sideImageUrl = resolveOgSideImage(safeTitle, branding);
+  const sideImageUrl = branding.generatorMode === "remote" ? resolveOgSideImage(safeTitle, branding) : null;
   const rightArtOpacity = sideImageUrl ? 0.16 : 1;
   const titleLines = truncateLines(wrapText(safeTitle, 23), 4).map(escapeXml);
   const excerptLines = excerpt

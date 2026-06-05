@@ -47,6 +47,7 @@ export function mapNoteDetail(note: NoteRecord, categoryIds: string[]) {
     ogTitle: note.og_title ?? "",
     ogDescription: note.og_description ?? "",
     ogImageAssetId: note.og_image_asset_id,
+    ogImageGeneratedAt: note.og_image_generated_at,
     categoryIds,
     status: note.status,
     publishAt: note.publish_at,
