@@ -154,7 +154,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
     ? truncateLines(wrapText(safeExcerpt, 39), 3).map(escapeXml)
     : [];
 
-  const titleFontSize = titleLines.length >= 4 ? 38 : titleLines.length === 3 ? 46 : titleLines.length === 2 ? 54 : 60;
+  const titleFontSize = titleLines.length >= 4 ? 36 : titleLines.length === 3 ? 44 : titleLines.length === 2 ? 52 : 58;
   const titleLineHeight = Math.round(titleFontSize * 1.05);
   const titleStartY = 198;
 
@@ -165,13 +165,13 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   const leftPanelY = 42;
   const leftPanelWidth = 630;
   const leftPanelHeight = 546;
-  const rightPanelX = 632;
+  const rightPanelX = 646;
   const rightPanelY = 42;
-  const rightPanelWidth = 534;
+  const rightPanelWidth = 520;
   const rightPanelHeight = 546;
-  const connectorX = 616;
+  const connectorX = 624;
   const connectorY = 176;
-  const connectorWidth = 56;
+  const connectorWidth = 42;
   const connectorHeight = 272;
 
   const gridLines: string[] = [];
