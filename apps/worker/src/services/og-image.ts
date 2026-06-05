@@ -154,13 +154,13 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
     ? truncateLines(wrapText(safeExcerpt, 44), 3).map(escapeXml)
     : [];
 
-  const titleFontSize = titleLines.length >= 4 ? 40 : titleLines.length === 3 ? 48 : titleLines.length === 2 ? 56 : 62;
+  const titleFontSize = titleLines.length >= 4 ? 38 : titleLines.length === 3 ? 46 : titleLines.length === 2 ? 54 : 60;
   const titleLineHeight = Math.round(titleFontSize * 1.05);
   const titleStartY = 198;
 
-  const excerptFontSize = 22;
-  const excerptLineHeight = Math.round(excerptFontSize * 1.4);
-  const excerptStartY = titleStartY + titleLines.length * titleLineHeight + 20;
+  const excerptFontSize = 21;
+  const excerptLineHeight = Math.round(excerptFontSize * 1.38);
+  const excerptStartY = titleStartY + titleLines.length * titleLineHeight + 18;
   const leftPanelX = 34;
   const leftPanelY = 42;
   const leftPanelWidth = 630;
@@ -247,7 +247,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   ${titleLines
     .map(
       (line, i) =>
-        `<text x="${leftPanelX + 44}" y="${titleStartY + i * titleLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${titleFontSize}" font-weight="900" letter-spacing="${titleFontSize > 54 ? "-1.6" : "-1.0"}" fill="#111827">${line}</text>`
+        `<text x="${leftPanelX + 38}" y="${titleStartY + i * titleLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${titleFontSize}" font-weight="900" letter-spacing="${titleFontSize > 54 ? "-1.6" : "-1.0"}" fill="#111827">${line}</text>`
     )
     .join("\n  ")}
 
@@ -256,7 +256,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
       ? excerptLines
           .map(
             (line, i) =>
-              `<text x="${leftPanelX + 44}" y="${excerptStartY + i * excerptLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${excerptFontSize}" font-weight="700" fill="#64748b">${line}</text>`
+              `<text x="${leftPanelX + 38}" y="${excerptStartY + i * excerptLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${excerptFontSize}" font-weight="700" fill="#64748b">${line}</text>`
           )
           .join("\n  ")
       : ""
