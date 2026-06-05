@@ -1471,6 +1471,21 @@ function App() {
     }
   }
 
+  async function retryActiveAiAssistJob() {
+    if (!activeAiAssistJob) return;
+
+    try {
+      const job = await notesApi.retryAiAssistJob(activeAiAssistJob.id);
+      setActiveAiAssistJob(job);
+      if (job.status === "queued" || job.status === "processing") {
+        setIsAiRunning(job.mode);
+      }
+      toast.success("AI job requeued");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to retry AI job");
+    }
+  }
+
   async function generateOgImage() {
     if (!draft) return;
     if (!config?.sanityConfigured) {
@@ -1666,6 +1681,7 @@ function App() {
             runAiAssist={runAiAssist}
             activeAiAssistJob={activeAiAssistJob?.noteId === draft.id ? activeAiAssistJob : null}
             cancelActiveAiAssistJob={cancelActiveAiAssistJob}
+            retryActiveAiAssistJob={retryActiveAiAssistJob}
             generateOgImage={generateOgImage}
             saveDraft={saveDraft}
             refreshDraftFromSanity={refreshDraftFromSanity}

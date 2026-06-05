@@ -5,14 +5,17 @@ import { z } from "zod";
 import {
   cancelAiAssistJob,
   createAiAssistJob,
+  findActiveAiAssistJobByNoteIdAndMode,
   findAiAssistJobById,
   findLatestAiAssistJobByNoteId,
   findNextQueuedAiAssistJob,
+  hasProcessingAiAssistJob,
   listRecentAiAssistJobs,
   markAiAssistJobCompleted,
   markAiAssistJobFailed,
   markAiAssistJobProcessing,
   markTimedOutAiAssistJobs,
+  retryAiAssistJob,
   type AiAssistJobRecord,
 } from "./db/repositories/ai-assist-jobs";
 import {
@@ -2065,8 +2068,10 @@ function truncateJobError(value: string, maxLength = 800) {
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
 }
 
+const AI_ASSIST_PROCESSING_TIMEOUT_MS = 15 * 60 * 1000;
+
 function aiAssistTimeoutCutoff(now = new Date()) {
-  return new Date(now.getTime() - 2 * 60 * 1000).toISOString();
+  return new Date(now.getTime() - AI_ASSIST_PROCESSING_TIMEOUT_MS).toISOString();
 }
 
 async function failTimedOutAiAssistJobs(env: Env, workspaceId: string) {
@@ -2077,8 +2082,12 @@ async function failTimedOutAiAssistJobs(env: Env, workspaceId: string) {
   });
 }
 
-async function processAiAssistJobs(env: Env, workspaceId: string, limit = 2) {
+async function processAiAssistJobs(env: Env, workspaceId: string, limit = 3) {
   await failTimedOutAiAssistJobs(env, workspaceId);
+  if (await hasProcessingAiAssistJob(env.DB, workspaceId)) {
+    return { processed: 0 };
+  }
+
   let processed = 0;
   for (let index = 0; index < limit; index += 1) {
     const job = await findNextQueuedAiAssistJob(env.DB, workspaceId);
@@ -2088,6 +2097,10 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 2) {
 
     const now = new Date().toISOString();
     await markAiAssistJobProcessing(env.DB, job.id, now);
+    const processingJob = await findAiAssistJobById(env.DB, workspaceId, job.id);
+    if (processingJob?.status !== "processing") {
+      continue;
+    }
 
     try {
       const note = await findNoteByIdInWorkspace(env.DB, workspaceId, job.note_id);
@@ -2184,6 +2197,12 @@ app.post("/api/ai/assist/jobs", async (c) => {
     return c.json({ message: "Not found" }, 404);
   }
 
+  const activeJob = await findActiveAiAssistJobByNoteIdAndMode(c.env.DB, workspaceId, note.id, payload.mode);
+  if (activeJob) {
+    c.executionCtx.waitUntil(processAiAssistJobs(c.env, workspaceId, 3));
+    return c.json(toAiAssistJobResponse(activeJob), 200);
+  }
+
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await createAiAssistJob(c.env.DB, {
@@ -2196,16 +2215,19 @@ app.post("/api/ai/assist/jobs", async (c) => {
   });
 
   const job = await findAiAssistJobById(c.env.DB, workspaceId, id);
-  c.executionCtx.waitUntil(processAiAssistJobs(c.env, workspaceId, 1));
+  c.executionCtx.waitUntil(processAiAssistJobs(c.env, workspaceId, 3));
   return c.json(toAiAssistJobResponse(job!), 202);
 });
 
 app.get("/api/ai/assist/jobs/:id", async (c) => {
   const workspaceId = c.get("workspaceId");
-  await failTimedOutAiAssistJobs(c.env, workspaceId);
   const job = await findAiAssistJobById(c.env.DB, workspaceId, c.req.param("id"));
   if (!job) {
     return c.json({ message: "Not found" }, 404);
+  }
+
+  if (job.status === "queued") {
+    c.executionCtx.waitUntil(processAiAssistJobs(c.env, workspaceId, 3));
   }
 
   return c.json(toAiAssistJobResponse(job));
@@ -2227,9 +2249,25 @@ app.post("/api/ai/assist/jobs/:id/cancel", async (c) => {
   return c.json(toAiAssistJobResponse(job));
 });
 
+app.post("/api/ai/assist/jobs/:id/retry", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  await retryAiAssistJob(c.env.DB, {
+    workspaceId,
+    id,
+    now: new Date().toISOString(),
+  });
+  const job = await findAiAssistJobById(c.env.DB, workspaceId, id);
+  if (!job) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  c.executionCtx.waitUntil(processAiAssistJobs(c.env, workspaceId, 3));
+  return c.json(toAiAssistJobResponse(job));
+});
+
 app.get("/api/notes/:id/ai-assist/latest", async (c) => {
   const workspaceId = c.get("workspaceId");
-  await failTimedOutAiAssistJobs(c.env, workspaceId);
   const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, c.req.param("id"));
   if (!note) {
     return c.json({ message: "Not found" }, 404);

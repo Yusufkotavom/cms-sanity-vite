@@ -93,6 +93,7 @@ type PostEditorPageProps = {
   runAiAssist: (mode: Exclude<AiRunMode, null>) => Promise<void>;
   activeAiAssistJob: AiAssistJob | null;
   cancelActiveAiAssistJob: () => Promise<void>;
+  retryActiveAiAssistJob: () => Promise<void>;
   generateOgImage: () => Promise<void>;
   saveDraft: () => Promise<ApiNote | undefined>;
   refreshDraftFromSanity: () => Promise<void>;
@@ -135,6 +136,7 @@ export function PostEditorPage({
   runAiAssist,
   activeAiAssistJob,
   cancelActiveAiAssistJob,
+  retryActiveAiAssistJob,
   generateOgImage,
   saveDraft,
   refreshDraftFromSanity,
@@ -359,12 +361,20 @@ export function PostEditorPage({
                   </div>
                 ) : null}
               </div>
-              {activeAiAssistJob.status === "queued" || activeAiAssistJob.status === "processing" ? (
-                <Button variant="outline" size="sm" onClick={() => void cancelActiveAiAssistJob()}>
-                  <XCircleIcon data-icon="inline-start" />
-                  Cancel AI
-                </Button>
-              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {activeAiAssistJob.status === "queued" || activeAiAssistJob.status === "processing" ? (
+                  <Button variant="outline" size="sm" onClick={() => void cancelActiveAiAssistJob()}>
+                    <XCircleIcon data-icon="inline-start" />
+                    Cancel AI
+                  </Button>
+                ) : null}
+                {activeAiAssistJob.status === "failed" || activeAiAssistJob.status === "cancelled" ? (
+                  <Button variant="outline" size="sm" onClick={() => void retryActiveAiAssistJob()}>
+                    <RefreshCcwIcon data-icon="inline-start" />
+                    Retry AI
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </CardContent>
         ) : null}

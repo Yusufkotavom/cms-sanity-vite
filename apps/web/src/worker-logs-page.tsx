@@ -51,6 +51,7 @@ function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
 export function WorkerLogsPage() {
   const [snapshot, setSnapshot] = useState<WorkerLogSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
 
   async function loadLogs() {
     setIsLoading(true);
@@ -66,6 +67,19 @@ export function WorkerLogsPage() {
   useEffect(() => {
     void loadLogs();
   }, []);
+
+  async function retryAiAssistJob(jobId: string) {
+    setRetryingJobId(jobId);
+    try {
+      await notesApi.retryAiAssistJob(jobId);
+      toast.success("AI job requeued");
+      await loadLogs();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to retry AI job");
+    } finally {
+      setRetryingJobId(null);
+    }
+  }
 
   const summary = useMemo(() => {
     const aiActive = snapshot?.aiAssistJobs.filter((job) => job.status === "queued" || job.status === "processing").length ?? 0;
@@ -119,11 +133,12 @@ export function WorkerLogsPage() {
                     <TableHead>Attempts</TableHead>
                     <TableHead>Updated</TableHead>
                     <TableHead>Error</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading ? <EmptyRow colSpan={6} label="Loading logs..." /> : null}
-                  {!isLoading && snapshot?.aiAssistJobs.length === 0 ? <EmptyRow colSpan={6} label="No AI assist jobs." /> : null}
+                  {isLoading ? <EmptyRow colSpan={7} label="Loading logs..." /> : null}
+                  {!isLoading && snapshot?.aiAssistJobs.length === 0 ? <EmptyRow colSpan={7} label="No AI assist jobs." /> : null}
                   {snapshot?.aiAssistJobs.map((job) => (
                     <TableRow key={job.id}>
                       <TableCell><Badge variant={statusVariant(job.status)}>{job.status}</Badge></TableCell>
@@ -132,6 +147,19 @@ export function WorkerLogsPage() {
                       <TableCell>{job.attempts}</TableCell>
                       <TableCell>{formatDate(job.updatedAt)}</TableCell>
                       <TableCell className="max-w-md truncate text-xs text-muted-foreground">{job.error ?? "-"}</TableCell>
+                      <TableCell className="text-right">
+                        {job.status === "failed" || job.status === "cancelled" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void retryAiAssistJob(job.id)}
+                            disabled={retryingJobId === job.id}
+                          >
+                            {retryingJobId === job.id ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+                            Retry
+                          </Button>
+                        ) : null}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

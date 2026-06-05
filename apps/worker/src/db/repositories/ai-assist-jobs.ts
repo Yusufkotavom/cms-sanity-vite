@@ -55,12 +55,28 @@ export async function findLatestAiAssistJobByNoteId(db: D1Database, workspaceId:
   return row ? toRecord(row) : null;
 }
 
+export async function findActiveAiAssistJobByNoteIdAndMode(db: D1Database, workspaceId: string, noteId: string, mode: AiAssistRequest["mode"]) {
+  const row = await db
+    .prepare("select * from ai_assist_jobs where workspace_id = ? and note_id = ? and mode = ? and status in ('queued', 'processing') order by created_at desc limit 1")
+    .bind(workspaceId, noteId, mode)
+    .first<Record<string, unknown>>();
+  return row ? toRecord(row) : null;
+}
+
 export async function findNextQueuedAiAssistJob(db: D1Database, workspaceId: string) {
   const row = await db
     .prepare("select * from ai_assist_jobs where workspace_id = ? and status = 'queued' order by created_at asc limit 1")
     .bind(workspaceId)
     .first<Record<string, unknown>>();
   return row ? toRecord(row) : null;
+}
+
+export async function hasProcessingAiAssistJob(db: D1Database, workspaceId: string) {
+  const row = await db
+    .prepare("select id from ai_assist_jobs where workspace_id = ? and status = 'processing' limit 1")
+    .bind(workspaceId)
+    .first<Record<string, unknown>>();
+  return Boolean(row);
 }
 
 export async function markTimedOutAiAssistJobs(db: D1Database, input: { workspaceId: string; olderThan: string; now: string }) {
@@ -72,6 +88,13 @@ export async function markTimedOutAiAssistJobs(db: D1Database, input: { workspac
 
 export async function markAiAssistJobProcessing(db: D1Database, id: string, now: string) {
   await db.prepare("update ai_assist_jobs set status = 'processing', attempts = attempts + 1, error = null, updated_at = ? where id = ? and status = 'queued'").bind(now, id).run();
+}
+
+export async function retryAiAssistJob(db: D1Database, input: { workspaceId: string; id: string; now: string }) {
+  await db
+    .prepare("update ai_assist_jobs set status = 'queued', error = null, updated_at = ? where workspace_id = ? and id = ? and status in ('failed', 'cancelled')")
+    .bind(input.now, input.workspaceId, input.id)
+    .run();
 }
 
 export async function markAiAssistJobCompleted(db: D1Database, input: { id: string; resultJson: string; now: string }) {

@@ -634,6 +634,10 @@ export const notesApi = {
     request<AiAssistJob>(`/api/ai/assist/jobs/${id}/cancel`, {
       method: "POST",
     }),
+  retryAiAssistJob: (id: string) =>
+    request<AiAssistJob>(`/api/ai/assist/jobs/${id}/retry`, {
+      method: "POST",
+    }),
   getLatestAiAssistJob: (noteId: string) => request<{ job: AiAssistJob | null }>(`/api/notes/${noteId}/ai-assist/latest`),
   getWorkerLogs: () => request<WorkerLogSnapshot>("/api/worker-logs"),
   getAiSettings: () => request<AiSettings>("/api/settings/ai"),
