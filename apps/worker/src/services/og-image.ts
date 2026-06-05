@@ -354,13 +354,13 @@ export async function generateAndUploadOgImage(params: {
   apiVersion: string;
   token: string;
   fetchImpl?: typeof fetch;
-}): Promise<{ assetId: string }> {
+}): Promise<{ assetId: string; bytes: ArrayBuffer; contentType: string }> {
   const { title, excerpt, branding, projectId, dataset, apiVersion, token, fetchImpl = fetch } = params;
 
   const preferRemote = branding?.generatorMode === "remote";
   const remoteFirst = preferRemote ? await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl) : null;
   if (remoteFirst) {
-    return uploadOgAsset({
+    const uploaded = await uploadOgAsset({
       bytes: remoteFirst.bytes,
       contentType: remoteFirst.contentType,
       projectId,
@@ -369,11 +369,12 @@ export async function generateAndUploadOgImage(params: {
       token,
       fetchImpl,
     });
+    return { ...uploaded, bytes: remoteFirst.bytes, contentType: remoteFirst.contentType };
   }
 
   try {
     const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, branding);
-    return await uploadOgAsset({
+    const uploaded = await uploadOgAsset({
       bytes: pngBuffer,
       contentType,
       projectId,
@@ -382,10 +383,11 @@ export async function generateAndUploadOgImage(params: {
       token,
       fetchImpl,
     });
+    return { ...uploaded, bytes: pngBuffer, contentType };
   } catch (error) {
     const remoteFallback = await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl);
     if (remoteFallback) {
-      return uploadOgAsset({
+      const uploaded = await uploadOgAsset({
         bytes: remoteFallback.bytes,
         contentType: remoteFallback.contentType,
         projectId,
@@ -394,6 +396,7 @@ export async function generateAndUploadOgImage(params: {
         token,
         fetchImpl,
       });
+      return { ...uploaded, bytes: remoteFallback.bytes, contentType: remoteFallback.contentType };
     }
     throw error;
   }

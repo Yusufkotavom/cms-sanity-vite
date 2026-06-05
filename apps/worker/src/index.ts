@@ -78,6 +78,7 @@ import {
   findWorkspaceBySlug,
   listWorkspaces,
   updateWorkspace,
+  type WorkspaceRecord,
 } from "./db/repositories/workspaces";
 import {
   mapNoteDetail,
@@ -272,6 +273,7 @@ const workspaceUpdateSchema = workspaceSchema.extend({
 
 export interface Env {
   DB: D1Database;
+  OG_ASSETS?: R2Bucket;
   SANITY_PROJECT_ID?: string;
   SANITY_DATASET?: string;
   SANITY_API_VERSION?: string;
@@ -509,6 +511,44 @@ const app = new Hono<{
     workspaceSlug: string;
   };
 }>();
+
+app.get("/og-assets/:workspace/:id", async (c) => {
+  await ensureSchema(c.env.DB);
+  const workspaceRef = c.req.param("workspace");
+  const id = c.req.param("id");
+  if (!workspaceRef || !id) {
+    return c.json({ message: "Not found" }, 404);
+  }
+  const workspace =
+    (await findWorkspaceBySlug(c.env.DB, workspaceRef)) ??
+    (await c.env.DB.prepare("select * from workspaces where id = ? limit 1").bind(workspaceRef).first<WorkspaceRecord>());
+
+  if (!workspace?.id) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  const workspaceId = workspace.id;
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+  if (!note?.og_image_asset_id) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  const object = await c.env.OG_ASSETS?.get(ogAssetKey(workspaceId, id));
+  if (!object) {
+    const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+    const sanityUrl = sanityAssetIdToUrl(note.og_image_asset_id, sanitySettings.projectId, sanitySettings.dataset);
+    if (sanityUrl) {
+      return c.redirect(sanityUrl, 302);
+    }
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  return new Response(object.body, { headers });
+});
 
 app.use(
   "/api/*",
@@ -1407,7 +1447,9 @@ app.get("/api/notes", async (c) => {
       attachOgImageUrl(
         mapNoteSummary(note, categoryIdsByNoteId.get(note.id) ?? []),
         sanitySettings.projectId,
-        sanitySettings.dataset
+        sanitySettings.dataset,
+        requestOrigin(c.req.url),
+        workspaceId
       )
     ),
   });
@@ -1570,6 +1612,33 @@ app.post("/api/sanity/test", async (c) => {
   }
 });
 
+app.get("/api/notes/:id/og-image", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+
+  if (!note?.og_image_asset_id) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  const key = ogAssetKey(workspaceId, id);
+  const object = await c.env.OG_ASSETS?.get(key);
+  if (!object) {
+    const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+    const sanityUrl = sanityAssetIdToUrl(note.og_image_asset_id, sanitySettings.projectId, sanitySettings.dataset);
+    if (sanityUrl) {
+      return c.redirect(sanityUrl, 302);
+    }
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  return new Response(object.body, { headers });
+});
+
 app.get("/api/notes/:id", async (c) => {
   const note = await findNoteByIdInWorkspace(c.env.DB, c.get("workspaceId"), c.req.param("id"));
 
@@ -1578,7 +1647,7 @@ app.get("/api/notes/:id", async (c) => {
   }
 
   const sanitySettings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
-  return c.json(await mapNote(c.env.DB, note, sanitySettings));
+  return c.json(await mapNote(c.env.DB, note, sanitySettings, requestOrigin(c.req.url)));
 });
 
 app.post("/api/notes/:id/refresh-from-sanity", async (c) => {
@@ -1822,7 +1891,7 @@ app.post("/api/notes/:id/schedule", async (c) => {
 
 app.post("/api/notes/:id/publish", async (c) => {
   const id = c.req.param("id");
-  const result = await publishNoteById(c.env, id);
+    const result = await publishNoteById(c.env, id, requestOrigin(c.req.url));
 
   if (!result.ok) {
     return c.json({ message: result.message }, 400);
@@ -1844,7 +1913,7 @@ app.post("/api/notes/:id/retry-publish", async (c) => {
     return c.json({ message: "Only failed notes can be retried" }, 409);
   }
 
-  const result = await publishNoteById(c.env, id);
+    const result = await publishNoteById(c.env, id, requestOrigin(c.req.url));
 
   if (!result.ok) {
     return c.json({ message: result.message }, 400);
@@ -1874,7 +1943,7 @@ app.post("/api/notes/:id/generate-og", async (c) => {
 
   try {
     const branding = await resolveOgBranding(c.env.DB, workspaceId);
-    const { assetId } = await generateAndUploadOgImage({
+    const { assetId, bytes, contentType } = await generateAndUploadOgImage({
       title: ogTitle,
       excerpt: ogExcerpt,
       branding,
@@ -1883,6 +1952,8 @@ app.post("/api/notes/:id/generate-og", async (c) => {
       apiVersion,
       token: sanitySettings.writeToken,
     });
+
+    await putOgImageToR2(c.env, { workspaceId, noteId: id, bytes, contentType });
 
     const now = new Date().toISOString();
     await setNoteOgImageAssetId(c.env.DB, {
@@ -1895,10 +1966,16 @@ app.post("/api/notes/:id/generate-og", async (c) => {
     const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
     return c.json(
       updated
-        ? await mapNote(c.env.DB, updated, sanitySettings)
+        ? await mapNote(c.env.DB, updated, sanitySettings, requestOrigin(c.req.url))
         : {
             ogImageAssetId: assetId,
-            ogImageUrl: sanityAssetIdToUrl(assetId, sanitySettings.projectId, sanitySettings.dataset),
+            ogImageUrl:
+              ogImagePreviewUrl(requestOrigin(c.req.url), {
+                id,
+                workspace_id: workspaceId,
+                og_image_asset_id: assetId,
+                updated_at: now,
+              }) || sanityAssetIdToUrl(assetId, sanitySettings.projectId, sanitySettings.dataset),
           }
     );
   } catch (error) {
@@ -2078,6 +2155,32 @@ app.get("/api/notes/:id/ai-assist/latest", async (c) => {
   return c.json({ job: job ? toAiAssistJobResponse(job) : null });
 });
 
+function ogAssetKey(workspaceId: string, noteId: string) {
+  return `workspaces/${workspaceId}/notes/${noteId}/og.png`;
+}
+
+function requestOrigin(url: string) {
+  return new URL(url).origin;
+}
+
+function ogImagePreviewUrl(origin: string | null | undefined, note: { id?: string | null; workspace_id?: string | null; workspace_slug?: string | null; og_image_asset_id?: string | null; updated_at?: string | null }) {
+  if (!origin || !note.id || !note.og_image_asset_id) return null;
+  const workspaceRef = note.workspace_slug || note.workspace_id;
+  if (!workspaceRef) return null;
+  const version = note.updated_at ? `?v=${encodeURIComponent(note.updated_at)}` : "";
+  return `${origin}/og-assets/${encodeURIComponent(workspaceRef)}/${encodeURIComponent(note.id)}${version}`;
+}
+
+async function putOgImageToR2(env: Env, input: { workspaceId: string; noteId: string; bytes: ArrayBuffer; contentType: string }) {
+  if (!env.OG_ASSETS) return;
+  await env.OG_ASSETS.put(ogAssetKey(input.workspaceId, input.noteId), input.bytes, {
+    httpMetadata: {
+      contentType: input.contentType,
+      cacheControl: "public, max-age=31536000, immutable",
+    },
+  });
+}
+
 function sanityAssetIdToUrl(assetId: string | null | undefined, projectId: string | null | undefined, dataset: string | null | undefined) {
   if (!assetId || !projectId || !dataset) return null;
   const hash = assetId.replace(/^image-/, "");
@@ -2086,10 +2189,22 @@ function sanityAssetIdToUrl(assetId: string | null | undefined, projectId: strin
   return `https://cdn.sanity.io/images/${projectId}/${dataset}/${hash.slice(0, lastDash)}.${hash.slice(lastDash + 1)}`;
 }
 
-function attachOgImageUrl<T extends { ogImageAssetId?: string | null }>(note: T, projectId: string | null | undefined, dataset: string | null | undefined) {
+function attachOgImageUrl<T extends { id?: string | null; ogImageAssetId?: string | null; updatedAt?: string | null }>(
+  note: T,
+  projectId: string | null | undefined,
+  dataset: string | null | undefined,
+  origin?: string | null,
+  workspaceId?: string | null
+) {
   return {
     ...note,
-    ogImageUrl: sanityAssetIdToUrl(note.ogImageAssetId, projectId, dataset),
+    ogImageUrl:
+      ogImagePreviewUrl(origin, {
+        id: note.id,
+        workspace_id: workspaceId,
+        og_image_asset_id: note.ogImageAssetId,
+        updated_at: note.updatedAt,
+      }) || sanityAssetIdToUrl(note.ogImageAssetId, projectId, dataset),
   };
 }
 
@@ -2204,16 +2319,19 @@ function mapAiBatchSummary(
 async function mapNote(
   db: D1Database,
   note: NoteRecord,
-  sanity?: { projectId: string | null | undefined; dataset: string | null | undefined }
+  sanity?: { projectId: string | null | undefined; dataset: string | null | undefined },
+  origin?: string | null
 ) {
   return attachOgImageUrl(
     mapNoteDetail(note, await getNoteCategoryIds(db, note.workspace_id, note.id)),
     sanity?.projectId,
-    sanity?.dataset
+    sanity?.dataset,
+    origin,
+    note.workspace_id
   );
 }
 
-async function publishNoteById(env: Env, noteId: string) {
+async function publishNoteById(env: Env, noteId: string, origin?: string | null) {
   let note = await findNoteById(env.DB, noteId);
 
   if (!note) {
@@ -2261,7 +2379,7 @@ async function publishNoteById(env: Env, noteId: string) {
       const ogTitle = note.og_title || note.seo_title || note.title;
       const ogExcerpt = note.og_description || note.seo_description || note.excerpt;
       const branding = await resolveOgBranding(env.DB, workspaceId);
-      const { assetId } = await generateAndUploadOgImage({
+      const { assetId, bytes, contentType } = await generateAndUploadOgImage({
         title: ogTitle,
         excerpt: ogExcerpt,
         branding,
@@ -2270,6 +2388,8 @@ async function publishNoteById(env: Env, noteId: string) {
         apiVersion,
         token: sanitySettings.writeToken,
       });
+
+      await putOgImageToR2(env, { workspaceId, noteId: note.id, bytes, contentType });
 
       const now = new Date().toISOString();
       await setNoteOgImageAssetId(env.DB, {
@@ -2321,8 +2441,8 @@ async function publishNoteById(env: Env, noteId: string) {
     return {
       ok: true as const,
       note: updated
-        ? await mapNote(env.DB, updated, sanitySettings)
-        : await mapNote(env.DB, note, sanitySettings),
+        ? await mapNote(env.DB, updated, sanitySettings, origin)
+        : await mapNote(env.DB, note, sanitySettings, origin),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sanity publish failed";

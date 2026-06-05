@@ -18,5 +18,11 @@
       "database_name": "cms-sanity-vite",
       "database_id": "9dae5491-e9c3-4fa1-856d-cd534b802ea6"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "OG_ASSETS",
+      "bucket_name": "cms-sanity-vite-og-assets"
+    }
   ]
 }
