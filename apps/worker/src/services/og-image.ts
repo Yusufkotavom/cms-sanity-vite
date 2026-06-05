@@ -1,9 +1,10 @@
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
+import { geistBoldFont } from "./geist-bold-font";
 import { geistVariableFont } from "./geist-variable-font";
 import { kotacomLogoDataUri } from "./kotacom-logo-data";
 
-const OG_FONT_FAMILY = "Geist Variable, Geist, Arial, sans-serif";
+const OG_FONT_FAMILY = "Geist, Geist Variable, Arial, sans-serif";
 
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
@@ -236,7 +237,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   ${titleLines
     .map(
       (line, i) =>
-        `<text x="${leftPanelX + 44}" y="${titleStartY + i * titleLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${titleFontSize}" font-weight="700" letter-spacing="${titleFontSize > 54 ? "-1.6" : "-1.0"}" fill="#111827">${line}</text>`
+        `<text x="${leftPanelX + 44}" y="${titleStartY + i * titleLineHeight}" font-family="${OG_FONT_FAMILY}" font-size="${titleFontSize}" font-weight="900" letter-spacing="${titleFontSize > 54 ? "-1.6" : "-1.0"}" fill="#111827">${line}</text>`
     )
     .join("\n  ")}
 
@@ -268,10 +269,10 @@ export async function generateOgImagePng(
     fitTo: { mode: "width", value: OG_WIDTH },
     font: {
       loadSystemFonts: false,
-      defaultFontFamily: "Geist Variable",
-      sansSerifFamily: "Geist Variable",
-      monospaceFamily: "Geist Variable",
-      fontBuffers: [geistVariableFont],
+      defaultFontFamily: "Geist",
+      sansSerifFamily: "Geist",
+      monospaceFamily: "Geist",
+      fontBuffers: [geistBoldFont, geistVariableFont],
     },
   });
 
