@@ -105,13 +105,23 @@ function resolveOgSideImage(title: string, branding: OgBranding = {}) {
   return candidates.find((value) => isSafeImageUrl(value)) || null;
 }
 
+function optimizeOgSideImageUrl(sourceUrl: string) {
+  const url = new URL(sourceUrl);
+  url.searchParams.set("w", "640");
+  url.searchParams.set("h", "640");
+  url.searchParams.set("fit", "crop");
+  url.searchParams.set("fm", "jpg");
+  url.searchParams.set("q", "72");
+  return url.toString();
+}
+
 async function fetchOgSideImageDataUri(title: string, branding: OgBranding | undefined, fetchImpl: typeof fetch) {
   const sourceUrl = resolveOgSideImage(title, branding);
   if (!sourceUrl) {
     return null;
   }
 
-  const response = await fetchImpl(sourceUrl);
+  const response = await fetchImpl(optimizeOgSideImageUrl(sourceUrl));
   const contentType = response.headers.get("content-type") || "";
   if (!response.ok || !contentType.toLowerCase().startsWith("image/")) {
     return null;
