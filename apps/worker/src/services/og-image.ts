@@ -149,18 +149,18 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   const safeFooterText = (branding.footerText ?? DEFAULT_FOOTER_TEXT).trim().slice(0, 72) || DEFAULT_FOOTER_TEXT;
   const logoDataUri = branding.logoDataUri?.trim() || kotacomLogoDataUri;
   const sideImageUrl = branding.sideImageDataUri?.trim() || null;
-  const titleLines = truncateLines(wrapText(safeTitle, 23), 4).map(escapeXml);
+  const titleLines = truncateLines(wrapText(safeTitle, 29), 4).map(escapeXml);
   const excerptLines = excerpt
-    ? truncateLines(wrapText(safeExcerpt, 36), 3).map(escapeXml)
+    ? truncateLines(wrapText(safeExcerpt, 44), 3).map(escapeXml)
     : [];
 
-  const titleFontSize = titleLines.length >= 4 ? 44 : titleLines.length === 3 ? 50 : titleLines.length === 2 ? 58 : 64;
-  const titleLineHeight = Math.round(titleFontSize * 1.08);
-  const titleStartY = 214;
+  const titleFontSize = titleLines.length >= 4 ? 40 : titleLines.length === 3 ? 48 : titleLines.length === 2 ? 56 : 62;
+  const titleLineHeight = Math.round(titleFontSize * 1.05);
+  const titleStartY = 198;
 
-  const excerptFontSize = 24;
-  const excerptLineHeight = Math.round(excerptFontSize * 1.42);
-  const excerptStartY = titleStartY + titleLines.length * titleLineHeight + 24;
+  const excerptFontSize = 22;
+  const excerptLineHeight = Math.round(excerptFontSize * 1.4);
+  const excerptStartY = titleStartY + titleLines.length * titleLineHeight + 20;
   const leftPanelX = 34;
   const leftPanelY = 42;
   const leftPanelWidth = 630;
