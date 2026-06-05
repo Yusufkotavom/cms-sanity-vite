@@ -232,8 +232,9 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#020617" fill-opacity="${sideImageUrl ? "0.06" : "0.08"}"/>
 
  
-   <text x="${leftPanelX + 44}" y="${leftPanelY + 58}" font-family="${OG_FONT_FAMILY}" font-size="34" font-weight="900" letter-spacing="-0.8" fill="#0f172a">KOTACOM</text>
-  <rect x="${leftPanelX + 44}" y="${leftPanelY + 82}" width="64" height="4" rx="2" fill="#0070f3"/>
+   <image x="${leftPanelX + 24}" y="${leftPanelY + 18}" width="172" height="38" href="${logoDataUri}" xlink:href="${logoDataUri}" preserveAspectRatio="xMinYMid meet"/>
+  <text x="${leftPanelX + 44}" y="${leftPanelY + 74}" font-family="${OG_FONT_FAMILY}" font-size="34" font-weight="900" letter-spacing="-0.8" fill="#0f172a">KOTACOM</text>
+  <rect x="${leftPanelX + 44}" y="${leftPanelY + 96}" width="64" height="4" rx="2" fill="#0070f3"/>
   ${titleLines
     .map(
       (line, i) =>
