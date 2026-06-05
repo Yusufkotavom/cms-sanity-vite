@@ -63,6 +63,13 @@ export async function findNextQueuedAiAssistJob(db: D1Database, workspaceId: str
   return row ? toRecord(row) : null;
 }
 
+export async function markTimedOutAiAssistJobs(db: D1Database, input: { workspaceId: string; olderThan: string; now: string }) {
+  await db
+    .prepare("update ai_assist_jobs set status = 'failed', error = 'AI assist timed out. Please retry.', updated_at = ? where workspace_id = ? and status = 'processing' and updated_at < ?")
+    .bind(input.now, input.workspaceId, input.olderThan)
+    .run();
+}
+
 export async function markAiAssistJobProcessing(db: D1Database, id: string, now: string) {
   await db.prepare("update ai_assist_jobs set status = 'processing', attempts = attempts + 1, error = null, updated_at = ? where id = ?").bind(now, id).run();
 }

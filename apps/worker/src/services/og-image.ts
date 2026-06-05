@@ -23,10 +23,15 @@ export type OgBranding = {
   ogBaseUrl?: string | null;
   generatorMode?: OgGeneratorMode | null;
   fallbackImageUrl?: string | null;
+  fallbackImageUrls?: string | null;
   websiteImageUrl?: string | null;
+  websiteImageUrls?: string | null;
   softwareImageUrl?: string | null;
+  softwareImageUrls?: string | null;
   percetakanImageUrl?: string | null;
+  percetakanImageUrls?: string | null;
   blogImageUrl?: string | null;
+  blogImageUrls?: string | null;
   sideImageDataUri?: string | null;
 };
 
@@ -87,23 +92,57 @@ function detectOgCategory(title: string, workflowLabel?: string | null) {
   return null;
 }
 
+function parseImageUrlList(value?: string | null) {
+  return (value ?? "")
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter((item) => isSafeImageUrl(item));
+}
+
+function selectDeterministicImage(title: string, urls: readonly string[]) {
+  if (!urls.length) return null;
+  const hash = title.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return urls[hash % urls.length] ?? null;
+}
+
 function resolveOgSideImage(title: string, branding: OgBranding = {}) {
   const category = detectOgCategory(title, branding.workflowLabel);
-  const imageMap = {
-    website: branding.websiteImageUrl?.trim() || "",
-    software: branding.softwareImageUrl?.trim() || "",
-    percetakan: branding.percetakanImageUrl?.trim() || "",
-    blog: branding.blogImageUrl?.trim() || "",
+  const imagePools = {
+    website: [
+      ...parseImageUrlList(branding.websiteImageUrls),
+      ...(isSafeImageUrl(branding.websiteImageUrl) ? [branding.websiteImageUrl!.trim()] : []),
+    ],
+    software: [
+      ...parseImageUrlList(branding.softwareImageUrls),
+      ...(isSafeImageUrl(branding.softwareImageUrl) ? [branding.softwareImageUrl!.trim()] : []),
+    ],
+    percetakan: [
+      ...parseImageUrlList(branding.percetakanImageUrls),
+      ...(isSafeImageUrl(branding.percetakanImageUrl) ? [branding.percetakanImageUrl!.trim()] : []),
+    ],
+    blog: [
+      ...parseImageUrlList(branding.blogImageUrls),
+      ...(isSafeImageUrl(branding.blogImageUrl) ? [branding.blogImageUrl!.trim()] : []),
+    ],
   } as const;
-  const candidates = [
-    category ? imageMap[category as keyof typeof imageMap] : "",
-    branding.websiteImageUrl?.trim() || "",
-    branding.softwareImageUrl?.trim() || "",
-    branding.percetakanImageUrl?.trim() || "",
-    branding.blogImageUrl?.trim() || "",
-    branding.fallbackImageUrl?.trim() || "",
+
+  const preferredPool = category ? imagePools[category as keyof typeof imagePools] : [];
+  const anyPool = [
+    ...imagePools.website,
+    ...imagePools.software,
+    ...imagePools.percetakan,
+    ...imagePools.blog,
   ];
-  return candidates.find((value) => isSafeImageUrl(value)) || null;
+  const fallbackPool = [
+    ...parseImageUrlList(branding.fallbackImageUrls),
+    ...(isSafeImageUrl(branding.fallbackImageUrl) ? [branding.fallbackImageUrl!.trim()] : []),
+  ];
+
+  return (
+    selectDeterministicImage(title, preferredPool) ||
+    selectDeterministicImage(title, anyPool) ||
+    selectDeterministicImage(title, fallbackPool)
+  );
 }
 
 function optimizeOgSideImageUrl(sourceUrl: string) {

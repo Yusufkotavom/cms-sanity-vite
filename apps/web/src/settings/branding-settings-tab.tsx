@@ -3,6 +3,7 @@ import type { SettingsPageProps } from "./types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { TabsContent } from "@/components/ui/tabs";
 import { FieldInfo } from "./field-info";
 
@@ -80,25 +81,25 @@ export function BrandingSettingsTab({
                   />
                 </div>
                 <div className="grid gap-2 md:col-span-2">
-                  <FieldInfo label="Fallback image URL" description="Image kanan utama bila category tidak match. HTTPS image URL." />
-                  <Input
-                    value={ogBrandingSettings.fallbackImageUrl}
+                  <FieldInfo label="Fallback image URLs" description="Satu URL per baris. Dipakai bila category tidak match." />
+                  <Textarea
+                    value={ogBrandingSettings.fallbackImageUrls || ogBrandingSettings.fallbackImageUrl}
                     onChange={(event) =>
                       setOgBrandingSettings((current) =>
-                        current ? { ...current, fallbackImageUrl: event.target.value } : current
+                        current ? { ...current, fallbackImageUrls: event.target.value } : current
                       )
                     }
                   />
                 </div>
                 {([
-                  ["websiteImageUrl", "Website image URL"],
-                  ["softwareImageUrl", "Software image URL"],
-                  ["percetakanImageUrl", "Percetakan image URL"],
-                  ["blogImageUrl", "Blog image URL"],
+                  ["websiteImageUrls", "Website image URLs"],
+                  ["softwareImageUrls", "Software image URLs"],
+                  ["percetakanImageUrls", "Percetakan image URLs"],
+                  ["blogImageUrls", "Blog image URLs"],
                 ] as const).map(([key, label]) => (
-                  <div key={key} className="grid gap-2">
-                    <FieldInfo label={label} description="Image kanan untuk category ini. HTTPS image URL." />
-                    <Input
+                  <div key={key} className="grid gap-2 md:col-span-2">
+                    <FieldInfo label={label} description="Satu URL per baris. Generator memilih deterministic berdasarkan title." />
+                    <Textarea
                       value={ogBrandingSettings[key]}
                       onChange={(event) =>
                         setOgBrandingSettings((current) =>

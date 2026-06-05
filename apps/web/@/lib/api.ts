@@ -167,10 +167,15 @@ export type OgBrandingSettings = {
   generatorMode: "local" | "remote";
   brandName: string;
   fallbackImageUrl: string;
+  fallbackImageUrls: string;
   websiteImageUrl: string;
+  websiteImageUrls: string;
   softwareImageUrl: string;
+  softwareImageUrls: string;
   percetakanImageUrl: string;
+  percetakanImageUrls: string;
   blogImageUrl: string;
+  blogImageUrls: string;
   workflowLabel: string;
   footerText: string;
 };

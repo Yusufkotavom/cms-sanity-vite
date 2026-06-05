@@ -10,6 +10,7 @@ import {
   markAiAssistJobCompleted,
   markAiAssistJobFailed,
   markAiAssistJobProcessing,
+  markTimedOutAiAssistJobs,
   type AiAssistJobRecord,
 } from "./db/repositories/ai-assist-jobs";
 import {
@@ -156,10 +157,15 @@ const ogBrandingSettingsSchema = z.object({
   generatorMode: z.enum(["local", "remote"]).default("local"),
   brandName: z.string().default(""),
   fallbackImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  fallbackImageUrls: z.string().default(""),
   websiteImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  websiteImageUrls: z.string().default(""),
   softwareImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  softwareImageUrls: z.string().default(""),
   percetakanImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  percetakanImageUrls: z.string().default(""),
   blogImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  blogImageUrls: z.string().default(""),
   workflowLabel: z.string().default(""),
   footerText: z.string().default(""),
 });
@@ -323,10 +329,15 @@ const OG_BRANDING_SETTING_KEYS = [
   "og.generatorMode",
   "og.brandName",
   "og.fallbackImageUrl",
+  "og.fallbackImageUrls",
   "og.websiteImageUrl",
+  "og.websiteImageUrls",
   "og.softwareImageUrl",
+  "og.softwareImageUrls",
   "og.percetakanImageUrl",
+  "og.percetakanImageUrls",
   "og.blogImageUrl",
+  "og.blogImageUrls",
   "og.workflowLabel",
   "og.footerText",
 ] as const;
@@ -397,10 +408,15 @@ async function getOgBrandingSettings(db: D1Database, workspaceId: string) {
     generatorMode: settings.get("og.generatorMode") === "remote" ? "remote" : "local",
     brandName: settings.get("og.brandName") ?? "",
     fallbackImageUrl: settings.get("og.fallbackImageUrl") ?? "",
+    fallbackImageUrls: settings.get("og.fallbackImageUrls") ?? "",
     websiteImageUrl: settings.get("og.websiteImageUrl") ?? "",
+    websiteImageUrls: settings.get("og.websiteImageUrls") ?? "",
     softwareImageUrl: settings.get("og.softwareImageUrl") ?? "",
+    softwareImageUrls: settings.get("og.softwareImageUrls") ?? "",
     percetakanImageUrl: settings.get("og.percetakanImageUrl") ?? "",
+    percetakanImageUrls: settings.get("og.percetakanImageUrls") ?? "",
     blogImageUrl: settings.get("og.blogImageUrl") ?? "",
+    blogImageUrls: settings.get("og.blogImageUrls") ?? "",
     workflowLabel: settings.get("og.workflowLabel") ?? "",
     footerText: settings.get("og.footerText") ?? "",
   };
@@ -499,10 +515,15 @@ async function resolveOgBranding(db: D1Database, workspaceId: string, fetchImpl:
     ogBaseUrl: settings.ogBaseUrl,
     generatorMode: settings.generatorMode === "remote" ? "remote" : "local",
     fallbackImageUrl: settings.fallbackImageUrl,
+    fallbackImageUrls: settings.fallbackImageUrls,
     websiteImageUrl: settings.websiteImageUrl,
+    websiteImageUrls: settings.websiteImageUrls,
     softwareImageUrl: settings.softwareImageUrl,
+    softwareImageUrls: settings.softwareImageUrls,
     percetakanImageUrl: settings.percetakanImageUrl,
+    percetakanImageUrls: settings.percetakanImageUrls,
     blogImageUrl: settings.blogImageUrl,
+    blogImageUrls: settings.blogImageUrls,
     logoDataUri,
   };
 }
@@ -1141,10 +1162,15 @@ app.put("/api/settings/og-branding", async (c) => {
     "og.generatorMode": payload.generatorMode,
     "og.brandName": payload.brandName,
     "og.fallbackImageUrl": payload.fallbackImageUrl,
+    "og.fallbackImageUrls": payload.fallbackImageUrls,
     "og.websiteImageUrl": payload.websiteImageUrl,
+    "og.websiteImageUrls": payload.websiteImageUrls,
     "og.softwareImageUrl": payload.softwareImageUrl,
+    "og.softwareImageUrls": payload.softwareImageUrls,
     "og.percetakanImageUrl": payload.percetakanImageUrl,
+    "og.percetakanImageUrls": payload.percetakanImageUrls,
     "og.blogImageUrl": payload.blogImageUrl,
+    "og.blogImageUrls": payload.blogImageUrls,
     "og.workflowLabel": payload.workflowLabel,
     "og.footerText": payload.footerText,
   });
@@ -2022,7 +2048,20 @@ function truncateJobError(value: string, maxLength = 800) {
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
 }
 
+function aiAssistTimeoutCutoff(now = new Date()) {
+  return new Date(now.getTime() - 2 * 60 * 1000).toISOString();
+}
+
+async function failTimedOutAiAssistJobs(env: Env, workspaceId: string) {
+  await markTimedOutAiAssistJobs(env.DB, {
+    workspaceId,
+    olderThan: aiAssistTimeoutCutoff(),
+    now: new Date().toISOString(),
+  });
+}
+
 async function processAiAssistJobs(env: Env, workspaceId: string, limit = 2) {
+  await failTimedOutAiAssistJobs(env, workspaceId);
   let processed = 0;
   for (let index = 0; index < limit; index += 1) {
     const job = await findNextQueuedAiAssistJob(env.DB, workspaceId);
@@ -2141,7 +2180,9 @@ app.post("/api/ai/assist/jobs", async (c) => {
 });
 
 app.get("/api/ai/assist/jobs/:id", async (c) => {
-  const job = await findAiAssistJobById(c.env.DB, c.get("workspaceId"), c.req.param("id"));
+  const workspaceId = c.get("workspaceId");
+  await failTimedOutAiAssistJobs(c.env, workspaceId);
+  const job = await findAiAssistJobById(c.env.DB, workspaceId, c.req.param("id"));
   if (!job) {
     return c.json({ message: "Not found" }, 404);
   }
@@ -2151,6 +2192,7 @@ app.get("/api/ai/assist/jobs/:id", async (c) => {
 
 app.get("/api/notes/:id/ai-assist/latest", async (c) => {
   const workspaceId = c.get("workspaceId");
+  await failTimedOutAiAssistJobs(c.env, workspaceId);
   const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, c.req.param("id"));
   if (!note) {
     return c.json({ message: "Not found" }, 404);
