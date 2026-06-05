@@ -146,11 +146,11 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
 
   const titleFontSize = titleLines.length >= 4 ? 44 : titleLines.length === 3 ? 50 : titleLines.length === 2 ? 58 : 64;
   const titleLineHeight = Math.round(titleFontSize * 1.08);
-  const titleStartY = 232;
+  const titleStartY = 214;
 
   const excerptFontSize = 24;
   const excerptLineHeight = Math.round(excerptFontSize * 1.42);
-  const excerptStartY = titleStartY + titleLines.length * titleLineHeight + 30;
+  const excerptStartY = titleStartY + titleLines.length * titleLineHeight + 24;
   const leftPanelX = 34;
   const leftPanelY = 42;
   const leftPanelWidth = 630;
@@ -232,8 +232,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#020617" fill-opacity="${sideImageUrl ? "0.06" : "0.08"}"/>
 
  
-   <image x="${leftPanelX + 24}" y="${leftPanelY + 18}" width="172" height="38" href="${logoDataUri}" xlink:href="${logoDataUri}" preserveAspectRatio="xMinYMid meet"/>
-  <text x="${leftPanelX + 44}" y="${leftPanelY + 74}" font-family="${OG_FONT_FAMILY}" font-size="34" font-weight="900" letter-spacing="-0.8" fill="#0f172a">KOTACOM</text>
+   <image x="${leftPanelX + 24}" y="${leftPanelY + 18}" width="234" height="54" href="${logoDataUri}" xlink:href="${logoDataUri}" preserveAspectRatio="xMinYMid meet"/>
   <rect x="${leftPanelX + 44}" y="${leftPanelY + 96}" width="64" height="4" rx="2" fill="#0070f3"/>
   ${titleLines
     .map(
