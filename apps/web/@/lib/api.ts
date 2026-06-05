@@ -29,6 +29,7 @@ export type ApiNote = {
   ogTitle: string;
   ogDescription: string;
   ogImageAssetId: string | null;
+  ogImageUrl: string | null;
   categoryIds: string[];
   status: "draft" | "scheduled" | "published" | "failed";
   publishAt: string | null;
@@ -162,6 +163,12 @@ export type AiConnectionTestResult = {
 export type OgBrandingSettings = {
   logoUrl: string;
   ogBaseUrl: string;
+  generatorMode: "local" | "remote";
+  fallbackImageUrl: string;
+  websiteImageUrl: string;
+  softwareImageUrl: string;
+  percetakanImageUrl: string;
+  blogImageUrl: string;
   workflowLabel: string;
   footerText: string;
 };

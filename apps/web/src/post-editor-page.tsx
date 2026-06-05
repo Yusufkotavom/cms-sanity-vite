@@ -475,7 +475,7 @@ export function PostEditorPage({
                   </Button>
                 </div>
                 {(() => {
-                  const ogUrl = sanityAssetToUrl(
+                  const ogUrl = draft.ogImageUrl || sanityAssetToUrl(
                     draft.ogImageAssetId,
                     config?.sanityProjectId ?? null,
                     config?.sanityDataset ?? null

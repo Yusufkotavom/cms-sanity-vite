@@ -12,11 +12,19 @@ const DEFAULT_FOOTER_TEXT = "WA 085799520350 · kotacom.id";
 
 let wasmInitialized = false;
 
+export type OgGeneratorMode = "local" | "remote";
+
 export type OgBranding = {
   workflowLabel?: string | null;
   footerText?: string | null;
   logoDataUri?: string | null;
   ogBaseUrl?: string | null;
+  generatorMode?: OgGeneratorMode | null;
+  fallbackImageUrl?: string | null;
+  websiteImageUrl?: string | null;
+  softwareImageUrl?: string | null;
+  percetakanImageUrl?: string | null;
+  blogImageUrl?: string | null;
 };
 
 async function ensureWasm() {
@@ -63,12 +71,45 @@ function truncateLines(lines: string[], maxLines: number): string[] {
   return truncated;
 }
 
+function isSafeImageUrl(value: string | null | undefined) {
+  return Boolean(value && /^https:\/\//i.test(value.trim()));
+}
+
+function detectOgCategory(title: string, workflowLabel?: string | null) {
+  const source = `${workflowLabel ?? ""} ${title}`.toLowerCase();
+  if (/(website|web dev|landing page)/i.test(source)) return "website";
+  if (/(software|aplikasi|pos|crm)/i.test(source)) return "software";
+  if (/(percetakan|printing|cetak|brosur|buku)/i.test(source)) return "percetakan";
+  if (/(blog|artikel|tips|insight)/i.test(source)) return "blog";
+  return null;
+}
+
+function resolveOgSideImage(title: string, branding: OgBranding = {}) {
+  const category = detectOgCategory(title, branding.workflowLabel);
+  const imageMap = {
+    website: branding.websiteImageUrl?.trim() || "",
+    software: branding.softwareImageUrl?.trim() || "",
+    percetakan: branding.percetakanImageUrl?.trim() || "",
+    blog: branding.blogImageUrl?.trim() || "",
+  } as const;
+  const candidates = [
+    category ? imageMap[category as keyof typeof imageMap] : "",
+    branding.websiteImageUrl?.trim() || "",
+    branding.softwareImageUrl?.trim() || "",
+    branding.percetakanImageUrl?.trim() || "",
+    branding.blogImageUrl?.trim() || "",
+    branding.fallbackImageUrl?.trim() || "",
+  ];
+  return candidates.find((value) => isSafeImageUrl(value)) || null;
+}
+
 export function buildOgSvg(title: string, excerpt?: string | null, branding: OgBranding = {}): string {
   const safeTitle = title.trim().slice(0, 72);
   const safeExcerpt = (excerpt ?? "").trim().slice(0, 96);
   const safeWorkflowLabel = (branding.workflowLabel ?? DEFAULT_WORKFLOW_LABEL).trim().slice(0, 28) || DEFAULT_WORKFLOW_LABEL;
   const safeFooterText = (branding.footerText ?? DEFAULT_FOOTER_TEXT).trim().slice(0, 72) || DEFAULT_FOOTER_TEXT;
   const logoDataUri = branding.logoDataUri?.trim() || kotacomLogoDataUri;
+  const sideImageUrl = resolveOgSideImage(safeTitle, branding);
   const titleLines = truncateLines(wrapText(safeTitle, 22), 4).map(escapeXml);
   const excerptLines = excerpt
     ? truncateLines(wrapText(safeExcerpt, 36), 3).map(escapeXml)
@@ -142,6 +183,9 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
     <mask id="gridMask">
       <rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#gridMaskGradient)"/>
     </mask>
+    <clipPath id="rightImageClip">
+      <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26"/>
+    </clipPath>
   </defs>
 
   <rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="url(#canvasBackground)"/>
@@ -159,6 +203,8 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX}" y="${rightPanelY}" width="${rightPanelWidth}" height="${rightPanelHeight}" rx="30" fill="#0b1220"/>
   <rect x="${rightPanelX}" y="${rightPanelY}" width="${rightPanelWidth}" height="${rightPanelHeight}" rx="30" fill="#0f172a" fill-opacity="0.96" stroke="#1e293b" stroke-opacity="0.9"/>
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#111827" stroke="#334155" stroke-opacity="0.7"/>
+  ${sideImageUrl ? `<image x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" href="${escapeXml(sideImageUrl)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#rightImageClip)"/>` : ""}
+  <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#020617" fill-opacity="${sideImageUrl ? "0.28" : "0.08"}"/>
   <rect x="${rightPanelX + 56}" y="${rightPanelY + 62}" width="${rightPanelWidth - 112}" height="166" rx="22" fill="#0f172a" stroke="#334155"/>
   <rect x="${rightPanelX + 56}" y="${rightPanelY + 62}" width="${rightPanelWidth - 112}" height="32" rx="22" fill="#111827"/>
   <circle cx="${rightPanelX + 82}" cy="${rightPanelY + 78}" r="4.5" fill="#22c55e"/>
@@ -276,6 +322,26 @@ async function uploadOgAsset(params: {
   return { assetId: uploadJson.document._id };
 }
 
+async function tryGenerateRemoteOgImage(title: string, excerpt: string | null | undefined, branding: OgBranding | undefined, fetchImpl: typeof fetch) {
+  const ogBaseUrl = branding?.ogBaseUrl?.trim()?.replace(/\/+$/, "");
+  if (!ogBaseUrl) {
+    return null;
+  }
+
+  const badge = (branding?.workflowLabel?.trim() || "Blog").slice(0, 32);
+  const remoteUrl = `${ogBaseUrl}/api/og?${new URLSearchParams({ title, description: excerpt ?? "", badge }).toString()}`;
+  const remoteResponse = await fetchImpl(remoteUrl);
+  const remoteContentType = remoteResponse.headers.get("content-type") || "";
+  if (!remoteResponse.ok || !remoteContentType.toLowerCase().startsWith("image/")) {
+    return null;
+  }
+
+  return {
+    bytes: await remoteResponse.arrayBuffer(),
+    contentType: remoteContentType,
+  };
+}
+
 export async function generateAndUploadOgImage(params: {
   title: string;
   excerpt?: string | null;
@@ -288,17 +354,37 @@ export async function generateAndUploadOgImage(params: {
 }): Promise<{ assetId: string }> {
   const { title, excerpt, branding, projectId, dataset, apiVersion, token, fetchImpl = fetch } = params;
 
-  const ogBaseUrl = branding?.ogBaseUrl?.trim()?.replace(/\/+$/, "");
-  if (ogBaseUrl) {
-    const badge = (branding?.workflowLabel?.trim() || "Blog").slice(0, 32);
-    const remoteUrl = `${ogBaseUrl}/api/og?${new URLSearchParams({ title, description: excerpt ?? "", badge }).toString()}`;
-    const remoteResponse = await fetchImpl(remoteUrl);
-    const remoteContentType = remoteResponse.headers.get("content-type") || "";
-    if (remoteResponse.ok && remoteContentType.toLowerCase().startsWith("image/")) {
-      const bytes = await remoteResponse.arrayBuffer();
+  const preferRemote = branding?.generatorMode === "remote";
+  const remoteFirst = preferRemote ? await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl) : null;
+  if (remoteFirst) {
+    return uploadOgAsset({
+      bytes: remoteFirst.bytes,
+      contentType: remoteFirst.contentType,
+      projectId,
+      dataset,
+      apiVersion,
+      token,
+      fetchImpl,
+    });
+  }
+
+  try {
+    const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, branding);
+    return await uploadOgAsset({
+      bytes: pngBuffer,
+      contentType,
+      projectId,
+      dataset,
+      apiVersion,
+      token,
+      fetchImpl,
+    });
+  } catch (error) {
+    const remoteFallback = await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl);
+    if (remoteFallback) {
       return uploadOgAsset({
-        bytes,
-        contentType: remoteContentType,
+        bytes: remoteFallback.bytes,
+        contentType: remoteFallback.contentType,
         projectId,
         dataset,
         apiVersion,
@@ -306,16 +392,6 @@ export async function generateAndUploadOgImage(params: {
         fetchImpl,
       });
     }
+    throw error;
   }
-
-  const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, branding);
-  return uploadOgAsset({
-    bytes: pngBuffer,
-    contentType,
-    projectId,
-    dataset,
-    apiVersion,
-    token,
-    fetchImpl,
-  });
 }

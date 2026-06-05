@@ -39,7 +39,26 @@ export function BrandingSettingsTab({
                   />
                 </div>
                 <div className="grid gap-2 md:col-span-2">
-                  <FieldInfo label="OG Base URL" description="URL frontend Sanity-clean yang punya /api/og agar hasil CMS sama dengan Studio." />
+                  <FieldInfo label="Generator mode" description="Local memakai generator CMS sebagai utama. Remote memakai OG Base URL sebagai engine lama/Sanity-clean." />
+                  <div className="flex gap-2">
+                    {(["local", "remote"] as const).map((mode) => (
+                      <Button
+                        key={mode}
+                        type="button"
+                        variant={ogBrandingSettings.generatorMode === mode ? "default" : "outline"}
+                        onClick={() =>
+                          setOgBrandingSettings((current) =>
+                            current ? { ...current, generatorMode: mode } : current
+                          )
+                        }
+                      >
+                        {mode}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <FieldInfo label="OG Base URL" description="Fallback remote /api/og. Dipakai hanya saat mode remote atau local generator gagal." />
                   <Input
                     value={ogBrandingSettings.ogBaseUrl}
                     onChange={(event) =>
@@ -49,6 +68,35 @@ export function BrandingSettingsTab({
                     }
                   />
                 </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <FieldInfo label="Fallback image URL" description="Image kanan utama bila category tidak match. HTTPS image URL." />
+                  <Input
+                    value={ogBrandingSettings.fallbackImageUrl}
+                    onChange={(event) =>
+                      setOgBrandingSettings((current) =>
+                        current ? { ...current, fallbackImageUrl: event.target.value } : current
+                      )
+                    }
+                  />
+                </div>
+                {([
+                  ["websiteImageUrl", "Website image URL"],
+                  ["softwareImageUrl", "Software image URL"],
+                  ["percetakanImageUrl", "Percetakan image URL"],
+                  ["blogImageUrl", "Blog image URL"],
+                ] as const).map(([key, label]) => (
+                  <div key={key} className="grid gap-2">
+                    <FieldInfo label={label} description="Image kanan untuk category ini. HTTPS image URL." />
+                    <Input
+                      value={ogBrandingSettings[key]}
+                      onChange={(event) =>
+                        setOgBrandingSettings((current) =>
+                          current ? { ...current, [key]: event.target.value } : current
+                        )
+                      }
+                    />
+                  </div>
+                ))}
                 <div className="grid gap-2">
                   <FieldInfo label="Workflow label" description="Label besar yang muncul di OG image." />
                   <Input

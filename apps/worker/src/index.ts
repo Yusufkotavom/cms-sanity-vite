@@ -151,6 +151,12 @@ const aiSettingsSchema = z.object({
 const ogBrandingSettingsSchema = z.object({
   logoUrl: z.string().trim().url().or(z.literal("")).default(""),
   ogBaseUrl: z.string().trim().url().or(z.literal("")).default(""),
+  generatorMode: z.enum(["local", "remote"]).default("local"),
+  fallbackImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  websiteImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  softwareImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  percetakanImageUrl: z.string().trim().url().or(z.literal("")).default(""),
+  blogImageUrl: z.string().trim().url().or(z.literal("")).default(""),
   workflowLabel: z.string().default(""),
   footerText: z.string().default(""),
 });
@@ -310,6 +316,12 @@ type EffectiveAiSettings = {
 const OG_BRANDING_SETTING_KEYS = [
   "og.logoUrl",
   "og.ogBaseUrl",
+  "og.generatorMode",
+  "og.fallbackImageUrl",
+  "og.websiteImageUrl",
+  "og.softwareImageUrl",
+  "og.percetakanImageUrl",
+  "og.blogImageUrl",
   "og.workflowLabel",
   "og.footerText",
 ] as const;
@@ -377,6 +389,12 @@ async function getOgBrandingSettings(db: D1Database, workspaceId: string) {
   return {
     logoUrl: settings.get("og.logoUrl") ?? "",
     ogBaseUrl: settings.get("og.ogBaseUrl") ?? "",
+    generatorMode: settings.get("og.generatorMode") === "remote" ? "remote" : "local",
+    fallbackImageUrl: settings.get("og.fallbackImageUrl") ?? "",
+    websiteImageUrl: settings.get("og.websiteImageUrl") ?? "",
+    softwareImageUrl: settings.get("og.softwareImageUrl") ?? "",
+    percetakanImageUrl: settings.get("og.percetakanImageUrl") ?? "",
+    blogImageUrl: settings.get("og.blogImageUrl") ?? "",
     workflowLabel: settings.get("og.workflowLabel") ?? "",
     footerText: settings.get("og.footerText") ?? "",
   };
@@ -472,6 +490,12 @@ async function resolveOgBranding(db: D1Database, workspaceId: string, fetchImpl:
     workflowLabel: settings.workflowLabel,
     footerText: settings.footerText,
     ogBaseUrl: settings.ogBaseUrl,
+    generatorMode: settings.generatorMode === "remote" ? "remote" : "local",
+    fallbackImageUrl: settings.fallbackImageUrl,
+    websiteImageUrl: settings.websiteImageUrl,
+    softwareImageUrl: settings.softwareImageUrl,
+    percetakanImageUrl: settings.percetakanImageUrl,
+    blogImageUrl: settings.blogImageUrl,
     logoDataUri,
   };
 }
@@ -1059,6 +1083,12 @@ app.put("/api/settings/og-branding", async (c) => {
   await setSettings(c.env.DB, workspaceId, {
     "og.logoUrl": payload.logoUrl,
     "og.ogBaseUrl": payload.ogBaseUrl,
+    "og.generatorMode": payload.generatorMode,
+    "og.fallbackImageUrl": payload.fallbackImageUrl,
+    "og.websiteImageUrl": payload.websiteImageUrl,
+    "og.softwareImageUrl": payload.softwareImageUrl,
+    "og.percetakanImageUrl": payload.percetakanImageUrl,
+    "og.blogImageUrl": payload.blogImageUrl,
     "og.workflowLabel": payload.workflowLabel,
     "og.footerText": payload.footerText,
   });
@@ -1370,9 +1400,16 @@ app.get("/api/notes", async (c) => {
     workspaceId,
     records.map((note) => note.id)
   );
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
 
   return c.json({
-    items: records.map((note) => mapNoteSummary(note, categoryIdsByNoteId.get(note.id) ?? [])),
+    items: records.map((note) =>
+      attachOgImageUrl(
+        mapNoteSummary(note, categoryIdsByNoteId.get(note.id) ?? []),
+        sanitySettings.projectId,
+        sanitySettings.dataset
+      )
+    ),
   });
 });
 
@@ -1540,7 +1577,8 @@ app.get("/api/notes/:id", async (c) => {
     return c.json({ message: "Not found" }, 404);
   }
 
-  return c.json(await mapNote(c.env.DB, note));
+  const sanitySettings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
+  return c.json(await mapNote(c.env.DB, note, sanitySettings));
 });
 
 app.post("/api/notes/:id/refresh-from-sanity", async (c) => {
@@ -1855,7 +1893,14 @@ app.post("/api/notes/:id/generate-og", async (c) => {
     });
 
     const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
-    return c.json(updated ? await mapNote(c.env.DB, updated) : { ogImageAssetId: assetId });
+    return c.json(
+      updated
+        ? await mapNote(c.env.DB, updated, sanitySettings)
+        : {
+            ogImageAssetId: assetId,
+            ogImageUrl: sanityAssetIdToUrl(assetId, sanitySettings.projectId, sanitySettings.dataset),
+          }
+    );
   } catch (error) {
     return c.json(
       { message: error instanceof Error ? error.message : "OG image generation failed" },
@@ -2033,6 +2078,21 @@ app.get("/api/notes/:id/ai-assist/latest", async (c) => {
   return c.json({ job: job ? toAiAssistJobResponse(job) : null });
 });
 
+function sanityAssetIdToUrl(assetId: string | null | undefined, projectId: string | null | undefined, dataset: string | null | undefined) {
+  if (!assetId || !projectId || !dataset) return null;
+  const hash = assetId.replace(/^image-/, "");
+  const lastDash = hash.lastIndexOf("-");
+  if (lastDash === -1) return null;
+  return `https://cdn.sanity.io/images/${projectId}/${dataset}/${hash.slice(0, lastDash)}.${hash.slice(lastDash + 1)}`;
+}
+
+function attachOgImageUrl<T extends { ogImageAssetId?: string | null }>(note: T, projectId: string | null | undefined, dataset: string | null | undefined) {
+  return {
+    ...note,
+    ogImageUrl: sanityAssetIdToUrl(note.ogImageAssetId, projectId, dataset),
+  };
+}
+
 function mapNoteSummary(note: Partial<NoteRecord>, categoryIds: string[]) {
   return mapNoteSummaryService(note, categoryIds);
 }
@@ -2141,8 +2201,16 @@ function mapAiBatchSummary(
   };
 }
 
-async function mapNote(db: D1Database, note: NoteRecord) {
-  return mapNoteDetail(note, await getNoteCategoryIds(db, note.workspace_id, note.id));
+async function mapNote(
+  db: D1Database,
+  note: NoteRecord,
+  sanity?: { projectId: string | null | undefined; dataset: string | null | undefined }
+) {
+  return attachOgImageUrl(
+    mapNoteDetail(note, await getNoteCategoryIds(db, note.workspace_id, note.id)),
+    sanity?.projectId,
+    sanity?.dataset
+  );
 }
 
 async function publishNoteById(env: Env, noteId: string) {
