@@ -25,6 +25,7 @@ export type OgBranding = {
   softwareImageUrl?: string | null;
   percetakanImageUrl?: string | null;
   blogImageUrl?: string | null;
+  sideImageDataUri?: string | null;
 };
 
 async function ensureWasm() {
@@ -103,13 +104,40 @@ function resolveOgSideImage(title: string, branding: OgBranding = {}) {
   return candidates.find((value) => isSafeImageUrl(value)) || null;
 }
 
+async function fetchOgSideImageDataUri(title: string, branding: OgBranding | undefined, fetchImpl: typeof fetch) {
+  const sourceUrl = resolveOgSideImage(title, branding);
+  if (!sourceUrl) {
+    return null;
+  }
+
+  const response = await fetchImpl(sourceUrl);
+  const contentType = response.headers.get("content-type") || "";
+  if (!response.ok || !contentType.toLowerCase().startsWith("image/")) {
+    return null;
+  }
+
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength > 1_500_000) {
+    return null;
+  }
+
+  let binary = "";
+  const chunkSize = 0x8000;
+  const view = new Uint8Array(bytes);
+  for (let index = 0; index < view.length; index += chunkSize) {
+    binary += String.fromCharCode(...view.subarray(index, index + chunkSize));
+  }
+
+  return `data:${contentType};base64,${btoa(binary)}`;
+}
+
 export function buildOgSvg(title: string, excerpt?: string | null, branding: OgBranding = {}): string {
   const safeTitle = title.trim().slice(0, 72);
   const safeExcerpt = (excerpt ?? "").trim().slice(0, 96);
   const safeWorkflowLabel = (branding.workflowLabel ?? DEFAULT_WORKFLOW_LABEL).trim().slice(0, 28) || DEFAULT_WORKFLOW_LABEL;
   const safeFooterText = (branding.footerText ?? DEFAULT_FOOTER_TEXT).trim().slice(0, 72) || DEFAULT_FOOTER_TEXT;
   const logoDataUri = branding.logoDataUri?.trim() || kotacomLogoDataUri;
-  const sideImageUrl = branding.generatorMode === "remote" ? resolveOgSideImage(safeTitle, branding) : null;
+  const sideImageUrl = branding.sideImageDataUri?.trim() || null;
   const rightArtOpacity = sideImageUrl ? 0.16 : 1;
   const titleLines = truncateLines(wrapText(safeTitle, 23), 4).map(escapeXml);
   const excerptLines = excerpt
@@ -359,7 +387,11 @@ export async function generateOgImageBytes(params: {
   }
 
   try {
-    const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, branding);
+    const sideImageDataUri = await fetchOgSideImageDataUri(title, branding, fetchImpl).catch(() => null);
+    const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, {
+      ...branding,
+      sideImageDataUri,
+    });
     return { bytes: pngBuffer, contentType };
   } catch (error) {
     const remoteFallback = await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl);
