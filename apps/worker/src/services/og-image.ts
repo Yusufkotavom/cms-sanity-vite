@@ -183,7 +183,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
     );
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}">
   <defs>
     <linearGradient id="canvasBackground" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f8fafc"/>
@@ -227,7 +227,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX}" y="${rightPanelY}" width="${rightPanelWidth}" height="${rightPanelHeight}" rx="30" fill="#0b1220"/>
   <rect x="${rightPanelX}" y="${rightPanelY}" width="${rightPanelWidth}" height="${rightPanelHeight}" rx="30" fill="#0f172a" fill-opacity="0.96" stroke="#1e293b" stroke-opacity="0.9"/>
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#111827" stroke="#334155" stroke-opacity="0.7"/>
-  ${sideImageUrl ? `<image x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" href="${escapeXml(sideImageUrl)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#rightImageClip)"/>` : ""}
+  ${sideImageUrl ? `<image x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" href="${escapeXml(sideImageUrl)}" xlink:href="${escapeXml(sideImageUrl)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#rightImageClip)"/>` : ""}
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#020617" fill-opacity="${sideImageUrl ? "0.06" : "0.08"}"/>
 
  
