@@ -38,6 +38,7 @@ export const notes = sqliteTable("notes", {
   ogTitle: text("og_title"),
   ogDescription: text("og_description"),
   ogImageAssetId: text("og_image_asset_id"),
+  ogImageGeneratedAt: text("og_image_generated_at"),
   status: text("status").notNull(),
   publishAt: text("publish_at"),
   sanityDocumentId: text("sanity_document_id"),

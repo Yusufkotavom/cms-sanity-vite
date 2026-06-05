@@ -292,7 +292,7 @@ export async function generateOgImagePng(
   };
 }
 
-async function uploadOgAsset(params: {
+export async function uploadOgImageBytesToSanity(params: {
   bytes: ArrayBuffer;
   contentType: string;
   projectId: string;
@@ -345,6 +345,31 @@ async function tryGenerateRemoteOgImage(title: string, excerpt: string | null | 
   };
 }
 
+export async function generateOgImageBytes(params: {
+  title: string;
+  excerpt?: string | null;
+  branding?: OgBranding;
+  fetchImpl?: typeof fetch;
+}): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+  const { title, excerpt, branding, fetchImpl = fetch } = params;
+  const preferRemote = branding?.generatorMode === "remote";
+  const remoteFirst = preferRemote ? await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl) : null;
+  if (remoteFirst) {
+    return remoteFirst;
+  }
+
+  try {
+    const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, branding);
+    return { bytes: pngBuffer, contentType };
+  } catch (error) {
+    const remoteFallback = await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl);
+    if (remoteFallback) {
+      return remoteFallback;
+    }
+    throw error;
+  }
+}
+
 export async function generateAndUploadOgImage(params: {
   title: string;
   excerpt?: string | null;
@@ -356,48 +381,15 @@ export async function generateAndUploadOgImage(params: {
   fetchImpl?: typeof fetch;
 }): Promise<{ assetId: string; bytes: ArrayBuffer; contentType: string }> {
   const { title, excerpt, branding, projectId, dataset, apiVersion, token, fetchImpl = fetch } = params;
-
-  const preferRemote = branding?.generatorMode === "remote";
-  const remoteFirst = preferRemote ? await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl) : null;
-  if (remoteFirst) {
-    const uploaded = await uploadOgAsset({
-      bytes: remoteFirst.bytes,
-      contentType: remoteFirst.contentType,
-      projectId,
-      dataset,
-      apiVersion,
-      token,
-      fetchImpl,
-    });
-    return { ...uploaded, bytes: remoteFirst.bytes, contentType: remoteFirst.contentType };
-  }
-
-  try {
-    const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, branding);
-    const uploaded = await uploadOgAsset({
-      bytes: pngBuffer,
-      contentType,
-      projectId,
-      dataset,
-      apiVersion,
-      token,
-      fetchImpl,
-    });
-    return { ...uploaded, bytes: pngBuffer, contentType };
-  } catch (error) {
-    const remoteFallback = await tryGenerateRemoteOgImage(title, excerpt, branding, fetchImpl);
-    if (remoteFallback) {
-      const uploaded = await uploadOgAsset({
-        bytes: remoteFallback.bytes,
-        contentType: remoteFallback.contentType,
-        projectId,
-        dataset,
-        apiVersion,
-        token,
-        fetchImpl,
-      });
-      return { ...uploaded, bytes: remoteFallback.bytes, contentType: remoteFallback.contentType };
-    }
-    throw error;
-  }
+  const generated = await generateOgImageBytes({ title, excerpt, branding, fetchImpl });
+  const uploaded = await uploadOgImageBytesToSanity({
+    bytes: generated.bytes,
+    contentType: generated.contentType,
+    projectId,
+    dataset,
+    apiVersion,
+    token,
+    fetchImpl,
+  });
+  return { ...uploaded, ...generated };
 }

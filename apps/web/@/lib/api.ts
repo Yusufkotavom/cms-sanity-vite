@@ -29,6 +29,7 @@ export type ApiNote = {
   ogTitle: string;
   ogDescription: string;
   ogImageAssetId: string | null;
+  ogImageGeneratedAt: string | null;
   ogImageUrl: string | null;
   categoryIds: string[];
   status: "draft" | "scheduled" | "published" | "failed";

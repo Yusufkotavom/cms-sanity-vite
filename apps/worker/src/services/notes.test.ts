@@ -17,6 +17,7 @@ const note: NoteRecord = {
   og_title: null,
   og_description: null,
   og_image_asset_id: null,
+  og_image_generated_at: null,
   status: "draft",
   publish_at: null,
   sanity_document_id: null,

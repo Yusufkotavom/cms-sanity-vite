@@ -13,6 +13,7 @@ export function mapNoteSummary(note: Partial<NoteRecord>, categoryIds: string[])
     ogTitle: note.og_title ?? "",
     ogDescription: note.og_description ?? "",
     ogImageAssetId: note.og_image_asset_id ?? null,
+    ogImageGeneratedAt: note.og_image_generated_at ?? null,
     categoryIds,
     status: note.status ?? "draft",
     publishAt: note.publish_at ?? null,

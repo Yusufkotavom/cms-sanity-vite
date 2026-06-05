@@ -56,6 +56,7 @@ import {
   replaceNoteCategories,
   saveNoteAiRewriteCandidate,
   setNoteOgImageAssetId,
+  setNoteOgImageGeneratedAt,
   type NoteRecord,
   updateNoteSanityMirror,
   updateNoteDraft,
@@ -92,7 +93,7 @@ import {
   publishNoteToSanity,
   type SanityCategory,
 } from "./services/publish";
-import { generateAndUploadOgImage, type OgBranding } from "./services/og-image";
+import { generateAndUploadOgImage, generateOgImageBytes, uploadOgImageBytesToSanity, type OgBranding } from "./services/og-image";
 import { processAiBatchWork } from "./services/ai-batch";
 import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, testAiConnection, type AiAssistRequest } from "./services/ai";
 import {
@@ -529,7 +530,7 @@ app.get("/og-assets/:workspace/:id", async (c) => {
 
   const workspaceId = workspace.id;
   const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
-  if (!note?.og_image_asset_id) {
+  if (!note?.og_image_asset_id && !note?.og_image_generated_at) {
     return c.json({ message: "Not found" }, 404);
   }
 
@@ -1617,7 +1618,7 @@ app.get("/api/notes/:id/og-image", async (c) => {
   const id = c.req.param("id");
   const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
 
-  if (!note?.og_image_asset_id) {
+  if (!note?.og_image_asset_id && !note?.og_image_generated_at) {
     return c.json({ message: "Not found" }, 404);
   }
 
@@ -1931,51 +1932,40 @@ app.post("/api/notes/:id/generate-og", async (c) => {
     return c.json({ message: "Note not found" }, 404);
   }
 
-  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
-
-  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
-    return c.json({ message: "Sanity env is not configured" }, 400);
-  }
-
   const ogTitle = note.og_title || note.seo_title || note.title;
   const ogExcerpt = note.og_description || note.seo_description || note.excerpt;
-  const apiVersion = sanitySettings.apiVersion || "2026-03-29";
 
   try {
     const branding = await resolveOgBranding(c.env.DB, workspaceId);
-    const { assetId, bytes, contentType } = await generateAndUploadOgImage({
+    const { bytes, contentType } = await generateOgImageBytes({
       title: ogTitle,
       excerpt: ogExcerpt,
       branding,
-      projectId: sanitySettings.projectId,
-      dataset: sanitySettings.dataset,
-      apiVersion,
-      token: sanitySettings.writeToken,
     });
 
     await putOgImageToR2(c.env, { workspaceId, noteId: id, bytes, contentType });
 
     const now = new Date().toISOString();
-    await setNoteOgImageAssetId(c.env.DB, {
+    await setNoteOgImageGeneratedAt(c.env.DB, {
       workspaceId,
       noteId: id,
-      ogImageAssetId: assetId,
+      generatedAt: now,
       updatedAt: now,
     });
 
     const updated = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
     return c.json(
       updated
-        ? await mapNote(c.env.DB, updated, sanitySettings, requestOrigin(c.req.url))
+        ? await mapNote(c.env.DB, updated, undefined, requestOrigin(c.req.url))
         : {
-            ogImageAssetId: assetId,
-            ogImageUrl:
-              ogImagePreviewUrl(requestOrigin(c.req.url), {
-                id,
-                workspace_id: workspaceId,
-                og_image_asset_id: assetId,
-                updated_at: now,
-              }) || sanityAssetIdToUrl(assetId, sanitySettings.projectId, sanitySettings.dataset),
+            ogImageAssetId: null,
+            ogImageGeneratedAt: now,
+            ogImageUrl: ogImagePreviewUrl(requestOrigin(c.req.url), {
+              id,
+              workspace_id: workspaceId,
+              og_image_generated_at: now,
+              updated_at: now,
+            }),
           }
     );
   } catch (error) {
@@ -2163,8 +2153,8 @@ function requestOrigin(url: string) {
   return new URL(url).origin;
 }
 
-function ogImagePreviewUrl(origin: string | null | undefined, note: { id?: string | null; workspace_id?: string | null; workspace_slug?: string | null; og_image_asset_id?: string | null; updated_at?: string | null }) {
-  if (!origin || !note.id || !note.og_image_asset_id) return null;
+function ogImagePreviewUrl(origin: string | null | undefined, note: { id?: string | null; workspace_id?: string | null; workspace_slug?: string | null; og_image_asset_id?: string | null; og_image_generated_at?: string | null; updated_at?: string | null }) {
+  if (!origin || !note.id || !note.og_image_asset_id && !note.og_image_generated_at) return null;
   const workspaceRef = note.workspace_slug || note.workspace_id;
   if (!workspaceRef) return null;
   const version = note.updated_at ? `?v=${encodeURIComponent(note.updated_at)}` : "";
@@ -2189,7 +2179,7 @@ function sanityAssetIdToUrl(assetId: string | null | undefined, projectId: strin
   return `https://cdn.sanity.io/images/${projectId}/${dataset}/${hash.slice(0, lastDash)}.${hash.slice(lastDash + 1)}`;
 }
 
-function attachOgImageUrl<T extends { id?: string | null; ogImageAssetId?: string | null; updatedAt?: string | null }>(
+function attachOgImageUrl<T extends { id?: string | null; ogImageAssetId?: string | null; ogImageGeneratedAt?: string | null; updatedAt?: string | null }>(
   note: T,
   projectId: string | null | undefined,
   dataset: string | null | undefined,
@@ -2203,6 +2193,7 @@ function attachOgImageUrl<T extends { id?: string | null; ogImageAssetId?: strin
         id: note.id,
         workspace_id: workspaceId,
         og_image_asset_id: note.ogImageAssetId,
+        og_image_generated_at: note.ogImageGeneratedAt,
         updated_at: note.updatedAt,
       }) || sanityAssetIdToUrl(note.ogImageAssetId, projectId, dataset),
   };
@@ -2375,21 +2366,36 @@ async function publishNoteById(env: Env, noteId: string, origin?: string | null)
       note = (await findNoteById(env.DB, note.id)) ?? { ...note, sanity_revision: snapshot.revision, updated_at: now };
     }
 
-    if (!note.og_image_asset_id) {
-      const ogTitle = note.og_title || note.seo_title || note.title;
-      const ogExcerpt = note.og_description || note.seo_description || note.excerpt;
-      const branding = await resolveOgBranding(env.DB, workspaceId);
-      const { assetId, bytes, contentType } = await generateAndUploadOgImage({
-        title: ogTitle,
-        excerpt: ogExcerpt,
-        branding,
+    if (note.og_image_generated_at || !note.og_image_asset_id) {
+      let generated = null as { bytes: ArrayBuffer; contentType: string } | null;
+      const object = await env.OG_ASSETS?.get(ogAssetKey(workspaceId, note.id));
+      if (object) {
+        generated = {
+          bytes: await object.arrayBuffer(),
+          contentType: object.httpMetadata?.contentType || "image/png",
+        };
+      }
+
+      if (!generated) {
+        const ogTitle = note.og_title || note.seo_title || note.title;
+        const ogExcerpt = note.og_description || note.seo_description || note.excerpt;
+        const branding = await resolveOgBranding(env.DB, workspaceId);
+        generated = await generateOgImageBytes({
+          title: ogTitle,
+          excerpt: ogExcerpt,
+          branding,
+        });
+        await putOgImageToR2(env, { workspaceId, noteId: note.id, ...generated });
+      }
+
+      const { assetId } = await uploadOgImageBytesToSanity({
+        bytes: generated.bytes,
+        contentType: generated.contentType,
         projectId: sanitySettings.projectId,
         dataset: sanitySettings.dataset,
         apiVersion,
         token: sanitySettings.writeToken,
       });
-
-      await putOgImageToR2(env, { workspaceId, noteId: note.id, bytes, contentType });
 
       const now = new Date().toISOString();
       await setNoteOgImageAssetId(env.DB, {

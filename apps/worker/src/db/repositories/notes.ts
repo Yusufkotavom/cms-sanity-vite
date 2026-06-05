@@ -17,6 +17,7 @@ export type NoteRecord = {
   og_title: string | null;
   og_description: string | null;
   og_image_asset_id: string | null;
+  og_image_generated_at: string | null;
   status: string;
   publish_at: string | null;
   sanity_document_id: string | null;
@@ -49,6 +50,7 @@ function toNoteRecord(note: typeof notes.$inferSelect): NoteRecord {
     og_title: note.ogTitle,
     og_description: note.ogDescription,
     og_image_asset_id: note.ogImageAssetId,
+    og_image_generated_at: note.ogImageGeneratedAt,
     status: note.status,
     publish_at: note.publishAt,
     sanity_document_id: note.sanityDocumentId,
@@ -409,6 +411,25 @@ export async function markNoteFailed(
     .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.noteId)));
 }
 
+export async function setNoteOgImageGeneratedAt(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    noteId: string;
+    generatedAt: string;
+    updatedAt: string;
+  }
+) {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(notes)
+    .set({
+      ogImageGeneratedAt: input.generatedAt,
+      updatedAt: input.updatedAt,
+    })
+    .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.noteId)));
+}
+
 export async function setNoteOgImageAssetId(
   db: D1Database,
   input: {
@@ -423,6 +444,7 @@ export async function setNoteOgImageAssetId(
     .update(notes)
     .set({
       ogImageAssetId: input.ogImageAssetId,
+      ogImageGeneratedAt: null,
       updatedAt: input.updatedAt,
     })
     .where(and(eq(notes.workspaceId, input.workspaceId), eq(notes.id, input.noteId)));
