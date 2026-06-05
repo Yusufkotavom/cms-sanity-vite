@@ -591,11 +591,12 @@ function App() {
       return;
     }
 
+    const draftId = draft.id;
     let cancelled = false;
 
     async function loadLatestAiAssistJob() {
       try {
-        const response = await notesApi.getLatestAiAssistJob(draft.id);
+        const response = await notesApi.getLatestAiAssistJob(draftId);
         if (cancelled) {
           return;
         }
