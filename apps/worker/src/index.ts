@@ -514,12 +514,22 @@ const app = new Hono<{
 }>();
 
 app.get("/og-assets/:workspace/:id", async (c) => {
-  await ensureSchema(c.env.DB);
   const workspaceRef = c.req.param("workspace");
   const id = c.req.param("id");
   if (!workspaceRef || !id) {
     return c.json({ message: "Not found" }, 404);
   }
+
+  const directObject = await c.env.OG_ASSETS?.get(ogAssetKey(workspaceRef, id));
+  if (directObject) {
+    const headers = new Headers();
+    directObject.writeHttpMetadata(headers);
+    headers.set("etag", directObject.httpEtag);
+    headers.set("cache-control", "public, max-age=31536000, immutable");
+    return new Response(directObject.body, { headers });
+  }
+
+  await ensureSchema(c.env.DB);
   const workspace =
     (await findWorkspaceBySlug(c.env.DB, workspaceRef)) ??
     (await c.env.DB.prepare("select * from workspaces where id = ? limit 1").bind(workspaceRef).first<WorkspaceRecord>());
@@ -529,26 +539,26 @@ app.get("/og-assets/:workspace/:id", async (c) => {
   }
 
   const workspaceId = workspace.id;
-  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
-  if (!note?.og_image_asset_id && !note?.og_image_generated_at) {
-    return c.json({ message: "Not found" }, 404);
-  }
-
   const object = await c.env.OG_ASSETS?.get(ogAssetKey(workspaceId, id));
-  if (!object) {
-    const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
-    const sanityUrl = sanityAssetIdToUrl(note.og_image_asset_id, sanitySettings.projectId, sanitySettings.dataset);
-    if (sanityUrl) {
-      return c.redirect(sanityUrl, 302);
-    }
+  if (object) {
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("etag", object.httpEtag);
+    headers.set("cache-control", "public, max-age=31536000, immutable");
+    return new Response(object.body, { headers });
+  }
+
+  const note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+  if (!note?.og_image_asset_id) {
     return c.json({ message: "Not found" }, 404);
   }
 
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set("etag", object.httpEtag);
-  headers.set("cache-control", "public, max-age=31536000, immutable");
-  return new Response(object.body, { headers });
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+  const sanityUrl = sanityAssetIdToUrl(note.og_image_asset_id, sanitySettings.projectId, sanitySettings.dataset);
+  if (sanityUrl) {
+    return c.redirect(sanityUrl, 302);
+  }
+  return c.json({ message: "Not found" }, 404);
 });
 
 app.use(
