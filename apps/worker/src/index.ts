@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 
 import {
+  cancelAiAssistJob,
   createAiAssistJob,
   findAiAssistJobById,
   findLatestAiAssistJobByNoteId,
@@ -2086,6 +2087,10 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 2) {
 
       const request = JSON.parse(job.request_json) as AiAssistRequest;
       const suggestion = await requestAiSuggestion(request, aiConfig);
+      const latestJob = await findAiAssistJobById(env.DB, workspaceId, job.id);
+      if (latestJob?.status === "cancelled") {
+        continue;
+      }
       const nextTitle = suggestion.title?.trim() || note.title;
       const nextSlug = suggestion.slug?.trim() || note.slug;
       await updateNoteDraft(env.DB, {
@@ -2183,6 +2188,22 @@ app.get("/api/ai/assist/jobs/:id", async (c) => {
   const workspaceId = c.get("workspaceId");
   await failTimedOutAiAssistJobs(c.env, workspaceId);
   const job = await findAiAssistJobById(c.env.DB, workspaceId, c.req.param("id"));
+  if (!job) {
+    return c.json({ message: "Not found" }, 404);
+  }
+
+  return c.json(toAiAssistJobResponse(job));
+});
+
+app.post("/api/ai/assist/jobs/:id/cancel", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  await cancelAiAssistJob(c.env.DB, {
+    workspaceId,
+    id,
+    now: new Date().toISOString(),
+  });
+  const job = await findAiAssistJobById(c.env.DB, workspaceId, id);
   if (!job) {
     return c.json({ message: "Not found" }, 404);
   }

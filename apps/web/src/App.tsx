@@ -608,6 +608,7 @@ function App() {
           setIsAiRunning(null);
         }
       } catch {
+        return;
       }
     }
 
@@ -637,6 +638,11 @@ function App() {
       return;
     }
 
+    if (activeAiAssistJob.status === "cancelled") {
+      setIsAiRunning(null);
+      return;
+    }
+
     if (activeAiAssistJob.status !== "queued" && activeAiAssistJob.status !== "processing") {
       return;
     }
@@ -646,6 +652,7 @@ function App() {
         const nextJob = await notesApi.getAiAssistJob(activeAiAssistJob.id);
         setActiveAiAssistJob(nextJob);
       } catch {
+        return;
       }
     }, 2000);
 
@@ -1440,6 +1447,19 @@ function App() {
     }
   }
 
+  async function cancelActiveAiAssistJob() {
+    if (!activeAiAssistJob) return;
+
+    try {
+      const job = await notesApi.cancelAiAssistJob(activeAiAssistJob.id);
+      setActiveAiAssistJob(job);
+      setIsAiRunning(null);
+      toast.success("AI job cancelled");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to cancel AI job");
+    }
+  }
+
   async function generateOgImage() {
     if (!draft) return;
     if (!config?.sanityConfigured) {
@@ -1633,6 +1653,8 @@ function App() {
             updateScheduleDate={updateScheduleDate}
             updateScheduleTime={updateScheduleTime}
             runAiAssist={runAiAssist}
+            activeAiAssistJob={activeAiAssistJob?.noteId === draft.id ? activeAiAssistJob : null}
+            cancelActiveAiAssistJob={cancelActiveAiAssistJob}
             generateOgImage={generateOgImage}
             saveDraft={saveDraft}
             refreshDraftFromSanity={refreshDraftFromSanity}

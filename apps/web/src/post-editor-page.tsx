@@ -6,12 +6,13 @@ import {
   ImagePlusIcon,
   Loader2Icon,
   RefreshCcwIcon,
+  XCircleIcon,
   SaveIcon,
   SendIcon,
   SparklesIcon,
 } from "lucide-react";
 
-import type { ApiCategory, ApiConfig, ApiNote } from "@/lib/api";
+import type { AiAssistJob, ApiCategory, ApiConfig, ApiNote } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +60,28 @@ function sanityAssetToUrl(assetId: string | null, projectId: string | null, data
 
 type AiRunMode = null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only";
 
+function aiJobStatusVariant(status: AiAssistJob["status"]): "default" | "secondary" | "destructive" | "outline" {
+  if (status === "completed") return "default";
+  if (status === "failed") return "destructive";
+  if (status === "cancelled") return "secondary";
+  return "outline";
+}
+
+function formatAiModeLabel(mode: AiAssistJob["mode"]) {
+  switch (mode) {
+    case "metadata":
+      return "Metadata";
+    case "draft":
+      return "Draft";
+    case "outline":
+      return "Outline";
+    case "outline_to_post":
+      return "Outline to Post";
+    case "seo_only":
+      return "SEO Only";
+  }
+}
+
 type PostEditorPageProps = {
   draft: ApiNote;
   config: ApiConfig | null;
@@ -68,6 +91,8 @@ type PostEditorPageProps = {
   updateScheduleDate: (value: string) => void;
   updateScheduleTime: (value: string) => void;
   runAiAssist: (mode: Exclude<AiRunMode, null>) => Promise<void>;
+  activeAiAssistJob: AiAssistJob | null;
+  cancelActiveAiAssistJob: () => Promise<void>;
   generateOgImage: () => Promise<void>;
   saveDraft: () => Promise<ApiNote | undefined>;
   refreshDraftFromSanity: () => Promise<void>;
@@ -108,6 +133,8 @@ export function PostEditorPage({
   updateScheduleDate,
   updateScheduleTime,
   runAiAssist,
+  activeAiAssistJob,
+  cancelActiveAiAssistJob,
   generateOgImage,
   saveDraft,
   refreshDraftFromSanity,
@@ -304,6 +331,43 @@ export function PostEditorPage({
             </div>
           </div>
         </CardContent>
+
+        {activeAiAssistJob ? (
+          <CardContent className="border-b border-border bg-muted/10 py-4">
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 text-sm md:flex-row md:items-start md:justify-between">
+              <div className="grid gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">AI Process</span>
+                  <Badge variant={aiJobStatusVariant(activeAiAssistJob.status)}>{activeAiAssistJob.status}</Badge>
+                  <Badge variant="outline">{formatAiModeLabel(activeAiAssistJob.mode)}</Badge>
+                </div>
+                <div className="grid gap-1 text-xs text-muted-foreground md:grid-cols-2">
+                  <span>Job ID: {activeAiAssistJob.id}</span>
+                  <span>Attempts: {activeAiAssistJob.attempts}</span>
+                  <span>Created: {formatRelativeDate(activeAiAssistJob.createdAt)}</span>
+                  <span>Updated: {formatRelativeDate(activeAiAssistJob.updatedAt)}</span>
+                </div>
+                {activeAiAssistJob.error ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                    {activeAiAssistJob.error}
+                  </div>
+                ) : null}
+                {activeAiAssistJob.status === "queued" || activeAiAssistJob.status === "processing" ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2Icon className="size-3 animate-spin" />
+                    <span>{activeAiAssistJob.status === "queued" ? "Menunggu worker..." : "AI sedang proses. Aman refresh/ganti note/tutup tab."}</span>
+                  </div>
+                ) : null}
+              </div>
+              {activeAiAssistJob.status === "queued" || activeAiAssistJob.status === "processing" ? (
+                <Button variant="outline" size="sm" onClick={() => void cancelActiveAiAssistJob()}>
+                  <XCircleIcon data-icon="inline-start" />
+                  Cancel AI
+                </Button>
+              ) : null}
+            </div>
+          </CardContent>
+        ) : null}
 
         <CardContent className="flex flex-col gap-4">
           <Tabs

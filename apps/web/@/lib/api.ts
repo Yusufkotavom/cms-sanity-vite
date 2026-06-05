@@ -120,7 +120,7 @@ export type AiAssistJob = {
   id: string;
   noteId: string;
   mode: AiAssistMode;
-  status: "queued" | "processing" | "completed" | "failed";
+  status: "queued" | "processing" | "completed" | "failed" | "cancelled";
   suggestion: ApiNote | null;
   error: string | null;
   attempts: number;
@@ -594,6 +594,10 @@ export const notesApi = {
       body: JSON.stringify(payload),
     }),
   getAiAssistJob: (id: string) => request<AiAssistJob>(`/api/ai/assist/jobs/${id}`),
+  cancelAiAssistJob: (id: string) =>
+    request<AiAssistJob>(`/api/ai/assist/jobs/${id}/cancel`, {
+      method: "POST",
+    }),
   getLatestAiAssistJob: (noteId: string) => request<{ job: AiAssistJob | null }>(`/api/notes/${noteId}/ai-assist/latest`),
   getAiSettings: () => request<AiSettings>("/api/settings/ai"),
   saveAiSettings: (payload: AiSettings) =>

@@ -1,6 +1,6 @@
 import type { AiAssistRequest } from "../../services/ai";
 
-export type AiAssistJobStatus = "queued" | "processing" | "completed" | "failed";
+export type AiAssistJobStatus = "queued" | "processing" | "completed" | "failed" | "cancelled";
 
 export type AiAssistJobRecord = {
   id: string;
@@ -71,13 +71,20 @@ export async function markTimedOutAiAssistJobs(db: D1Database, input: { workspac
 }
 
 export async function markAiAssistJobProcessing(db: D1Database, id: string, now: string) {
-  await db.prepare("update ai_assist_jobs set status = 'processing', attempts = attempts + 1, error = null, updated_at = ? where id = ?").bind(now, id).run();
+  await db.prepare("update ai_assist_jobs set status = 'processing', attempts = attempts + 1, error = null, updated_at = ? where id = ? and status = 'queued'").bind(now, id).run();
 }
 
 export async function markAiAssistJobCompleted(db: D1Database, input: { id: string; resultJson: string; now: string }) {
-  await db.prepare("update ai_assist_jobs set status = 'completed', result_json = ?, error = null, updated_at = ? where id = ?").bind(input.resultJson, input.now, input.id).run();
+  await db.prepare("update ai_assist_jobs set status = 'completed', result_json = ?, error = null, updated_at = ? where id = ? and status = 'processing'").bind(input.resultJson, input.now, input.id).run();
 }
 
 export async function markAiAssistJobFailed(db: D1Database, input: { id: string; error: string; now: string }) {
-  await db.prepare("update ai_assist_jobs set status = 'failed', error = ?, updated_at = ? where id = ?").bind(input.error, input.now, input.id).run();
+  await db.prepare("update ai_assist_jobs set status = 'failed', error = ?, updated_at = ? where id = ? and status = 'processing'").bind(input.error, input.now, input.id).run();
+}
+
+export async function cancelAiAssistJob(db: D1Database, input: { workspaceId: string; id: string; now: string }) {
+  await db
+    .prepare("update ai_assist_jobs set status = 'cancelled', error = 'Cancelled by user', updated_at = ? where workspace_id = ? and id = ? and status in ('queued', 'processing')")
+    .bind(input.now, input.workspaceId, input.id)
+    .run();
 }
