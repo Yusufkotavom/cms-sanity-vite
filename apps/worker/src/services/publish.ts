@@ -307,6 +307,7 @@ export async function fetchSanityPosts({
 export async function patchNoteToSanity({
   note,
   categoryIds,
+  ogImageAssetId,
   projectId,
   dataset,
   apiVersion,
@@ -315,6 +316,7 @@ export async function patchNoteToSanity({
 }: {
   note: NoteRecord;
   categoryIds: string[];
+  ogImageAssetId?: string | null;
   projectId: string;
   dataset: string;
   apiVersion: string;
@@ -338,6 +340,25 @@ export async function patchNoteToSanity({
       }),
   });
 
+  const metaImage =
+    ogImageAssetId
+      ? {
+          _type: "image" as const,
+          asset: {
+            _type: "reference" as const,
+            _ref: ogImageAssetId,
+          },
+          alt: note.og_title || note.seo_title || note.title,
+        }
+      : await fetchSanityMetaImage({
+          sanityDocumentId: note.sanity_document_id,
+          projectId,
+          dataset,
+          apiVersion,
+          token,
+          fetchImpl,
+        }).catch(() => null);
+
   const payload = {
     mutations: [
       {
@@ -346,6 +367,7 @@ export async function patchNoteToSanity({
           ...(note.sanity_revision ? { ifRevisionID: note.sanity_revision } : {}),
           set: {
             title: note.title,
+            ...(ogImageAssetId && metaImage ? { image: metaImage } : {}),
             slug: {
               _type: "slug",
               current: note.slug,
@@ -361,6 +383,7 @@ export async function patchNoteToSanity({
               title: note.seo_title || note.title,
               description: note.seo_description || note.excerpt || undefined,
               keywords: note.seo_keywords || undefined,
+              image: metaImage,
               openGraph: {
                 title: note.og_title || note.seo_title || note.title,
                 description: note.og_description || note.seo_description || note.excerpt || undefined,
@@ -465,6 +488,7 @@ export async function publishNoteToSanity({
             current: note.slug,
           },
           excerpt: note.excerpt || undefined,
+          image: metaImage || undefined,
           categories:
             categoryIds.length > 0
               ? categoryIds.map((categoryId) => ({

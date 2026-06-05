@@ -161,6 +161,7 @@ export type AiConnectionTestResult = {
 
 export type OgBrandingSettings = {
   logoUrl: string;
+  ogBaseUrl: string;
   workflowLabel: string;
   footerText: string;
 };

@@ -16,6 +16,7 @@ export type OgBranding = {
   workflowLabel?: string | null;
   footerText?: string | null;
   logoDataUri?: string | null;
+  ogBaseUrl?: string | null;
 };
 
 async function ensureWasm() {
@@ -242,6 +243,39 @@ export async function generateOgImagePng(
   };
 }
 
+async function uploadOgAsset(params: {
+  bytes: ArrayBuffer;
+  contentType: string;
+  projectId: string;
+  dataset: string;
+  apiVersion: string;
+  token: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const { bytes, contentType, projectId, dataset, apiVersion, token, fetchImpl = fetch } = params;
+  const fileName = `og-${crypto.randomUUID().slice(0, 12)}.png`;
+  const assetUrl = `https://${projectId}.api.sanity.io/v${apiVersion}/assets/images/${dataset}?filename=${encodeURIComponent(fileName)}`;
+
+  const uploadResponse = await fetchImpl(assetUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": contentType,
+    },
+    body: bytes,
+  });
+
+  const uploadJson = (await uploadResponse.json().catch(() => ({}))) as {
+    document?: { _id?: string };
+  };
+
+  if (!uploadResponse.ok || !uploadJson.document?._id) {
+    throw new Error(`Sanity OG image upload failed (${uploadResponse.status})`);
+  }
+
+  return { assetId: uploadJson.document._id };
+}
+
 export async function generateAndUploadOgImage(params: {
   title: string;
   excerpt?: string | null;
@@ -252,40 +286,36 @@ export async function generateAndUploadOgImage(params: {
   token: string;
   fetchImpl?: typeof fetch;
 }): Promise<{ assetId: string }> {
-  const {
-    title,
-    excerpt,
-    branding,
+  const { title, excerpt, branding, projectId, dataset, apiVersion, token, fetchImpl = fetch } = params;
+
+  const ogBaseUrl = branding?.ogBaseUrl?.trim()?.replace(/\/+$/, "");
+  if (ogBaseUrl) {
+    const badge = (branding?.workflowLabel?.trim() || "Blog").slice(0, 32);
+    const remoteUrl = `${ogBaseUrl}/api/og?${new URLSearchParams({ title, description: excerpt ?? "", badge }).toString()}`;
+    const remoteResponse = await fetchImpl(remoteUrl);
+    const remoteContentType = remoteResponse.headers.get("content-type") || "";
+    if (remoteResponse.ok && remoteContentType.toLowerCase().startsWith("image/")) {
+      const bytes = await remoteResponse.arrayBuffer();
+      return uploadOgAsset({
+        bytes,
+        contentType: remoteContentType,
+        projectId,
+        dataset,
+        apiVersion,
+        token,
+        fetchImpl,
+      });
+    }
+  }
+
+  const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, branding);
+  return uploadOgAsset({
+    bytes: pngBuffer,
+    contentType,
     projectId,
     dataset,
     apiVersion,
     token,
-    fetchImpl = fetch,
-  } = params;
-
-  const { pngBuffer, contentType } = await generateOgImagePng(title, excerpt, branding);
-
-  const fileName = `og-${crypto.randomUUID().slice(0, 12)}.png`;
-  const assetUrl = `https://${projectId}.api.sanity.io/v${apiVersion}/assets/images/${dataset}?filename=${encodeURIComponent(fileName)}`;
-
-  const uploadResponse = await fetchImpl(assetUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": contentType,
-    },
-    body: pngBuffer,
+    fetchImpl,
   });
-
-  const uploadJson = (await uploadResponse.json().catch(() => ({}))) as {
-    document?: { _id?: string };
-  };
-
-  if (!uploadResponse.ok || !uploadJson.document?._id) {
-    throw new Error(
-      `Sanity OG image upload failed (${uploadResponse.status})`
-    );
-  }
-
-  return { assetId: uploadJson.document._id };
 }

@@ -150,6 +150,7 @@ const aiSettingsSchema = z.object({
 
 const ogBrandingSettingsSchema = z.object({
   logoUrl: z.string().trim().url().or(z.literal("")).default(""),
+  ogBaseUrl: z.string().trim().url().or(z.literal("")).default(""),
   workflowLabel: z.string().default(""),
   footerText: z.string().default(""),
 });
@@ -308,6 +309,7 @@ type EffectiveAiSettings = {
 
 const OG_BRANDING_SETTING_KEYS = [
   "og.logoUrl",
+  "og.ogBaseUrl",
   "og.workflowLabel",
   "og.footerText",
 ] as const;
@@ -374,6 +376,7 @@ async function getOgBrandingSettings(db: D1Database, workspaceId: string) {
   const settings = await getSettingsMap(db, workspaceId, [...OG_BRANDING_SETTING_KEYS]);
   return {
     logoUrl: settings.get("og.logoUrl") ?? "",
+    ogBaseUrl: settings.get("og.ogBaseUrl") ?? "",
     workflowLabel: settings.get("og.workflowLabel") ?? "",
     footerText: settings.get("og.footerText") ?? "",
   };
@@ -468,6 +471,7 @@ async function resolveOgBranding(db: D1Database, workspaceId: string, fetchImpl:
   return {
     workflowLabel: settings.workflowLabel,
     footerText: settings.footerText,
+    ogBaseUrl: settings.ogBaseUrl,
     logoDataUri,
   };
 }
@@ -1054,6 +1058,7 @@ app.put("/api/settings/og-branding", async (c) => {
 
   await setSettings(c.env.DB, workspaceId, {
     "og.logoUrl": payload.logoUrl,
+    "og.ogBaseUrl": payload.ogBaseUrl,
     "og.workflowLabel": payload.workflowLabel,
     "og.footerText": payload.footerText,
   });
@@ -2217,6 +2222,7 @@ async function publishNoteById(env: Env, noteId: string) {
       ? await patchNoteToSanity({
           note,
           categoryIds,
+          ogImageAssetId: note.og_image_asset_id,
           projectId: sanitySettings.projectId,
           dataset: sanitySettings.dataset,
           apiVersion,

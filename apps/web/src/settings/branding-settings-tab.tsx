@@ -28,12 +28,23 @@ export function BrandingSettingsTab({
             <>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2 md:col-span-2">
-                  <FieldInfo label="Logo URL" description="URL logo yang akan diunduh worker untuk compose OG image." />
+                  <FieldInfo label="Logo URL" description="URL logo yang akan diunduh worker untuk compose OG image fallback." />
                   <Input
                     value={ogBrandingSettings.logoUrl}
                     onChange={(event) =>
                       setOgBrandingSettings((current) =>
                         current ? { ...current, logoUrl: event.target.value } : current
+                      )
+                    }
+                  />
+                </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <FieldInfo label="OG Base URL" description="URL frontend Sanity-clean yang punya /api/og agar hasil CMS sama dengan Studio." />
+                  <Input
+                    value={ogBrandingSettings.ogBaseUrl}
+                    onChange={(event) =>
+                      setOgBrandingSettings((current) =>
+                        current ? { ...current, ogBaseUrl: event.target.value } : current
                       )
                     }
                   />
