@@ -17,6 +17,7 @@ export type OgGeneratorMode = "local" | "remote";
 
 export type OgBranding = {
   workflowLabel?: string | null;
+  brandName?: string | null;
   footerText?: string | null;
   logoDataUri?: string | null;
   ogBaseUrl?: string | null;
@@ -146,6 +147,7 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   const safeTitle = title.trim().slice(0, 72);
   const safeExcerpt = (excerpt ?? "").trim().slice(0, 96);
   const safeWorkflowLabel = (branding.workflowLabel ?? DEFAULT_WORKFLOW_LABEL).trim().slice(0, 28) || DEFAULT_WORKFLOW_LABEL;
+  const safeBrandName = (branding.brandName ?? "KOTACOM").trim().slice(0, 28) || "KOTACOM";
   const safeFooterText = (branding.footerText ?? DEFAULT_FOOTER_TEXT).trim().slice(0, 72) || DEFAULT_FOOTER_TEXT;
   const logoDataUri = branding.logoDataUri?.trim() || kotacomLogoDataUri;
   const sideImageUrl = branding.sideImageDataUri?.trim() || null;
@@ -242,8 +244,9 @@ export function buildOgSvg(title: string, excerpt?: string | null, branding: OgB
   <rect x="${rightPanelX + 28}" y="${rightPanelY + 24}" width="${rightPanelWidth - 56}" height="${rightPanelHeight - 48}" rx="26" fill="#020617" fill-opacity="${sideImageUrl ? "0.06" : "0.08"}"/>
 
  
-   <image x="${leftPanelX + 24}" y="${leftPanelY + 18}" width="234" height="54" href="${logoDataUri}" xlink:href="${logoDataUri}" preserveAspectRatio="xMinYMid meet"/>
-  <rect x="${leftPanelX + 44}" y="${leftPanelY + 96}" width="64" height="4" rx="2" fill="#0070f3"/>
+   <image x="${leftPanelX + 32}" y="${leftPanelY + 24}" width="52" height="52" href="${logoDataUri}" xlink:href="${logoDataUri}" preserveAspectRatio="xMidYMid meet"/>
+  <text x="${leftPanelX + 100}" y="${leftPanelY + 64}" font-family="${OG_FONT_FAMILY}" font-size="34" font-weight="900" letter-spacing="-0.8" fill="#0f172a">${escapeXml(safeBrandName)}</text>
+  <rect x="${leftPanelX + 32}" y="${leftPanelY + 96}" width="64" height="4" rx="2" fill="#0070f3"/>
   ${titleLines
     .map(
       (line, i) =>

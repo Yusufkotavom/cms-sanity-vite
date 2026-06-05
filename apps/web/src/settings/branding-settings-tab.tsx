@@ -58,6 +58,17 @@ export function BrandingSettingsTab({
                   </div>
                 </div>
                 <div className="grid gap-2 md:col-span-2">
+                  <FieldInfo label="Brand name" description="Teks brand di samping logo OG. Kosongkan untuk default KOTACOM." />
+                  <Input
+                    value={ogBrandingSettings.brandName}
+                    onChange={(event) =>
+                      setOgBrandingSettings((current) =>
+                        current ? { ...current, brandName: event.target.value } : current
+                      )
+                    }
+                  />
+                </div>
+                <div className="grid gap-2 md:col-span-2">
                   <FieldInfo label="OG Base URL" description="Fallback remote /api/og. Dipakai hanya saat mode remote atau local generator gagal." />
                   <Input
                     value={ogBrandingSettings.ogBaseUrl}

@@ -165,6 +165,7 @@ export type OgBrandingSettings = {
   logoUrl: string;
   ogBaseUrl: string;
   generatorMode: "local" | "remote";
+  brandName: string;
   fallbackImageUrl: string;
   websiteImageUrl: string;
   softwareImageUrl: string;
