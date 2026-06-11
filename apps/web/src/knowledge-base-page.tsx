@@ -314,7 +314,7 @@ export function KnowledgeBasePage() {
             metadataJson: row.metadataJson || null,
           }));
 
-          const result = await kbApi.import(payload as any);
+          const result = await kbApi.import(payload as KbEntryPayload[]);
           toast.success(`Imported ${result.imported} entries from CSV`);
         } else {
           const data = JSON.parse(text);
@@ -438,14 +438,14 @@ export function KnowledgeBasePage() {
             const value = item[header as keyof KbEntry];
             let cellString = "";
             
-            if (value === null || value === undefined) {
-              cellString = "";
-            } else if (typeof value === "boolean") {
-              cellString = value ? "true" : "false";
-            } else if (typeof value === "object") {
-              cellString = JSON.stringify(value);
-            } else {
-              cellString = String(value);
+            if (value !== null && value !== undefined) {
+              if (typeof value === "boolean") {
+                cellString = value ? "true" : "false";
+              } else if (typeof value === "object") {
+                cellString = JSON.stringify(value);
+              } else {
+                cellString = String(value);
+              }
             }
             
             const escaped = cellString.replace(/"/g, '""');
