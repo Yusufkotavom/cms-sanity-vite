@@ -286,23 +286,48 @@ export function KnowledgeBasePage() {
   async function handleImportJson() {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json";
+    input.accept = ".json,.csv";
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
       try {
         const text = await file.text();
-        const data = JSON.parse(text);
+        const filename = file.name.toLowerCase();
 
-        if (data.company || data.links || data.generationRules) {
-          const result = await kbApi.seedFromCompanyInfo(data);
-          toast.success(`Imported ${result.imported} entries from company info`);
-        } else if (Array.isArray(data)) {
-          const result = await kbApi.import(data);
-          toast.success(`Imported ${result.imported} entries`);
+        if (filename.endsWith(".csv")) {
+          const rows = parseCSV(text);
+          if (rows.length === 0) {
+            toast.error("File CSV kosong atau tidak valid.");
+            return;
+          }
+
+          const payload = rows.map((row) => ({
+            id: row.id || undefined,
+            type: row.type || "product",
+            category: row.category || "",
+            title: row.title || "",
+            content: row.content || "",
+            keywords: row.keywords || "",
+            modes: row.modes || "",
+            priority: Number(row.priority || 0),
+            isActive: row.isActive === "true" || row.isActive === "1" || row.isActive === "yes",
+            metadataJson: row.metadataJson || null,
+          }));
+
+          const result = await kbApi.import(payload as any);
+          toast.success(`Imported ${result.imported} entries from CSV`);
         } else {
-          toast.error("Invalid JSON format. Provide an array of entries or company-info JSON.");
-          return;
+          const data = JSON.parse(text);
+          if (data.company || data.links || data.generationRules) {
+            const result = await kbApi.seedFromCompanyInfo(data);
+            toast.success(`Imported ${result.imported} entries from company info`);
+          } else if (Array.isArray(data)) {
+            const result = await kbApi.import(data);
+            toast.success(`Imported ${result.imported} entries`);
+          } else {
+            toast.error("Invalid JSON format. Provide an array of entries or company-info JSON.");
+            return;
+          }
         }
         loadEntries();
       } catch (error) {
@@ -310,6 +335,61 @@ export function KnowledgeBasePage() {
       }
     };
     input.click();
+  }
+
+  function parseCSV(text: string) {
+    const lines: string[][] = [];
+    let row: string[] = [];
+    let inQuotes = false;
+    let currentValue = "";
+    
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+      
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          currentValue += '"';
+          i++; 
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        row.push(currentValue);
+        currentValue = "";
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (char === '\r' && nextChar === '\n') {
+          i++; 
+        }
+        row.push(currentValue);
+        lines.push(row);
+        row = [];
+        currentValue = "";
+      } else {
+        currentValue += char;
+      }
+    }
+    if (row.length > 0 || currentValue) {
+      row.push(currentValue);
+      lines.push(row);
+    }
+    
+    if (lines.length < 2) return [];
+    
+    const headers = lines[0].map(h => h.trim());
+    const result: Record<string, string>[] = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i];
+      if (values.length < headers.length) continue; 
+      const entry: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        entry[header] = values[index];
+      });
+      result.push(entry);
+    }
+    
+    return result;
   }
 
   async function handleExportJson() {
