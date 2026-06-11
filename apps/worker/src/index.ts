@@ -315,7 +315,11 @@ const kbResolveSchema = z.object({
   limit: z.number().int().min(1).max(20).default(10),
 });
 
-const kbImportSchema = z.array(kbEntryCreateSchema).min(1).max(200);
+const kbImportSchema = z.array(
+  kbEntryCreateSchema.extend({
+    id: z.string().uuid().optional(),
+  })
+).min(1).max(200);
 
 const authLoginSchema = z.object({
   email: z.string().trim().email(),
@@ -1654,21 +1658,40 @@ app.post("/api/kb/import", async (c) => {
   const ids: string[] = [];
 
   for (const entry of entries) {
-    const id = crypto.randomUUID();
-    await createKbEntry(c.env.DB, {
-      id,
-      workspaceId,
-      type: entry.type,
-      category: entry.category,
-      title: entry.title,
-      content: entry.content,
-      keywords: entry.keywords,
-      modes: entry.modes,
-      priority: entry.priority,
-      isActive: entry.isActive ? 1 : 0,
-      metadataJson: entry.metadataJson,
-      now,
-    });
+    const id = entry.id || crypto.randomUUID();
+    const existing = entry.id ? await findKbEntryById(c.env.DB, workspaceId, entry.id) : null;
+
+    if (existing) {
+      await updateKbEntry(c.env.DB, {
+        id,
+        workspaceId,
+        type: entry.type,
+        category: entry.category,
+        title: entry.title,
+        content: entry.content,
+        keywords: entry.keywords,
+        modes: entry.modes,
+        priority: entry.priority,
+        isActive: entry.isActive ? 1 : 0,
+        metadataJson: entry.metadataJson,
+        updatedAt: now,
+      });
+    } else {
+      await createKbEntry(c.env.DB, {
+        id,
+        workspaceId,
+        type: entry.type,
+        category: entry.category,
+        title: entry.title,
+        content: entry.content,
+        keywords: entry.keywords,
+        modes: entry.modes,
+        priority: entry.priority,
+        isActive: entry.isActive ? 1 : 0,
+        metadataJson: entry.metadataJson,
+        now,
+      });
+    }
     ids.push(id);
   }
 

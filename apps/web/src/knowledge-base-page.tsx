@@ -30,6 +30,7 @@ import {
   ArrowUp,
   ArrowDown,
   ImageIcon,
+  DownloadIcon,
 } from "lucide-react";
 
 const KB_TYPES: { value: KbEntryType; label: string }[] = [
@@ -311,6 +312,39 @@ export function KnowledgeBasePage() {
     input.click();
   }
 
+  async function handleExportJson() {
+    try {
+      const params: { limit: number } = { limit: 1000 };
+      const result = await kbApi.list(params);
+      
+      const exportData = result.items.map(entry => ({
+        id: entry.id,
+        type: entry.type,
+        category: entry.category,
+        title: entry.title,
+        content: entry.content,
+        keywords: entry.keywords,
+        modes: entry.modes,
+        priority: entry.priority,
+        isActive: entry.isActive,
+        metadataJson: entry.metadataJson,
+      }));
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `kb-export-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("KB entries exported successfully!");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export failed");
+    }
+  }
+
   const renderSortHeader = (field: keyof KbEntry, label: string) => {
     const isSorted = sortField === field;
     return (
@@ -349,6 +383,10 @@ export function KnowledgeBasePage() {
               <Button variant="outline" size="sm" onClick={handleImportJson}>
                 <UploadIcon className="mr-1 h-4 w-4" />
                 Import
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportJson} disabled={isLoading}>
+                <DownloadIcon className="mr-1 h-4 w-4" />
+                Export
               </Button>
               <Button size="sm" onClick={openCreateDialog}>
                 <PlusIcon className="mr-1 h-4 w-4" />
