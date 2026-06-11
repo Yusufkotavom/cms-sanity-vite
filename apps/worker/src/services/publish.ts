@@ -2,53 +2,6 @@ import { markdownToPortableText } from "../markdown-to-portable-text";
 import { portableTextToMarkdown } from "../portable-text-to-markdown";
 import type { NoteRecord } from "../db/repositories/notes";
 
-function extractBlocksFromMarkdown(markdown: string): { cleanMarkdown: string; blocks: any[] } {
-  const blocks: any[] = [];
-  const regex = /\[block:whatsapp-cta\s+([^\]]+)\]/g;
-  
-  const cleanMarkdown = markdown.replace(regex, (match, attrString) => {
-    const attrs: Record<string, string> = {};
-    const attrRegex = /(\w+)="([^"]*)"/g;
-    let m;
-    while ((m = attrRegex.exec(attrString)) !== null) {
-      attrs[m[1]] = m[2];
-    }
-    
-    const blockKey = crypto.randomUUID().slice(0, 12);
-    
-    let bodyBlocks: any[] | undefined = undefined;
-    if (attrs.text) {
-      bodyBlocks = [
-        {
-          _type: "block",
-          _key: crypto.randomUUID().slice(0, 12),
-          style: "normal",
-          markDefs: [],
-          children: [
-            {
-              _type: "span",
-              _key: crypto.randomUUID().slice(0, 12),
-              marks: [],
-              text: attrs.text
-            }
-          ]
-        }
-      ];
-    }
-    
-    blocks.push({
-      _type: "whatsapp-cta",
-      _key: blockKey,
-      title: attrs.title || "Butuh jawaban cepat? Chat tim kami via WhatsApp",
-      tagLine: attrs.tagline || "WhatsApp CTA",
-      body: bodyBlocks,
-    });
-    
-    return "";
-  }).replace(/\n{3,}/g, "\n\n").trim();
-  
-  return { cleanMarkdown, blocks };
-}
 
 export type SanityCategory = {
   id: string;
@@ -375,9 +328,7 @@ export async function patchNoteToSanity({
     throw new Error("Sanity document ID is required for patch updates");
   }
 
-  const { cleanMarkdown, blocks } = extractBlocksFromMarkdown(note.content_md);
-
-  const body = await markdownToPortableText(cleanMarkdown, {
+  const body = await markdownToPortableText(note.content_md, {
     uploadImage: ({ url: imageUrl, alt }) =>
       uploadImageToSanity({
         projectId,
@@ -424,7 +375,6 @@ export async function patchNoteToSanity({
             },
             excerpt: note.excerpt || undefined,
             body,
-            blocks: blocks.length > 0 ? blocks : undefined,
             categories: categoryIds.map((categoryId) => ({
               _type: "reference",
               _ref: categoryId,
@@ -441,6 +391,7 @@ export async function patchNoteToSanity({
               },
             },
           },
+          unset: ["blocks"],
         },
       },
     ],
@@ -539,9 +490,8 @@ export async function publishNoteToSanity({
   fetchImpl?: typeof fetch;
 }) {
   const sanityDocumentId = note.sanity_document_id || createSanityPostDocumentId(note.id);
-  const { cleanMarkdown, blocks } = extractBlocksFromMarkdown(note.content_md);
 
-  const body = await markdownToPortableText(cleanMarkdown, {
+  const body = await markdownToPortableText(note.content_md, {
     uploadImage: ({ url: imageUrl, alt }) =>
       uploadImageToSanity({
         projectId,
@@ -595,7 +545,6 @@ export async function publishNoteToSanity({
                 }))
               : undefined,
           body,
-          blocks: blocks.length > 0 ? blocks : undefined,
           meta: {
             title: note.seo_title || note.title,
             description: note.seo_description || note.excerpt || undefined,

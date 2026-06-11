@@ -62,7 +62,8 @@ export type PortableTextNode =
   | PortableTextBlock
   | PortableTextCodeBlock
   | PortableTextImageBlock
-  | PortableTextTableBlock;
+  | PortableTextTableBlock
+  | Record<string, any>;
 
 type MarkdownNode = {
   type?: string;
@@ -337,8 +338,9 @@ async function convertListItem(
     const converted = await convertBlockNode(child, level, options);
     for (const block of converted) {
       if (block._type === "block") {
-        block.listItem = listItem;
-        block.level = level;
+        const b = block as PortableTextBlock;
+        b.listItem = listItem;
+        b.level = level;
       }
     }
     blocks.push(...converted);
@@ -400,6 +402,74 @@ async function convertBlockquote(
   return result;
 }
 
+function parseBlockShortcode(type: string, attrString: string): PortableTextNode | null {
+  const attrs: Record<string, string> = {};
+  const attrRegex = /(\w+)="([^"]*)"/g;
+  let m;
+  while ((m = attrRegex.exec(attrString)) !== null) {
+    attrs[m[1]] = m[2];
+  }
+
+  const blockKey = createKey();
+
+  let bodyBlocks: any[] | undefined = undefined;
+  if (attrs.text) {
+    bodyBlocks = [
+      {
+        _type: "block",
+        _key: createKey(),
+        style: "normal",
+        markDefs: [],
+        children: [
+          {
+            _type: "span",
+            _key: createKey(),
+            marks: [],
+            text: attrs.text,
+          },
+        ],
+      },
+    ];
+  }
+
+  if (type === "whatsapp-cta") {
+    return {
+      _type: "whatsapp-cta",
+      _key: blockKey,
+      title: attrs.title || "Butuh jawaban cepat? Chat tim kami via WhatsApp",
+      tagLine: attrs.tagline || "WhatsApp CTA",
+      body: bodyBlocks,
+      colorVariant: attrs.colorVariant || "primary",
+      sectionWidth: attrs.sectionWidth || "default",
+      stackAlign: attrs.stackAlign || "left",
+    };
+  }
+
+  if (type === "hero-2") {
+    return {
+      _type: "hero-2",
+      _key: blockKey,
+      title: attrs.title || "",
+      tagLine: attrs.tagline || "",
+      body: bodyBlocks,
+    };
+  }
+
+  // Generic block fallback
+  const { title, tagline, text, colorVariant, sectionWidth, stackAlign, ...rest } = attrs;
+  return {
+    _type: type,
+    _key: blockKey,
+    title: title || undefined,
+    tagLine: tagline || undefined,
+    body: bodyBlocks,
+    colorVariant: colorVariant || undefined,
+    sectionWidth: sectionWidth || undefined,
+    stackAlign: stackAlign || undefined,
+    ...rest,
+  };
+}
+
 async function convertBlockNode(
   node: MarkdownNode,
   level = 1,
@@ -409,6 +479,16 @@ async function convertBlockNode(
     case "paragraph":
       if (isStandaloneImageParagraph(node)) {
         return convertImageNode((node.children ?? [])[0], options);
+      }
+      if (node.children?.length === 1 && node.children[0].type === "text") {
+        const textVal = (node.children[0].value ?? "").trim();
+        const blockMatch = textVal.match(/^\[block:([a-zA-Z0-9-]+)\s+([^\]]+)\]$/);
+        if (blockMatch) {
+          const parsed = parseBlockShortcode(blockMatch[1], blockMatch[2]);
+          if (parsed) {
+            return [parsed];
+          }
+        }
       }
       return [convertParagraph(node)];
     case "heading":
