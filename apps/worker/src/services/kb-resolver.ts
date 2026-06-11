@@ -27,8 +27,20 @@ export function formatKbEntryForPrompt(entry: KbEntryRecord, maxContentChars = M
   if (entry.metadata_json) {
     try {
       const meta = JSON.parse(entry.metadata_json) as Record<string, unknown>;
-      if (typeof meta.url === "string" && meta.url) {
-        metaParts.push(`URL: ${meta.url}`);
+      if (Array.isArray(meta.url)) {
+        meta.url.forEach((u, idx) => {
+          if (typeof u === "string" && u) {
+            metaParts.push(`URL ${idx + 1}: ${u.trim()}`);
+          }
+        });
+      } else if (typeof meta.url === "string" && meta.url) {
+        if (meta.url.includes(",")) {
+          meta.url.split(",").map(u => u.trim()).filter(Boolean).forEach((u, idx) => {
+            metaParts.push(`URL ${idx + 1}: ${u}`);
+          });
+        } else {
+          metaParts.push(`URL: ${meta.url.trim()}`);
+        }
       }
       if (typeof meta.imageUrl === "string" && meta.imageUrl) {
         metaParts.push(`Image: ${meta.imageUrl}`);

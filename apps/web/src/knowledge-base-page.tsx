@@ -345,6 +345,51 @@ export function KnowledgeBasePage() {
     }
   }
 
+  async function handleExportCsv() {
+    try {
+      const params: { limit: number } = { limit: 1000 };
+      const result = await kbApi.list(params);
+      
+      const headers = ["id", "type", "category", "title", "content", "keywords", "modes", "priority", "isActive", "metadataJson"];
+      const csvRows = [
+        headers.join(","),
+        ...result.items.map(item => {
+          return headers.map(header => {
+            const value = item[header as keyof KbEntry];
+            let cellString = "";
+            
+            if (value === null || value === undefined) {
+              cellString = "";
+            } else if (typeof value === "boolean") {
+              cellString = value ? "true" : "false";
+            } else if (typeof value === "object") {
+              cellString = JSON.stringify(value);
+            } else {
+              cellString = String(value);
+            }
+            
+            const escaped = cellString.replace(/"/g, '""');
+            return `"${escaped}"`;
+          }).join(",");
+        })
+      ];
+
+      const csvContent = csvRows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `kb-export-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("KB entries exported to CSV successfully!");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export CSV failed");
+    }
+  }
+
   const renderSortHeader = (field: keyof KbEntry, label: string) => {
     const isSorted = sortField === field;
     return (
@@ -386,7 +431,11 @@ export function KnowledgeBasePage() {
               </Button>
               <Button variant="outline" size="sm" onClick={handleExportJson} disabled={isLoading}>
                 <DownloadIcon className="mr-1 h-4 w-4" />
-                Export
+                Export JSON
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportCsv} disabled={isLoading}>
+                <DownloadIcon className="mr-1 h-4 w-4" />
+                Export CSV
               </Button>
               <Button size="sm" onClick={openCreateDialog}>
                 <PlusIcon className="mr-1 h-4 w-4" />
