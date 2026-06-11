@@ -197,6 +197,7 @@ const sanitySettingsSchema = z.object({
   dataset: z.string().trim().default("development"),
   apiVersion: z.string().trim().default("2026-03-29"),
   writeToken: z.string().trim().default(""),
+  studioUrl: z.string().trim().default(""),
 });
 
 const requiredSanitySettingsSchema = z.object({
@@ -204,6 +205,7 @@ const requiredSanitySettingsSchema = z.object({
   dataset: z.string().trim().min(1),
   apiVersion: z.string().trim().min(1),
   writeToken: z.string().trim().min(1),
+  studioUrl: z.string().trim().default(""),
 });
 
 const scheduleSchema = z.object({
@@ -428,6 +430,7 @@ const SANITY_SETTING_KEYS = [
   "sanity.dataset",
   "sanity.apiVersion",
   "sanity.writeToken",
+  "sanity.studioUrl",
 ] as const;
 
 async function getAiSettings(db: D1Database, workspaceId: string) {
@@ -510,6 +513,7 @@ async function getSanitySettings(db: D1Database, workspaceId: string, env?: Env)
     dataset: settings.get("sanity.dataset") ?? env?.SANITY_DATASET ?? "development",
     apiVersion: settings.get("sanity.apiVersion") ?? env?.SANITY_API_VERSION ?? "2026-03-29",
     writeToken: settings.get("sanity.writeToken") ?? env?.SANITY_WRITE_TOKEN ?? "",
+    studioUrl: settings.get("sanity.studioUrl") ?? "",
   };
 }
 
@@ -540,6 +544,7 @@ function normalizeSanitySettings(
     dataset: payload.dataset.trim(),
     apiVersion: payload.apiVersion.trim(),
     writeToken: writeToken.trim(),
+    studioUrl: (payload.studioUrl ?? "").trim(),
   };
 }
 
@@ -859,6 +864,7 @@ app.post("/api/workspaces", async (c) => {
     "sanity.dataset": sanitySettings.dataset,
     "sanity.apiVersion": sanitySettings.apiVersion,
     "sanity.writeToken": sanitySettings.writeToken,
+    "sanity.studioUrl": sanitySettings.studioUrl,
   });
 
   const workspace = await findWorkspaceById(c.env.DB, id);
@@ -930,6 +936,7 @@ app.patch("/api/workspaces/:id", async (c) => {
       "sanity.dataset": sanitySettings.dataset,
       "sanity.apiVersion": sanitySettings.apiVersion,
       "sanity.writeToken": sanitySettings.writeToken,
+      "sanity.studioUrl": sanitySettings.studioUrl,
     });
   }
 
@@ -1003,6 +1010,7 @@ app.get("/api/config", async (c) => {
     ),
     sanityProjectId: sanitySettings.projectId || null,
     sanityDataset: sanitySettings.dataset || null,
+    sanityStudioUrl: sanitySettings.studioUrl || null,
     aiConfigured: Boolean(activeAiModel?.apiBaseUrl && activeAiModel?.apiKey && activeAiModel?.model),
     aiBaseUrl: activeAiModel?.apiBaseUrl || null,
     aiModel: activeAiModel?.model || null,
@@ -1020,6 +1028,7 @@ app.get("/api/settings/sanity", async (c) => {
     apiVersion: settings.apiVersion,
     writeToken: settings.writeToken ? "********" : "",
     hasWriteToken: Boolean(settings.writeToken),
+    studioUrl: settings.studioUrl,
   });
 });
 
@@ -1033,6 +1042,7 @@ app.put("/api/settings/sanity", async (c) => {
     "sanity.dataset": payload.dataset,
     "sanity.apiVersion": payload.apiVersion,
     "sanity.writeToken": payload.writeToken === "********" ? existing.writeToken : payload.writeToken,
+    "sanity.studioUrl": payload.studioUrl,
   });
 
   const saved = await getSanitySettings(c.env.DB, workspaceId, c.env);
@@ -1042,6 +1052,7 @@ app.put("/api/settings/sanity", async (c) => {
     apiVersion: saved.apiVersion,
     writeToken: saved.writeToken ? "********" : "",
     hasWriteToken: Boolean(saved.writeToken),
+    studioUrl: saved.studioUrl,
   });
 });
 

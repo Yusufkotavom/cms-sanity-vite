@@ -277,6 +277,16 @@ export function WorkspaceSettingsTab({
                   }}
                 />
               </div>
+              <div className="grid gap-2">
+                <FieldInfo label="Studio URL" description="URL Sanity Studio untuk workspace ini (misal: https://sanity-clean-studio.vercel.app). Kosongkan jika tidak perlu." />
+                <Input
+                  value={workspaceSanitySettings.studioUrl}
+                  placeholder="https://sanity-clean-studio.vercel.app"
+                  onChange={(event) => {
+                    setWorkspaceSanitySettings((current) => ({ ...current, studioUrl: event.target.value }));
+                  }}
+                />
+              </div>
             </div>
 
             <div className="rounded-xl border border-dashed border-border bg-muted/10 p-3 text-xs">

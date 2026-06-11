@@ -170,6 +170,7 @@ function createEmptyWorkspaceSanitySettings(): SanitySettings {
     apiVersion: "2026-03-29",
     writeToken: "",
     hasWriteToken: false,
+    studioUrl: "",
   };
 }
 

@@ -190,9 +190,18 @@ export function PostEditorPage({
     ? `https://${config.sanityProjectId}.api.sanity.io/v2026-03-29/data/doc/${config.sanityDataset}/${encodeURIComponent(draft.sanityDocumentId)}`
     : null;
 
+  const sanityStudioUrl = draft.sanityDocumentId && config?.sanityStudioUrl
+    ? `${config.sanityStudioUrl}/structure/coreContent;posts;${encodeURIComponent(draft.sanityDocumentId)}`
+    : null;
+
   function openSanityDocument() {
     if (!sanityDocumentUrl) return;
     window.open(sanityDocumentUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function openSanityStudio() {
+    if (!sanityStudioUrl) return;
+    window.open(sanityStudioUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -807,6 +816,12 @@ export function PostEditorPage({
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        {sanityStudioUrl ? (
+                          <Button variant="outline" onClick={openSanityStudio}>
+                            <ExternalLinkIcon data-icon="inline-start" />
+                            Open in Studio
+                          </Button>
+                        ) : null}
                         {sanityDocumentUrl ? (
                           <Button variant="outline" onClick={openSanityDocument}>
                             <ExternalLinkIcon data-icon="inline-start" />

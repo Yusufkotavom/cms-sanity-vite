@@ -59,6 +59,7 @@ export type ApiConfig = {
   sanityConfigured: boolean;
   sanityProjectId: string | null;
   sanityDataset: string | null;
+  sanityStudioUrl: string | null;
   aiConfigured: boolean;
   aiBaseUrl: string | null;
   aiModel: string | null;
@@ -73,6 +74,7 @@ export type SanitySettings = {
   apiVersion: string;
   writeToken: string;
   hasWriteToken: boolean;
+  studioUrl: string;
 };
 
 export type SanityConnectionTestResult = {
