@@ -29,6 +29,7 @@ const MODEL_PRESETS = [
     name: "OpenRouter",
     apiBaseUrl: "https://openrouter.ai/api/v1",
     model: "openai/gpt-4o-mini",
+    maxTokens: 8192,
   },
   {
     label: "Gemini Compatible",
@@ -36,6 +37,7 @@ const MODEL_PRESETS = [
     name: "Gemini OpenAI Compatible",
     apiBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     model: "gemini-2.5-pro",
+    maxTokens: 8192,
   },
   {
     label: "Groq",
@@ -43,6 +45,7 @@ const MODEL_PRESETS = [
     name: "Groq",
     apiBaseUrl: "https://api.groq.com/openai/v1",
     model: "llama-3.3-70b-versatile",
+    maxTokens: 4096,
   },
   {
     label: "Custom",
@@ -50,6 +53,7 @@ const MODEL_PRESETS = [
     name: "Custom OpenAI Compatible",
     apiBaseUrl: "",
     model: "",
+    maxTokens: 4096,
   },
 ] as const;
 
@@ -140,6 +144,7 @@ function createModelFromPreset(preset: (typeof MODEL_PRESETS)[number]) {
     apiKey: "",
     hasApiKey: false,
     model: preset.model,
+    maxTokens: preset.maxTokens,
   };
 }
 
@@ -340,6 +345,16 @@ export function AiSettingsTab({
                                   value={model.apiKey}
                                   placeholder={model.hasApiKey ? "********" : "API key"}
                                   onChange={(event) => updateModel(model.id, { apiKey: event.target.value })}
+                                />
+                              </div>
+                              <div className="grid gap-2">
+                                <FieldInfo label="Max tokens" description="Maksimal token output untuk model ini. (misal 4096 atau 8192) untuk membatasi budget atau menghindari 402 error." />
+                                <Input
+                                  disabled={isModelsReadonly}
+                                  type="number"
+                                  value={model.maxTokens ?? ""}
+                                  placeholder="Contoh: 4096"
+                                  onChange={(event) => updateModel(model.id, { maxTokens: event.target.value ? Number(event.target.value) : undefined })}
                                 />
                               </div>
                             </div>

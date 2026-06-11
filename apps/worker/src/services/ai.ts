@@ -58,10 +58,12 @@ export type AiConfig = {
   model: string;
   systemPrompt?: string;
   companyInfo?: string;
+  knowledgeContext?: string;
   metadataPrompt?: string;
   draftPrompt?: string;
   outlinePrompt?: string;
   outlineToPostPrompt?: string;
+  maxTokens?: number;
 };
 
 export type AiConnectionTestResult = {
@@ -97,7 +99,7 @@ function extractJsonObject(value: string) {
   return normalized.slice(firstBrace, lastBrace + 1);
 }
 
-function buildSystemPrompt(mode: AiAssistRequest["mode"], config: AiConfig) {
+export function buildSystemPrompt(mode: AiAssistRequest["mode"], config: AiConfig) {
   const basePrompt =
     mode === "metadata"
       ? [
@@ -155,14 +157,20 @@ function buildSystemPrompt(mode: AiAssistRequest["mode"], config: AiConfig) {
   const companyInfoPrompt = config.companyInfo?.trim()
     ? `Company info and brand guardrails:\n${config.companyInfo.trim()}`
     : "";
-  const mergedPrompt = [basePrompt.join(" "), config.systemPrompt?.trim(), companyInfoPrompt, modePrompt?.trim()]
+  const knowledgeBlock = config.knowledgeContext?.trim()
+    ? `Relevant knowledge base entries:\n${config.knowledgeContext.trim()}\n\nCRITICAL INSTRUCTION:
+1. You MUST actively weave and embed the exact URLs and image links from the provided "Relevant knowledge base entries" directly into the markdown content (e.g. using markdown link format '[Link Text](URL)' or image format '![Alt Text](ImageURL)') wherever they are relevant to the topic.
+2. Under no circumstances should you generate fake links, mock phone numbers, or placeholder WhatsApp links (e.g., 'https://wa.me/6281234567890' or similar). If a CTA requires a link but no phone number is provided, you MUST use the provided URL of the homepage ('https://www.kotacom.id') or relevant services pages (e.g. 'https://www.kotacom.id/pembuatan-website').
+3. Every time you mention Kotacom's services (like custom software, e-commerce, IT support, or website creation), look at the list of entries and link those terms to their exact matching URLs.`
+    : "";
+  const mergedPrompt = [basePrompt.join(" "), config.systemPrompt?.trim(), companyInfoPrompt, knowledgeBlock, modePrompt?.trim()]
     .filter(Boolean)
     .join("\n\n");
 
   return mergedPrompt;
 }
 
-function buildUserPrompt(input: AiAssistRequest) {
+export function buildUserPrompt(input: AiAssistRequest) {
   const requestedFields =
     input.mode === "metadata"
       ? ["title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"]
@@ -243,6 +251,7 @@ export async function requestAiSuggestion(
     body: JSON.stringify({
       model: config.model,
       temperature: input.mode === "metadata" ? 0.4 : 0.7,
+      max_tokens: config.maxTokens || 4096,
       messages: [
         {
           role: "system",

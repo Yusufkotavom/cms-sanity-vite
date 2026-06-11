@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:remote": "vite",
     "build": "tsc -b && vite build",
     "deploy": "wrangler pages deploy dist --project-name cms-sanity-vite",
     "lint": "eslint .",

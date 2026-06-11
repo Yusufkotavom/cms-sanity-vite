@@ -126,6 +126,7 @@ export type AiAssistJob = {
   attempts: number;
   createdAt: string;
   updatedAt: string;
+  promptLog?: string | null;
 };
 
 export type AiSettings = {
@@ -137,6 +138,7 @@ export type AiSettings = {
     apiKey: string;
     hasApiKey: boolean;
     model: string;
+    maxTokens?: number;
   }>;
   defaultModelId: string;
   systemPrompt: string;
@@ -460,8 +462,9 @@ async function request<T>(path: string, init?: RequestInit, options?: { skipAuth
   const token = options?.skipAuth ? null : getStoredAuthToken();
   const workspaceSlug = getStoredActiveWorkspaceSlug();
   const baseUrl = getApiBaseUrl();
+  const isMultipart = init?.body instanceof FormData;
   const mergedHeaders = {
-    "Content-Type": "application/json",
+    ...(isMultipart ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : {}),
     ...((init?.headers as Record<string, string> | undefined) ?? {}),
@@ -713,4 +716,91 @@ export const notesApi = {
     request<AiBatchDetail>(`/api/ai/batches/${batchId}/items/${itemId}`, {
       method: "DELETE",
     }),
+};
+
+export type KbEntryType = "product" | "url" | "image" | "block" | "template" | "faq" | "policy";
+
+export type KbEntry = {
+  id: string;
+  workspaceId: string;
+  type: KbEntryType;
+  category: string;
+  title: string;
+  content: string;
+  keywords: string;
+  modes: string;
+  priority: number;
+  isActive: boolean;
+  metadataJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type KbEntryPayload = {
+  type: KbEntryType;
+  category?: string;
+  title: string;
+  content: string;
+  keywords?: string;
+  modes?: string;
+  priority?: number;
+  isActive?: boolean;
+  metadataJson?: string | null;
+};
+
+export type KbResolveResult = {
+  context: string;
+  entryCount: number;
+  terms: string[];
+};
+
+export const kbApi = {
+  list: (params?: { type?: KbEntryType; category?: string; isActive?: boolean; limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.type) query.set("type", params.type);
+    if (params?.category) query.set("category", params.category);
+    if (params?.isActive !== undefined) query.set("isActive", String(params.isActive));
+    if (params?.limit) query.set("limit", String(params.limit));
+    if (params?.offset) query.set("offset", String(params.offset));
+    const qs = query.toString();
+    return request<{ items: KbEntry[]; total: number }>(`/api/kb${qs ? `?${qs}` : ""}`);
+  },
+  get: (id: string) => request<KbEntry>(`/api/kb/${id}`),
+  create: (payload: KbEntryPayload) =>
+    request<KbEntry>("/api/kb", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  update: (id: string, payload: Partial<KbEntryPayload>) =>
+    request<KbEntry>(`/api/kb/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  remove: (id: string) =>
+    request<{ ok: true }>(`/api/kb/${id}`, {
+      method: "DELETE",
+    }),
+  resolve: (context: { keywords?: string; title?: string; mode?: string; limit?: number }) =>
+    request<KbResolveResult>("/api/kb/resolve", {
+      method: "POST",
+      body: JSON.stringify(context),
+    }),
+  import: (entries: KbEntryPayload[]) =>
+    request<{ imported: number; ids: string[] }>("/api/kb/import", {
+      method: "POST",
+      body: JSON.stringify(entries),
+    }),
+  seedFromCompanyInfo: (companyInfo: unknown) =>
+    request<{ imported: number; ids: string[] }>("/api/kb/seed-from-company-info", {
+      method: "POST",
+      body: JSON.stringify(companyInfo),
+    }),
+  upload: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<{ url: string; filename: string }>("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
 };

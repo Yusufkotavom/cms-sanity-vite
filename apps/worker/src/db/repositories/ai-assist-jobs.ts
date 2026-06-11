@@ -14,6 +14,7 @@ export type AiAssistJobRecord = {
   attempts: number;
   created_at: string;
   updated_at: string;
+  prompt_log: string | null;
 };
 
 function toRecord(row: Record<string, unknown>): AiAssistJobRecord {
@@ -29,6 +30,7 @@ function toRecord(row: Record<string, unknown>): AiAssistJobRecord {
     attempts: Number(row.attempts ?? 0),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
+    prompt_log: row.prompt_log ? String(row.prompt_log) : null,
   };
 }
 
@@ -97,12 +99,12 @@ export async function retryAiAssistJob(db: D1Database, input: { workspaceId: str
     .run();
 }
 
-export async function markAiAssistJobCompleted(db: D1Database, input: { id: string; resultJson: string; now: string }) {
-  await db.prepare("update ai_assist_jobs set status = 'completed', result_json = ?, error = null, updated_at = ? where id = ? and status = 'processing'").bind(input.resultJson, input.now, input.id).run();
+export async function markAiAssistJobCompleted(db: D1Database, input: { id: string; resultJson: string; promptLog?: string; now: string }) {
+  await db.prepare("update ai_assist_jobs set status = 'completed', result_json = ?, prompt_log = ?, error = null, updated_at = ? where id = ? and status = 'processing'").bind(input.resultJson, input.promptLog || null, input.now, input.id).run();
 }
 
-export async function markAiAssistJobFailed(db: D1Database, input: { id: string; error: string; now: string }) {
-  await db.prepare("update ai_assist_jobs set status = 'failed', error = ?, updated_at = ? where id = ? and status = 'processing'").bind(input.error, input.now, input.id).run();
+export async function markAiAssistJobFailed(db: D1Database, input: { id: string; error: string; promptLog?: string; now: string }) {
+  await db.prepare("update ai_assist_jobs set status = 'failed', error = ?, prompt_log = ?, updated_at = ? where id = ? and status = 'processing'").bind(input.error, input.promptLog || null, input.now, input.id).run();
 }
 
 export async function cancelAiAssistJob(db: D1Database, input: { workspaceId: string; id: string; now: string }) {

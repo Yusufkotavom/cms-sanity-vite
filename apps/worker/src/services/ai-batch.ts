@@ -3,6 +3,7 @@ import {
   requestAiSuggestion,
   type AiConfig,
 } from "./ai";
+import { resolveRelevantKbEntries } from "./kb-resolver";
 import {
   findAiBatchById,
   findNextRunnableAiBatchItem,
@@ -207,8 +208,15 @@ async function processPendingItem(
     },
   };
 
+  const knowledgeContext = await resolveRelevantKbEntries(env.DB, batch.workspace_id, {
+    keywords: item.seo_keywords || item.keyword,
+    title: item.title || item.keyword,
+    mode: "outline",
+  });
+
   const suggestion = await requestAiSuggestion(aiRequest, {
     ...config,
+    knowledgeContext,
     outlinePrompt: template.outline_prompt || config.outlinePrompt,
   });
 
@@ -299,8 +307,15 @@ async function processOutlineDoneItem(
     },
   };
 
+  const knowledgeContext = await resolveRelevantKbEntries(env.DB, batch.workspace_id, {
+    keywords: item.seo_keywords || item.keyword,
+    title: item.title || item.keyword,
+    mode: "outline_to_post",
+  });
+
   const suggestion = await requestAiSuggestion(aiRequest, {
     ...config,
+    knowledgeContext,
     outlineToPostPrompt: template.content_prompt || config.outlineToPostPrompt,
   });
 

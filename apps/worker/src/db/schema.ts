@@ -161,3 +161,21 @@ export const noteCategories = sqliteTable(
     index("note_categories_note_id_idx").on(table.noteId),
   ]
 );
+
+export const kbEntries = sqliteTable("kb_entries", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull(),
+  type: text("type").notNull(),
+  category: text("category").notNull().default(""),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  keywords: text("keywords").notNull().default(""),
+  modes: text("modes").notNull().default(""),
+  priority: integer("priority").notNull().default(0),
+  isActive: integer("is_active").notNull().default(1),
+  metadataJson: text("metadata_json"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("kb_entries_workspace_active_idx").on(table.workspaceId, table.isActive),
+]);

@@ -16,6 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ActivityIcon,
+  BookOpenIcon,
   CalendarClockIcon,
   CommandIcon,
   DatabaseIcon,
@@ -56,6 +57,11 @@ const data = {
       title: "AI Batch",
       route: "ai-batch",
       icon: <SparklesIcon />,
+    },
+    {
+      title: "Knowledge Base",
+      route: "knowledge-base",
+      icon: <BookOpenIcon />,
     },
   ],
   navSecondary: [

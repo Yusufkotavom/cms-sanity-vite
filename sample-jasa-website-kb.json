@@ -1,0 +1,46 @@
+[
+  {
+    "type": "product",
+    "category": "website",
+    "title": "Jasa Pembuatan Website Profesional & SEO-Friendly Kotacom",
+    "content": "Detail layanan pembuatan website dari Kotacom. Kami melayani pembuatan website kustom untuk company profile (profil perusahaan), landing page konversi tinggi, toko online (e-commerce), dan portal berita. Fitur unggulan: integrasi SEO on-page lengkap, kecepatan loading tinggi (Core Web Vitals hijau), layout responsif mobile-first, integrasi Google Search Console & Analytics, serta gratis maintenance 3 bulan pertama. Harga mulai dari Rp 3.500.000 (landing page) hingga Rp 15.000.000+ untuk custom web application.",
+    "keywords": "jasa pembuatan website, buat website profesional, jasa web design, web developer indonesia, company profile murah, landing page seo",
+    "modes": "outline_to_post,seo_only",
+    "priority": 10,
+    "isActive": true,
+    "metadataJson": null
+  },
+  {
+    "type": "url",
+    "category": "website",
+    "title": "Halaman Layanan & Portfolio Pembuatan Website Kotacom",
+    "content": "URL: https://www.kotacom.id/pembuatan-website\nPortfolio kami meliputi pembuatan website korporat, e-commerce dengan payment gateway otomatis (Xendit/Midtrans), sistem reservasi online, dan landing page campaign. Lebih dari 150 project sukses dirilis sejak 2008.",
+    "keywords": "portfolio website, contoh website company profile, link jasa website kotacom, harga web design",
+    "modes": "outline_to_post",
+    "priority": 9,
+    "isActive": true,
+    "metadataJson": "{\"url\": \"https://www.kotacom.id/pembuatan-website\"}"
+  },
+  {
+    "type": "faq",
+    "category": "website",
+    "title": "FAQ Proses dan Syarat Pembuatan Website",
+    "content": "Q: Berapa lama proses pembuatan website?\nA: Landing page biasanya selesai dalam 3-5 hari kerja. Website company profile standar memakan waktu 7-14 hari kerja. Aplikasi web kustom bisa 1-3 bulan tergantung kompleksitas.\n\nQ: Apakah biaya sudah termasuk domain dan hosting?\nA: Ya, paket standar kami sudah include domain (.com / .co.id) dan cloud hosting super cepat selama 1 tahun pertama.\n\nQ: Bagaimana dengan optimasi SEO?\nA: Semua website yang kami buat sudah dioptimasi struktur SEO-nya (semantic HTML, meta tag dinamis, sitemap XML, robots.txt, schema markup).",
+    "keywords": "faq jasa website, biaya pembuatan website, berapa lama buat website, hosting gratis domain",
+    "modes": "outline_to_post",
+    "priority": 8,
+    "isActive": true,
+    "metadataJson": null
+  },
+  {
+    "type": "block",
+    "category": "website",
+    "title": "Panduan Penulisan & AI Gen untuk Jasa Website",
+    "content": "Aturan penulisan artikel promosi jasa pembuatan website untuk AI:\n1. Hook: Mulai dengan menyoroti masalah bisnis offline yang kesulitan mendapatkan pelanggan baru di era digital.\n2. Solusi: Tampilkan website profesional sebagai solusi digital utama.\n3. Fitur Utama: Selalu sebutkan keunggulan Kotacom (desain kustom responsif, speed tinggi, garansi support).\n4. Nada Suara: Profesional, informatif, dan persuasif.\n5. Call to Action (CTA): Ajak pembaca untuk berkonsultasi gratis via WhatsApp di link https://www.kotacom.id/pembuatan-website.",
+    "keywords": "panduan konten website, struktur post jasa website, cta pembuatan website",
+    "modes": "outline_to_post,outline_only",
+    "priority": 8,
+    "isActive": true,
+    "metadataJson": null
+  }
+]

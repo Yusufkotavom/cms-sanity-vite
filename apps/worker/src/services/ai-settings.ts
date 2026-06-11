@@ -1,3 +1,5 @@
+import type { AiConfig } from "./ai";
+
 export const AI_SETTING_KEYS = [
   "ai.models",
   "ai.defaultModelId",
@@ -21,6 +23,7 @@ export type AiModelSettings = {
   apiBaseUrl: string;
   apiKey: string;
   model: string;
+  maxTokens?: number;
 };
 
 export type AiWorkspaceSettings = {
@@ -102,7 +105,10 @@ export function normalizeAiWorkspaceSettings(settings: Map<string, string>): AiW
       typeof model.apiBaseUrl === "string" &&
       typeof model.apiKey === "string" &&
       typeof model.model === "string"
-  );
+  ).map((model) => ({
+    ...model,
+    maxTokens: model.maxTokens ? Number(model.maxTokens) : undefined,
+  }));
 
   if (parsedModels.length === 0) {
     const legacyModel = createLegacyAiModel(settings);
@@ -135,7 +141,7 @@ export function resolveDefaultAiModel(settings: AiWorkspaceSettings) {
   return settings.models.find((model) => model.id === settings.defaultModelId) ?? settings.models[0] ?? null;
 }
 
-export function toAiConfig(settings: AiWorkspaceSettings) {
+export function toAiConfig(settings: AiWorkspaceSettings): AiConfig {
   const model = resolveDefaultAiModel(settings);
   return {
     apiBaseUrl: model?.apiBaseUrl ?? "",
@@ -147,6 +153,7 @@ export function toAiConfig(settings: AiWorkspaceSettings) {
     draftPrompt: settings.draftPrompt,
     outlinePrompt: settings.outlinePrompt,
     outlineToPostPrompt: settings.outlineToPostPrompt,
+    maxTokens: model?.maxTokens,
   };
 }
 

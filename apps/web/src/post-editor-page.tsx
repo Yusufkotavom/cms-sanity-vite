@@ -12,6 +12,8 @@ import {
   SaveIcon,
   SendIcon,
   SparklesIcon,
+  CopyIcon,
+  CheckIcon,
 } from "lucide-react";
 
 import type { AiAssistJob, ApiCategory, ApiConfig, ApiNote } from "@/lib/api";
@@ -176,6 +178,14 @@ export function PostEditorPage({
   const [aiRewritePrompt, setAiRewritePrompt] = useState(
     "Rewrite konten post ini dalam bahasa Indonesia yang lebih rapi, lebih kuat secara SEO, dan tetap menjaga fakta asli. Perbaiki alur, kejelasan, transisi, excerpt, serta metadata SEO/OG. Jangan mengubah intent utama atau menambahkan klaim yang tidak ada di sumber."
   );
+  const [showPromptLog, setShowPromptLog] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+
+  const handleCopyPrompt = (text: string) => {
+    void navigator.clipboard.writeText(text);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2000);
+  };
   const sanityDocumentUrl = draft.sanityDocumentId && config?.sanityProjectId && config.sanityDataset
     ? `https://${config.sanityProjectId}.api.sanity.io/v2026-03-29/data/doc/${config.sanityDataset}/${encodeURIComponent(draft.sanityDocumentId)}`
     : null;
@@ -372,6 +382,43 @@ export function PostEditorPage({
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Loader2Icon className="size-3 animate-spin" />
                     <span>{activeAiAssistJob.status === "queued" ? "Menunggu worker..." : "AI sedang proses. Aman refresh/ganti note/tutup tab."}</span>
+                  </div>
+                ) : null}
+                {activeAiAssistJob.promptLog ? (
+                  <div className="mt-1 flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowPromptLog(!showPromptLog)}
+                      >
+                        {showPromptLog ? "Sembunyikan Prompt AI" : "Tampilkan Prompt AI"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs font-normal text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        onClick={() => handleCopyPrompt(activeAiAssistJob.promptLog || "")}
+                      >
+                        {copiedPrompt ? (
+                          <>
+                            <CheckIcon className="size-3 text-green-500" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <CopyIcon className="size-3" />
+                            <span>Copy Prompt</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {showPromptLog && (
+                      <pre className="max-h-[300px] overflow-auto rounded-lg border border-border bg-muted p-3 font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-all">
+                        {activeAiAssistJob.promptLog}
+                      </pre>
+                    )}
                   </div>
                 ) : null}
               </div>

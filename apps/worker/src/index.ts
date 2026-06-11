@@ -103,7 +103,19 @@ import {
 } from "./services/publish";
 import { generateAndUploadOgImage, generateOgImageBytes, uploadOgImageBytesToSanity, type OgBranding } from "./services/og-image";
 import { processAiBatchWork } from "./services/ai-batch";
-import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, testAiConnection, type AiAssistRequest } from "./services/ai";
+import { resolveRelevantKbEntries } from "./services/kb-resolver";
+import { resolveRelevantKbEntriesDetailed } from "./services/kb-resolver";
+import { buildKbEntriesFromCompanyInfo } from "./services/kb-seed";
+import {
+  KB_ENTRY_TYPES,
+  countKbEntries,
+  createKbEntry,
+  deleteKbEntry,
+  findKbEntryById,
+  listKbEntries,
+  updateKbEntry,
+} from "./db/repositories/kb-entries";
+import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, testAiConnection, type AiAssistRequest, buildSystemPrompt, buildUserPrompt } from "./services/ai";
 import {
   AI_INHERIT_FROM_DEFAULT_KEY,
   AI_SETTING_KEYS,
@@ -263,6 +275,47 @@ const aiBatchItemUpdateSchema = z.object({
   keyword: z.string().trim().min(1),
   description: z.string().default(""),
 });
+
+const kbEntryCreateSchema = z.object({
+  type: z.enum(KB_ENTRY_TYPES),
+  category: z.string().default(""),
+  title: z.string().min(1),
+  content: z.string().min(1),
+  keywords: z.string().default(""),
+  modes: z.string().default(""),
+  priority: z.number().int().default(0),
+  isActive: z.boolean().default(true),
+  metadataJson: z.string().nullable().default(null),
+});
+
+const kbEntryUpdateSchema = z.object({
+  type: z.enum(KB_ENTRY_TYPES).optional(),
+  category: z.string().optional(),
+  title: z.string().min(1).optional(),
+  content: z.string().min(1).optional(),
+  keywords: z.string().optional(),
+  modes: z.string().optional(),
+  priority: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+  metadataJson: z.string().nullable().optional(),
+});
+
+const kbListQuerySchema = z.object({
+  type: z.enum(KB_ENTRY_TYPES).optional(),
+  category: z.string().optional(),
+  isActive: z.preprocess((val) => val === "true" ? true : val === "false" ? false : val, z.boolean().optional()),
+  limit: z.preprocess((val) => (val === undefined || val === null || val === "") ? undefined : Number(val), z.number().int().min(1).max(200).default(50)),
+  offset: z.preprocess((val) => (val === undefined || val === null || val === "") ? undefined : Number(val), z.number().int().min(0).default(0)),
+});
+
+const kbResolveSchema = z.object({
+  keywords: z.string().default(""),
+  title: z.string().default(""),
+  mode: z.string().default("outline_to_post"),
+  limit: z.number().int().min(1).max(20).default(10),
+});
+
+const kbImportSchema = z.array(kbEntryCreateSchema).min(1).max(200);
 
 const authLoginSchema = z.object({
   email: z.string().trim().email(),
@@ -628,7 +681,7 @@ app.use("/api/*", async (c, next) => {
   }
 
   const path = c.req.path;
-  const isPublicPath = path === "/api/health" || path === "/api/auth/status" || path === "/api/auth/login";
+  const isPublicPath = path === "/api/health" || path === "/api/auth/status" || path === "/api/auth/login" || path.startsWith("/api/uploads/");
 
   if (!isAuthConfigured(c.env)) {
     if (isPublicPath) {
@@ -667,7 +720,7 @@ app.use("/api/*", async (c, next) => {
 });
 app.use("/api/*", async (c, next) => {
   const path = c.req.path;
-  const isPublicPath = path === "/api/health" || path === "/api/auth/status" || path === "/api/auth/login";
+  const isPublicPath = path === "/api/health" || path === "/api/auth/status" || path === "/api/auth/login" || path.startsWith("/api/uploads/");
   const isWorkspaceAdminPath = path === "/api/workspaces" || /^\/api\/workspaces\/[^/]+$/.test(path);
 
   if (isPublicPath || isWorkspaceAdminPath) {
@@ -1496,6 +1549,166 @@ app.delete("/api/ai/batches/:id/items/:itemId", async (c) => {
   });
 });
 
+app.get("/api/kb", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const query = kbListQuerySchema.parse(c.req.query());
+  const [items, total] = await Promise.all([
+    listKbEntries(c.env.DB, workspaceId, query),
+    countKbEntries(c.env.DB, workspaceId, query),
+  ]);
+  return c.json({ items: items.map(mapKbEntry), total });
+});
+
+app.post("/api/kb", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const payload = kbEntryCreateSchema.parse(await c.req.json());
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+
+  await createKbEntry(c.env.DB, {
+    id,
+    workspaceId,
+    type: payload.type,
+    category: payload.category,
+    title: payload.title,
+    content: payload.content,
+    keywords: payload.keywords,
+    modes: payload.modes,
+    priority: payload.priority,
+    isActive: payload.isActive ? 1 : 0,
+    metadataJson: payload.metadataJson,
+    now,
+  });
+
+  const entry = await findKbEntryById(c.env.DB, workspaceId, id);
+  return c.json(entry ? mapKbEntry(entry) : { id }, 201);
+});
+
+app.get("/api/kb/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const entry = await findKbEntryById(c.env.DB, workspaceId, c.req.param("id"));
+  if (!entry) {
+    return c.json({ message: "KB entry not found" }, 404);
+  }
+  return c.json(mapKbEntry(entry));
+});
+
+app.patch("/api/kb/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const existing = await findKbEntryById(c.env.DB, workspaceId, id);
+
+  if (!existing) {
+    return c.json({ message: "KB entry not found" }, 404);
+  }
+
+  const payload = kbEntryUpdateSchema.parse(await c.req.json());
+  await updateKbEntry(c.env.DB, {
+    id,
+    workspaceId,
+    type: payload.type,
+    category: payload.category,
+    title: payload.title,
+    content: payload.content,
+    keywords: payload.keywords,
+    modes: payload.modes,
+    priority: payload.priority,
+    isActive: payload.isActive !== undefined ? (payload.isActive ? 1 : 0) : undefined,
+    metadataJson: payload.metadataJson,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const updated = await findKbEntryById(c.env.DB, workspaceId, id);
+  return c.json(updated ? mapKbEntry(updated) : { id });
+});
+
+app.delete("/api/kb/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const existing = await findKbEntryById(c.env.DB, workspaceId, id);
+
+  if (!existing) {
+    return c.json({ message: "KB entry not found" }, 404);
+  }
+
+  await deleteKbEntry(c.env.DB, workspaceId, id);
+  return c.json({ ok: true });
+});
+
+app.post("/api/kb/resolve", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const payload = kbResolveSchema.parse(await c.req.json());
+  const result = await resolveRelevantKbEntriesDetailed(c.env.DB, workspaceId, {
+    keywords: payload.keywords,
+    title: payload.title,
+    mode: payload.mode,
+  }, { limit: payload.limit });
+
+  return c.json(result);
+});
+
+app.post("/api/kb/import", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const entries = kbImportSchema.parse(await c.req.json());
+  const now = new Date().toISOString();
+  const ids: string[] = [];
+
+  for (const entry of entries) {
+    const id = crypto.randomUUID();
+    await createKbEntry(c.env.DB, {
+      id,
+      workspaceId,
+      type: entry.type,
+      category: entry.category,
+      title: entry.title,
+      content: entry.content,
+      keywords: entry.keywords,
+      modes: entry.modes,
+      priority: entry.priority,
+      isActive: entry.isActive ? 1 : 0,
+      metadataJson: entry.metadataJson,
+      now,
+    });
+    ids.push(id);
+  }
+
+  return c.json({ imported: ids.length, ids }, 201);
+});
+
+app.post("/api/kb/seed-from-company-info", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const companyInfoJson = await c.req.json();
+  const seedEntries = buildKbEntriesFromCompanyInfo(companyInfoJson as Parameters<typeof buildKbEntriesFromCompanyInfo>[0]);
+
+  if (seedEntries.length === 0) {
+    return c.json({ imported: 0, ids: [], message: "No entries could be extracted from the provided company info" }, 400);
+  }
+
+  const now = new Date().toISOString();
+  const ids: string[] = [];
+
+  for (const entry of seedEntries) {
+    const id = crypto.randomUUID();
+    await createKbEntry(c.env.DB, {
+      id,
+      workspaceId,
+      type: entry.type,
+      category: entry.category,
+      title: entry.title,
+      content: entry.content,
+      keywords: entry.keywords,
+      modes: entry.modes,
+      priority: entry.priority,
+      isActive: entry.isActive ? 1 : 0,
+      metadataJson: entry.metadataJson,
+      now,
+    });
+    ids.push(id);
+  }
+
+  return c.json({ imported: ids.length, ids }, 201);
+});
+
 app.get("/api/notes", async (c) => {
   const workspaceId = c.get("workspaceId");
   const records = await listNotes(c.env.DB, workspaceId);
@@ -1703,6 +1916,53 @@ app.get("/api/notes/:id/og-image", async (c) => {
   return new Response(object.body, { headers });
 });
 
+app.post("/api/upload", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!c.env.OG_ASSETS) {
+    return c.json({ message: "R2 storage not configured" }, 500);
+  }
+
+  const body = await c.req.parseBody();
+  const file = body.file;
+  if (!file || !(file instanceof File)) {
+    return c.json({ message: "No file uploaded" }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  const extension = file.name.split(".").pop() || "png";
+  const filename = `${id}.${extension}`;
+  const key = `uploads/${workspaceId}/${filename}`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  await c.env.OG_ASSETS.put(key, arrayBuffer, {
+    httpMetadata: { contentType: file.type || "image/png" },
+  });
+
+  const origin = requestOrigin(c.req.url);
+  const url = `${origin}/api/uploads/${workspaceId}/${filename}`;
+  return c.json({ url, filename });
+});
+
+app.get("/api/uploads/:workspaceId/:filename", async (c) => {
+  const workspaceId = c.req.param("workspaceId");
+  const filename = c.req.param("filename");
+  if (!c.env.OG_ASSETS) {
+    return c.json({ message: "R2 storage not configured" }, 500);
+  }
+
+  const key = `uploads/${workspaceId}/${filename}`;
+  const object = await c.env.OG_ASSETS.get(key);
+  if (!object) {
+    return c.json({ message: "File not found" }, 404);
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  return new Response(object.body, { headers });
+});
+
 app.get("/api/notes/:id", async (c) => {
   const note = await findNoteByIdInWorkspace(c.env.DB, c.get("workspaceId"), c.req.param("id"));
 
@@ -1835,6 +2095,12 @@ app.post("/api/notes/:id/ai-rewrite-preview", async (c) => {
       token: sanitySettings.writeToken,
     });
 
+    const knowledgeContext = await resolveRelevantKbEntries(c.env.DB, workspaceId, {
+      keywords: snapshot.seoKeywords,
+      title: snapshot.title,
+      mode: "draft",
+    });
+
     const suggestion = await requestAiSuggestion(
       {
         mode: "draft",
@@ -1853,6 +2119,7 @@ app.post("/api/notes/:id/ai-rewrite-preview", async (c) => {
       },
       {
         ...aiConfig,
+        knowledgeContext,
         draftPrompt: payload.prompt,
       }
     );
@@ -2096,6 +2363,7 @@ function toAiAssistJobResponse(job: AiAssistJobRecord) {
     attempts: job.attempts,
     createdAt: job.created_at,
     updatedAt: job.updated_at,
+    promptLog: job.prompt_log,
   };
 }
 
@@ -2138,6 +2406,7 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 3) {
       continue;
     }
 
+    let promptLog: string | undefined = undefined;
     try {
       const note = await findNoteByIdInWorkspace(env.DB, workspaceId, job.note_id);
       if (!note) {
@@ -2151,6 +2420,17 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 3) {
       }
 
       const request = JSON.parse(job.request_json) as AiAssistRequest;
+      aiConfig.knowledgeContext = await resolveRelevantKbEntries(env.DB, workspaceId, {
+        keywords: request.note.seoKeywords,
+        title: request.note.title,
+        mode: request.mode,
+      });
+
+      // Reconstruct prompt log for recording
+      const sysPrompt = buildSystemPrompt(request.mode, aiConfig);
+      const usrPrompt = buildUserPrompt(request);
+      promptLog = `--- SYSTEM PROMPT ---\n${sysPrompt}\n\n--- USER PROMPT ---\n${usrPrompt}`;
+
       const suggestion = await requestAiSuggestion(request, aiConfig);
       const latestJob = await findAiAssistJobById(env.DB, workspaceId, job.id);
       if (latestJob?.status === "cancelled") {
@@ -2183,6 +2463,7 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 3) {
       await markAiAssistJobCompleted(env.DB, {
         id: job.id,
         resultJson: JSON.stringify(await mapNote(env.DB, refreshed)),
+        promptLog,
         now: new Date().toISOString(),
       });
       processed += 1;
@@ -2190,6 +2471,7 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 3) {
       await markAiAssistJobFailed(env.DB, {
         id: job.id,
         error: truncateJobError(error instanceof Error ? error.message : "AI assist job failed"),
+        promptLog,
         now: new Date().toISOString(),
       });
     }
@@ -2209,6 +2491,11 @@ app.post("/api/ai/assist", async (c) => {
   }
 
   try {
+    aiConfig.knowledgeContext = await resolveRelevantKbEntries(c.env.DB, workspaceId, {
+      keywords: payload.note.seoKeywords,
+      title: payload.note.title,
+      mode: payload.mode,
+    });
     const suggestion = await requestAiSuggestion(payload, aiConfig);
 
     return c.json({
@@ -2443,6 +2730,38 @@ function mapAiPromptTemplate(template: {
     contentPrompt: template.content_prompt,
     createdAt: template.created_at,
     updatedAt: template.updated_at,
+  };
+}
+
+function mapKbEntry(entry: {
+  id: string;
+  workspace_id: string;
+  type: string;
+  category: string;
+  title: string;
+  content: string;
+  keywords: string;
+  modes: string;
+  priority: number;
+  is_active: number;
+  metadata_json: string | null;
+  created_at: string;
+  updated_at: string;
+}) {
+  return {
+    id: entry.id,
+    workspaceId: entry.workspace_id,
+    type: entry.type,
+    category: entry.category,
+    title: entry.title,
+    content: entry.content,
+    keywords: entry.keywords,
+    modes: entry.modes,
+    priority: entry.priority,
+    isActive: entry.is_active === 1,
+    metadataJson: entry.metadata_json,
+    createdAt: entry.created_at,
+    updatedAt: entry.updated_at,
   };
 }
 

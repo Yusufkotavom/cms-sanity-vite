@@ -50,6 +50,11 @@ const AiBatchPage = lazy(async () => {
   return { default: module.AiBatchPage };
 });
 
+const KnowledgeBasePage = lazy(async () => {
+  const module = await import("./knowledge-base-page");
+  return { default: module.KnowledgeBasePage };
+});
+
 const PostEditorPage = lazy(async () => {
   const module = await import("./post-editor-page");
   return { default: module.PostEditorPage };
@@ -73,6 +78,7 @@ type AppRoute =
   | "scheduled"
   | "sanity-sync"
   | "ai-batch"
+  | "knowledge-base"
   | "worker-logs"
   | "settings"
   | "api-status";
@@ -117,6 +123,10 @@ const routeMeta: Record<AppRoute, { title: string; description: string }> = {
   "ai-batch": {
     title: "AI Batch",
     description: "Generate outline dan konten secara bertahap dari banyak keyword.",
+  },
+  "knowledge-base": {
+    title: "Knowledge Base",
+    description: "Kelola entri knowledge base untuk konteks AI generation.",
   },
   "worker-logs": {
     title: "Worker Logs",
@@ -184,6 +194,7 @@ function getRouteFromHash(hash: string): RouteState {
     "scheduled",
     "sanity-sync",
     "ai-batch",
+    "knowledge-base",
     "worker-logs",
     "settings",
     "api-status",
@@ -1875,6 +1886,18 @@ function App() {
             }
           >
             <AiBatchPage config={config} workspaceSlug={activeWorkspaceSlug} />
+          </Suspense>
+        );
+      case "knowledge-base":
+        return (
+          <Suspense
+            fallback={
+              <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border bg-card/60 text-sm text-muted-foreground">
+                Loading knowledge base...
+              </div>
+            }
+          >
+            <KnowledgeBasePage />
           </Suspense>
         );
       case "worker-logs":

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:remote": "wrangler dev --remote",
     "build": "wrangler deploy --dry-run",
     "typecheck": "tsc --noEmit",
     "test": "pnpm exec vitest run",
