@@ -71,7 +71,7 @@ export async function listKbEntries(db: D1Database, workspaceId: string, options
     conditions.push(eq(kbEntries.isActive, options.isActive ? 1 : 0));
   }
 
-  const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 1000);
   const offset = Math.max(options.offset ?? 0, 0);
 
   const rows = await drizzleDb

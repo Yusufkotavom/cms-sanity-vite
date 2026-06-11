@@ -304,7 +304,7 @@ const kbListQuerySchema = z.object({
   type: z.enum(KB_ENTRY_TYPES).optional(),
   category: z.string().optional(),
   isActive: z.preprocess((val) => val === "true" ? true : val === "false" ? false : val, z.boolean().optional()),
-  limit: z.preprocess((val) => (val === undefined || val === null || val === "") ? undefined : Number(val), z.number().int().min(1).max(200).default(50)),
+  limit: z.preprocess((val) => (val === undefined || val === null || val === "") ? undefined : Number(val), z.number().int().min(1).max(1000).default(50)),
   offset: z.preprocess((val) => (val === undefined || val === null || val === "") ? undefined : Number(val), z.number().int().min(0).default(0)),
 });
 

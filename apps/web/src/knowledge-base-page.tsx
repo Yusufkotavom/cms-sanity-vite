@@ -367,7 +367,7 @@ export function KnowledgeBasePage() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>Knowledge Base</CardTitle>
               <CardDescription>
@@ -375,7 +375,7 @@ export function KnowledgeBasePage() {
                 Total: {total} entries.
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => setResolveOpen(true)}>
                 <FlaskConicalIcon className="mr-1 h-4 w-4" />
                 Test Resolver
@@ -396,7 +396,7 @@ export function KnowledgeBasePage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex gap-3">
+          <div className="mb-4 flex flex-wrap gap-3">
             <Select value={filterType} onValueChange={(val) => { setFilterType(val ?? "all"); setOffset(0); }}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="Type" />
