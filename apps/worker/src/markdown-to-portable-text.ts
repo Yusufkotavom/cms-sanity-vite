@@ -67,8 +67,8 @@ export type SanityLink = {
   title: string;
   href?: string;
   target?: boolean;
+  buttonVariant?: string;
 };
-
 export type SanityImage = {
   _type: "image";
   asset?: { _type: "reference"; _ref: string };
@@ -955,7 +955,19 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
 
   const blockKey = createKey();
 
-  // Helper: create body blocks from text attr
+  const parseBoolean = (value?: string, fallback?: boolean): boolean | undefined => {
+    if (value === undefined) return fallback;
+    if (value.toLowerCase() === "true") return true;
+    if (value.toLowerCase() === "false") return false;
+    return fallback;
+  };
+
+  const parseNumber = (value?: string, fallback?: number): number | undefined => {
+    if (value === undefined || value.trim() === "") return fallback;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
   const makeBody = (text?: string): PortableTextNode[] | undefined => {
     if (!text) return undefined;
     return [
@@ -969,56 +981,73 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     ];
   };
 
-  // Helper: create link from attrs
+  const makePadding = (): SanitySectionPadding | undefined => {
+    const top = parseBoolean(attrs.paddingTop);
+    const bottom = parseBoolean(attrs.paddingBottom);
+    if (top === undefined && bottom === undefined) return undefined;
+    return { _type: "sectionPadding", top: top ?? true, bottom: bottom ?? true };
+  };
+
+  const prefixedKey = (prefix: string | undefined, name: string) =>
+    prefix ? `${prefix}${name[0].toUpperCase()}${name.slice(1)}` : name;
+
   const makeLink = (prefix?: string): SanityLink | undefined => {
-    const titleKey = prefix ? `${prefix}Title` : "title";
-    const hrefKey = prefix ? `${prefix}Href` : "href";
-    const title = attrs[titleKey] || attrs.title;
-    const href = attrs[hrefKey] || attrs.href;
+    const title = attrs[prefixedKey(prefix, "title")] || (!prefix ? attrs.title : undefined);
+    const href = attrs[prefixedKey(prefix, "href")] || (!prefix ? attrs.href : undefined);
+    const variant = attrs[prefixedKey(prefix, "variant")];
+    const target = parseBoolean(attrs[prefixedKey(prefix, "target")], href ? isExternalHref(href) : false) ?? false;
+    const isExternal = parseBoolean(attrs[prefixedKey(prefix, "isExternal")], href ? isExternalHref(href) : false) ?? false;
     if (!title && !href) return undefined;
     return {
       _type: "link",
       _key: createKey(),
-      isExternal: href ? isExternalHref(href) : false,
+      isExternal,
       title: title || href || "",
       href: href || undefined,
-      target: href ? isExternalHref(href) : false,
+      target,
+      buttonVariant: variant || undefined,
     };
   };
 
-  // Helper: parse array from "item1|item2|item3" format
+  const makeLinks = (): SanityLink[] | undefined => {
+    const links = [makeLink("primary"), makeLink("secondary")].filter(Boolean) as SanityLink[];
+    if (links.length > 0) return links;
+    const link = makeLink();
+    return link ? [link] : undefined;
+  };
+
   const parseArray = (val?: string): string[] | undefined => {
     if (!val) return undefined;
     const items = val.split("|").map((s) => s.trim()).filter(Boolean);
     return items.length > 0 ? items : undefined;
   };
 
-  // Helper: parse features from "title1|title2" or JSON-like format
-  const parseFeatures = (val?: string): { _type: string; _key: string; title: string; description?: string }[] | undefined => {
-    if (!val) return undefined;
-    const items = val.split("|").map((s) => s.trim()).filter(Boolean);
-    if (items.length === 0) return undefined;
-    return items.map((item) => {
-      const [title, ...descParts] = item.split(":");
-      return {
-        _type: "feature",
-        _key: createKey(),
-        title: title.trim(),
-        description: descParts.length > 0 ? descParts.join(":").trim() : undefined,
-      };
-    });
+  const parseStructured = (val?: string): string[][] | undefined => {
+    const rows = parseArray(val)?.map((item) => item.split("::").map((part) => part.trim()));
+    return rows && rows.length > 0 ? rows : undefined;
   };
+
+  const parseFeatures = (val?: string): { _type: string; _key: string; icon?: string; title: string; description?: string; badge?: string }[] | undefined =>
+    parseStructured(val)?.map(([icon, title, description, badge]) => ({
+      _type: "feature",
+      _key: createKey(),
+      icon: icon || undefined,
+      title: title || "Feature",
+      description: description || undefined,
+      badge: badge || undefined,
+    })) ?? parseArray(val)?.map((title) => ({ _type: "feature", _key: createKey(), title }));
 
   // Hero blocks
   if (type === "hero-1") {
     return {
       _type: "hero-1",
       _key: blockKey,
-      tagLine: attrs.tagline || undefined,
+      padding: makePadding(),
+      tagLine: attrs.tagline || attrs.tagLine || undefined,
       uiIcon: attrs.uiIcon || undefined,
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
-      links: attrs.href ? [makeLink()!].filter(Boolean) : undefined,
+      links: makeLinks(),
     };
   }
 
@@ -1026,11 +1055,12 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "hero-2",
       _key: blockKey,
-      tagLine: attrs.tagline || undefined,
+      padding: makePadding(),
+      tagLine: attrs.tagline || attrs.tagLine || undefined,
       uiIcon: attrs.uiIcon || undefined,
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
-      links: attrs.href ? [makeLink()!].filter(Boolean) : undefined,
+      links: makeLinks(),
     };
   }
 
@@ -1218,14 +1248,15 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "cta-1",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       sectionWidth: attrs.sectionWidth || undefined,
       stackAlign: attrs.stackAlign || undefined,
-      tagLine: attrs.tagline || undefined,
+      tagLine: attrs.tagline || attrs.tagLine || undefined,
       uiIcon: attrs.uiIcon || undefined,
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
-      links: attrs.href ? [makeLink()!].filter(Boolean) : undefined,
+      links: makeLinks(),
     };
   }
 
@@ -1233,10 +1264,11 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "whatsapp-cta",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || "primary",
       sectionWidth: attrs.sectionWidth || "default",
       stackAlign: attrs.stackAlign || "left",
-      tagLine: attrs.tagline || "WhatsApp CTA",
+      tagLine: attrs.tagline || attrs.tagLine || "WhatsApp CTA",
       uiIcon: attrs.uiIcon || undefined,
       title: attrs.title || "Butuh jawaban cepat? Chat tim kami via WhatsApp",
       body: makeBody(attrs.text),
@@ -1259,6 +1291,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "faqs",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
     };
   }
@@ -1268,6 +1301,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "form-newsletter",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       stackAlign: attrs.stackAlign || undefined,
       consentText: attrs.consentText || undefined,
@@ -1281,10 +1315,11 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "all-posts",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       displayMode: attrs.displayMode || "default",
       contentTypes: parseArray(attrs.contentTypes) || ["post"],
-      limit: Number(attrs.limit) || 6,
+      limit: parseNumber(attrs.limit, 6) || 6,
     };
   }
 
@@ -1293,11 +1328,12 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "stats-hero-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       eyebrow: attrs.eyebrow || undefined,
       title: attrs.title || "",
       description: attrs.description || undefined,
-      links: attrs.href ? [makeLink()!].filter(Boolean) : undefined,
+      links: makeLinks(),
     };
   }
 
@@ -1305,6 +1341,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "company-info",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       description: attrs.description || undefined,
@@ -1315,6 +1352,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "testimonials-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       description: attrs.description || undefined,
@@ -1326,6 +1364,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "pricing-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       description: attrs.description || undefined,
@@ -1337,6 +1376,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "faq-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       description: attrs.description || undefined,
@@ -1344,10 +1384,23 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     };
   }
 
+  if (type === "benefits-block") {
+    return {
+      _type: "benefits-block",
+      _key: blockKey,
+      padding: makePadding(),
+      colorVariant: attrs.colorVariant || undefined,
+      title: attrs.title || undefined,
+      description: attrs.description || undefined,
+      benefits: parseArray(attrs.benefits || attrs.items),
+    };
+  }
+
   if (type === "features-package-block") {
     return {
       _type: "features-package-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       cardStyle: attrs.cardStyle || undefined,
       title: attrs.title || undefined,
@@ -1362,15 +1415,19 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "service-types-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       description: attrs.description || undefined,
-      services: attrs.services ? parseArray(attrs.services)?.map((item) => ({
+      services: parseStructured(attrs.services)?.map(([title, description, features, timeline, badge]) => ({
         _type: "serviceType" as const,
         _key: createKey(),
-        title: item,
-        description: "",
-      })) : undefined,
+        title: title || "Service",
+        description: description || "",
+        features: parseArray(features),
+        timeline: timeline || undefined,
+        badge: badge || undefined,
+      })),
     };
   }
 
@@ -1378,6 +1435,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "problem-solution-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       problems: parseArray(attrs.problems),
@@ -1390,15 +1448,17 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "value-props-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       description: attrs.description || undefined,
-      valueProps: attrs.valueProps ? parseArray(attrs.valueProps)?.map((item) => ({
+      valueProps: parseStructured(attrs.valueProps)?.map(([icon, title, description]) => ({
         _type: "valueProp" as const,
         _key: createKey(),
-        title: item,
-        description: "",
-      })) : undefined,
+        icon: icon || undefined,
+        title: title || "Value",
+        description: description || "",
+      })),
     };
   }
 

@@ -124,35 +124,27 @@ Untuk mendapatkan hasil tulisan AI terbaik dan meminimalkan halusinasi informasi
 
 ## 6. Aturan Penulisan Block Shortcode
 
-Untuk menyisipkan blok interaktif di antara paragraf tulisan secara fleksibel (inline), gunakan format shortcode di bawah ini pada baris baru yang terpisah. Sistem akan otomatis mendeteksi dan mengubahnya menjadi Portable Text Object di Sanity.
+Untuk menyisipkan blok interaktif di antara paragraf tulisan secara fleksibel, gunakan format shortcode pada baris baru yang terpisah:
 
-### A. WhatsApp CTA Block
-*   **Format**:
-    ```markdown
-    [block:whatsapp-cta title="Butuh jawaban cepat? Chat tim kami via WhatsApp" tagline="Hubungi kami" text="Hubungi tim kami untuk konsultasi gratis mengenai kebutuhan Anda" colorVariant="primary" sectionWidth="default" stackAlign="left" /]
-    ```
-*   **Parameter**:
-    *   `title` (opsional): Judul utama CTA (default: "Butuh jawaban cepat? Chat tim kami via WhatsApp").
-    *   `tagline` (opsional): Subtitle/kategori kecil di atas judul.
-    *   `text` (opsional): Deskripsi detail singkat yang dimasukkan ke dalam body block.
-    *   `colorVariant` (opsional): Varian warna latar belakang (pilihan: `primary`, `secondary`, `outline`, dll.).
-    *   `sectionWidth` (opsional): Lebar blok (pilihan: `default`, `narrow`, `full`).
-    *   `stackAlign` (opsional): Penyelarasan layout (pilihan: `left`, `center`, `right`).
-
-### B. Hero 2 Block
-*   **Format**:
-    ```markdown
-    [block:hero-2 title="Partner Teknologi Bisnis" tagline="Tech Partner" text="Website, Software, dan IT Support dalam satu tim" /]
-    ```
-*   **Parameter**:
-    *   `title` (opsional): Judul utama hero.
-    *   `tagline` (opsional): Tagline kecil di atas judul.
-    *   `text` (opsional): Deskripsi body.
-
-### C. Generic / Custom Blocks
-Jika Anda ingin menyisipkan tipe blok lain yang sudah terdaftar di Sanity Studio (misalnya `faq-block` atau `pricing-block`), gunakan format:
 ```markdown
-[block:tipe-block title="..." tagline="..." text="..." /]
+[block:block-name key="value" /]
 ```
-Sistem akan memetakan atribut tersebut secara dinamis ke skema blok terkait di Sanity.
+
+Dokumentasi lengkap semua block Sanity, field, dan contoh shortcode valid tersedia di:
+
+```txt
+docs/sanity-block-shortcodes.md
+```
+
+Shortcode yang paling aman untuk AI draft artikel:
+
+```markdown
+[block:whatsapp-cta title="Butuh jawaban cepat? Chat tim kami via WhatsApp" tagline="Hubungi kami" text="Hubungi tim kami untuk konsultasi gratis mengenai kebutuhan Anda" colorVariant="primary" sectionWidth="default" stackAlign="left" /]
+
+[block:cta-1 tagline="Konsultasi Gratis" title="Ceritakan kebutuhan bisnis Anda" text="Dapatkan rekomendasi teknis dan langkah implementasi realistis." primaryTitle="Diskusikan Kebutuhan" primaryHref="/contact" /]
+
+[block:hero-2 title="Partner Teknologi Bisnis" tagline="Tech Partner" text="Website, Software, dan IT Support dalam satu tim" /]
+```
+
+Selalu pastikan shortcode berdiri sendiri pada satu baris, semua string ditutup dengan kutip ganda (`"`), dan tidak dicampur dengan teks paragraf biasa.
 

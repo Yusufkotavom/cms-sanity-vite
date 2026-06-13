@@ -76,4 +76,73 @@ describe("markdownToPortableText", () => {
       style: "normal",
     });
   });
+
+  it("supports full practical hero and CTA shortcode fields", async () => {
+    const blocks = await markdownToPortableText(
+      [
+        '[block:hero-1 tagline="Layanan IT" uiIcon="monitor" title="Solusi Digital" text="Website, software, dan support IT." primaryTitle="Lihat Layanan" primaryHref="/services" primaryVariant="default" secondaryTitle="Hubungi Kami" secondaryHref="/contact" secondaryVariant="outline" /]',
+        '[block:whatsapp-cta paddingTop="true" paddingBottom="false" colorVariant="primary" sectionWidth="default" stackAlign="left" tagline="Butuh Bantuan" uiIcon="message-circle" title="Chat via WhatsApp" text="Tim kami siap membantu." secondaryTitle="Lihat Layanan" secondaryHref="/services" secondaryVariant="outline" /]',
+      ].join("\n\n")
+    );
+
+    expect(blocks[0]).toMatchObject({
+      _type: "hero-1",
+      tagLine: "Layanan IT",
+      uiIcon: "monitor",
+      title: "Solusi Digital",
+      links: [
+        { _type: "link", title: "Lihat Layanan", href: "/services", buttonVariant: "default" },
+        { _type: "link", title: "Hubungi Kami", href: "/contact", buttonVariant: "outline" },
+      ],
+    });
+
+    expect(blocks[1]).toMatchObject({
+      _type: "whatsapp-cta",
+      padding: { _type: "sectionPadding", top: true, bottom: false },
+      colorVariant: "primary",
+      sectionWidth: "default",
+      stackAlign: "left",
+      tagLine: "Butuh Bantuan",
+      uiIcon: "message-circle",
+      title: "Chat via WhatsApp",
+      secondaryLink: { _type: "link", title: "Lihat Layanan", href: "/services", buttonVariant: "outline" },
+    });
+  });
+
+  it("supports Sanity-clean SEO and utility blocks", async () => {
+    const blocks = await markdownToPortableText(
+      [
+        '[block:benefits-block paddingTop="true" paddingBottom="true" colorVariant="muted" title="Manfaat" description="Alasan memilih kami" benefits="Konsultatif|Support berkelanjutan|Harga transparan" /]',
+        '[block:value-props-block title="Kenapa Kami" description="Nilai utama" valueProps="zap::Cepat::Respons cepat untuk kebutuhan bisnis|shield::Aman::Solusi dibuat defensif" /]',
+        '[block:all-posts colorVariant="default" displayMode="grid" contentTypes="post|service" limit="4" /]',
+      ].join("\n\n")
+    );
+
+    expect(blocks[0]).toMatchObject({
+      _type: "benefits-block",
+      padding: { _type: "sectionPadding", top: true, bottom: true },
+      colorVariant: "muted",
+      title: "Manfaat",
+      description: "Alasan memilih kami",
+      benefits: ["Konsultatif", "Support berkelanjutan", "Harga transparan"],
+    });
+
+    expect(blocks[1]).toMatchObject({
+      _type: "value-props-block",
+      title: "Kenapa Kami",
+      description: "Nilai utama",
+      valueProps: [
+        { _type: "valueProp", icon: "zap", title: "Cepat", description: "Respons cepat untuk kebutuhan bisnis" },
+        { _type: "valueProp", icon: "shield", title: "Aman", description: "Solusi dibuat defensif" },
+      ],
+    });
+
+    expect(blocks[2]).toMatchObject({
+      _type: "all-posts",
+      colorVariant: "default",
+      displayMode: "grid",
+      contentTypes: ["post", "service"],
+      limit: 4,
+    });
+  });
 });
