@@ -93,10 +93,38 @@ function extractJsonObject(value: string) {
   const lastBrace = normalized.lastIndexOf("}");
 
   if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    throw new Error("AI response did not contain a JSON object");
+    // Last resort: try to find any JSON-like structure
+    const maybeJson = normalized.match(/\{[\s\S]*\}/);
+    if (!maybeJson) {
+      throw new Error("AI response did not contain a JSON object");
+    }
+    return maybeJson[0];
   }
 
-  return normalized.slice(firstBrace, lastBrace + 1);
+  const candidate = normalized.slice(firstBrace, lastBrace + 1);
+
+  // Validate that the extracted JSON is parseable
+  try {
+    JSON.parse(candidate);
+    return candidate;
+  } catch {
+    // JSON is malformed (likely truncated). Try to find the deepest valid JSON prefix.
+    // Walk backwards from end to find the last valid complete key-value
+    for (let i = lastBrace; i > firstBrace; i--) {
+      const attempt = normalized.slice(firstBrace, i + 1);
+      try {
+        JSON.parse(attempt);
+        return attempt;
+      } catch {
+        continue;
+      }
+    }
+
+    // If no valid JSON found, throw with context
+    throw new Error(
+      `AI response JSON is malformed (likely truncated). First 200 chars: ${candidate.slice(0, 200)}...`
+    );
+  }
 }
 
 export function buildSystemPrompt(mode: AiAssistRequest["mode"], config: AiConfig) {
@@ -251,7 +279,9 @@ export async function requestAiSuggestion(
     body: JSON.stringify({
       model: config.model,
       temperature: input.mode === "metadata" ? 0.4 : 0.7,
-      max_tokens: config.maxTokens || 4096,
+      max_tokens: input.mode === "outline_to_post" || input.mode === "draft"
+        ? Math.max(config.maxTokens || 8192, 8192)
+        : (config.maxTokens || 4096),
       messages: [
         {
           role: "system",
@@ -275,7 +305,31 @@ export async function requestAiSuggestion(
     throw new Error("AI response was empty");
   }
 
-  const parsed = JSON.parse(extractJsonObject(content)) as unknown;
+  let jsonCandidate: string;
+  try {
+    jsonCandidate = extractJsonObject(content);
+  } catch {
+    // Content-generation modes: fall back to treating response as raw markdown
+    if (input.mode === "outline_to_post") {
+      return aiSuggestionSchema.parse({ contentMd: content });
+    }
+    if (input.mode === "draft") {
+      return aiSuggestionSchema.parse({ contentMd: content });
+    }
+    throw new Error("AI response did not contain a JSON object");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonCandidate);
+  } catch {
+    // Truncated JSON fallback for content generation
+    if (input.mode === "outline_to_post" || input.mode === "draft") {
+      return aiSuggestionSchema.parse({ contentMd: content });
+    }
+    throw new Error("AI response JSON is malformed");
+  }
+
   return aiSuggestionSchema.parse(parsed);
 }
 
