@@ -17,6 +17,7 @@ import {
   AiBatchRunsView,
   AiBatchTemplatesView,
 } from "./app/ai-batch-page-views";
+import { KeywordEnrichDialog } from "./app/keyword-enrich-dialog";
 
 function parseBatchLines(value: string) {
   return value
@@ -76,6 +77,7 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
   const [itemForm, setItemForm] = useState({ keyword: "", description: "" });
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [isEnrichOpen, setIsEnrichOpen] = useState(false);
 
   const parsedItems = useMemo(() => parseBatchLines(batchLines), [batchLines]);
 
@@ -486,6 +488,7 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
               createBatch={() => void createBatch()}
               isCreating={isCreating}
               cancel={backToRuns}
+              onEnrichKeywords={() => setIsEnrichOpen(true)}
             />
           ) : runsView === "detail" ? (
             <AiBatchDetailView
@@ -528,6 +531,14 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
           isSavingTemplate={isSavingTemplate}
         />
       </Tabs>
+
+      <KeywordEnrichDialog
+        open={isEnrichOpen}
+        onOpenChange={setIsEnrichOpen}
+        initialKeywords={batchLines}
+        onApply={(keywords) => setBatchLines((prev) => [prev, keywords].filter(Boolean).join("\n"))}
+        workspaceSlug={workspaceSlug}
+      />
     </section>
   );
 }

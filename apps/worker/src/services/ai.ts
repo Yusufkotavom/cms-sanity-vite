@@ -34,6 +34,7 @@ export const aiAssistModeSchema = z.enum(["metadata", "draft", "outline", "outli
 export const aiAssistRequestSchema = z.object({
   mode: aiAssistModeSchema,
   note: aiNoteSchema,
+  templateId: z.string().uuid().optional(),
 });
 
 export const aiSuggestionSchema = z.object({
@@ -348,6 +349,115 @@ export async function requestAiSuggestion(
   }
 
   return aiSuggestionSchema.parse(parsed);
+}
+
+const keywordEnrichSchema = z.object({
+  suggestions: z.array(
+    z.object({
+      keyword: z.string(),
+      description: z.string().default(""),
+    })
+  ),
+});
+
+export type KeywordEnrichResult = z.infer<typeof keywordEnrichSchema>;
+
+const KEYWORD_ENRICH_SYSTEM_PROMPT = `Anda adalah ahli SEO riset keyword profesional. Tugas anda adalah mengembangkan seed keyword menjadi peta keyword yang terstruktur, berdasarkan prinsip SEO modern.
+
+## Prinsip SEO yang harus diikuti:
+1. **Search Intent**: Setiap keyword harus memiliki intent jelas — informasional, komersial, atau transaksional
+2. **Struktur Short → Long Tail**: Mulai dari head term (1-2 kata), kembangkan ke mid-tail (2-3 kata), lalu long-tail (3+ kata dengan intent spesifik)
+3. **Real Demand**: Hasilkan keyword yang benar-benar dicari orang. Hindari keyword acak atau tidak realistis
+4. **Topical Authority**: Keyword dalam satu cluster harus saling terkait secara semantik
+5. **EEAT-Friendly**: Prioritaskan keyword yang menunjukkan expertise, pengalaman, dan trustworthiness
+6. **AI Overview Resilience**: Untuk keyword broad informational, pastikan ada angle unik yang tidak bisa dijawab instant oleh AI Overview
+
+## Output:
+Kembalikan JSON dengan format:
+{
+  "suggestions": [
+    { "keyword": "...", "description": "..." }
+  ]
+}
+
+Setiap keyword harus memiliki deskripsi singkat yang menjelaskan:
+- Intent pencarian (informational, commercial, transactional, navigational)
+- Target audiens
+- Sudut pandang konten yang disarankan
+
+Hasilkan 8-20 keyword tergantung dari seed yang diberikan. Prioritaskan kualitas daripada kuantitas.`;
+
+export async function requestAiKeywordEnrichment(
+  keywords: string,
+  config: AiConfig,
+  systemPrompt?: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<KeywordEnrichResult> {
+  const effectivePrompt = systemPrompt?.trim() || KEYWORD_ENRICH_SYSTEM_PROMPT;
+  const baseUrl = config.apiBaseUrl.replace(/\/+$/, "");
+  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: config.model,
+      temperature: 0.5,
+      max_tokens: config.maxTokens || 4096,
+      messages: [
+        {
+          role: "system",
+          content: effectivePrompt,
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            task: "Kembangkan seed keyword berikut menjadi daftar keyword SEO yang terstruktur. Perhatikan prinsip short-to-long-tail, search intent, dan topical authority.",
+            seedKeywords: keywords,
+            bahasa: "Indonesia",
+          }),
+        },
+      ],
+    }),
+  });
+
+  const payload = await readAiResponsePayload(response);
+
+  if (!response.ok) {
+    throw new Error(buildAiRequestErrorMessage("Keyword enrichment request failed", response.status, payload));
+  }
+
+  const content = payload.json.choices?.[0]?.message?.content?.trim();
+  if (!content) {
+    throw new Error("AI response was empty");
+  }
+
+  let jsonCandidate: string;
+  try {
+    jsonCandidate = extractJsonObject(content);
+  } catch {
+    // Try fallback: if no JSON found, attempt to parse as plain text suggestions
+    const lines = content.split("\n").filter(Boolean);
+    const suggestions = lines
+      .map((line) => {
+        const cleaned = line.replace(/^[\d\s\-\*•]+/, "").trim();
+        const [keyword, ...rest] = cleaned.split(/[|–-]/);
+        return keyword?.trim() ? { keyword: keyword.trim(), description: rest.join(" ").trim() } : null;
+      })
+      .filter(Boolean) as KeywordEnrichResult["suggestions"];
+    if (suggestions.length > 0) {
+      return { suggestions };
+    }
+    throw new Error("AI response did not contain valid keyword suggestions");
+  }
+
+  try {
+    const parsed = JSON.parse(jsonCandidate);
+    return keywordEnrichSchema.parse(parsed);
+  } catch {
+    throw new Error("Keyword enrichment JSON is malformed");
+  }
 }
 
 export async function testAiConnection(

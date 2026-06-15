@@ -4,9 +4,7 @@ import {
   type AiConfig,
 } from "./ai";
 import { resolveRelevantKbEntries } from "./kb-resolver";
-import { getSettingsMap } from "../db/repositories/app-settings";
 import { DEFAULT_WORKSPACE_ID } from "../db/repositories/workspaces";
-import { AI_SETTING_KEYS, normalizeAiWorkspaceSettings } from "./ai-settings";
 import {
   findAiBatchById,
   findNextRunnableAiBatchItem,
@@ -210,17 +208,12 @@ async function processPendingItem(
       contentMd: item.content_md || "",
     },
   };
-
-  const aiSettingsMap = await getSettingsMap(env.DB, batch.workspace_id, [...AI_SETTING_KEYS]);
-  const aiSettings = normalizeAiWorkspaceSettings(aiSettingsMap);
-
   const knowledgeContext = await resolveRelevantKbEntries(env.DB, batch.workspace_id, {
     keywords: item.seo_keywords || item.keyword,
     title: item.title || item.keyword,
     mode: "outline",
   }, {
     defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
-    useDefaultWorkspaceKb: aiSettings.useDefaultWorkspaceKb,
   });
 
   const suggestion = await requestAiSuggestion(aiRequest, {
@@ -316,16 +309,12 @@ async function processOutlineDoneItem(
     },
   };
 
-  const aiSettingsMap = await getSettingsMap(env.DB, batch.workspace_id, [...AI_SETTING_KEYS]);
-  const aiSettings = normalizeAiWorkspaceSettings(aiSettingsMap);
-
   const knowledgeContext = await resolveRelevantKbEntries(env.DB, batch.workspace_id, {
     keywords: item.seo_keywords || item.keyword,
     title: item.title || item.keyword,
     mode: "outline_to_post",
   }, {
     defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
-    useDefaultWorkspaceKb: aiSettings.useDefaultWorkspaceKb,
   });
 
   const suggestion = await requestAiSuggestion(aiRequest, {

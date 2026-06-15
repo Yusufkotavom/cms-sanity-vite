@@ -154,3 +154,7 @@ Shortcode yang paling aman untuk AI draft artikel:
 
 Selalu pastikan shortcode berdiri sendiri pada satu baris, semua string ditutup dengan kutip ganda (`"`), dan tidak dicampur dengan teks paragraf biasa.
 
+---
+
+**Referensi operasional Knowledge Base:** [`docs/knowledge-base.md`](knowledge-base.md)
+

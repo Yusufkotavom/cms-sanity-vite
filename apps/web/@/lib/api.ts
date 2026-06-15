@@ -96,6 +96,7 @@ export type AiAssistMode = "metadata" | "draft" | "outline" | "outline_to_post" 
 
 export type AiAssistRequest = {
   mode: AiAssistMode;
+  templateId?: string;
   note: {
     title: string;
     slug: string;
@@ -710,6 +711,11 @@ export const notesApi = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  enrichKeywords: (keywords: string, prompt?: string) =>
+    request<{ suggestions: Array<{ keyword: string; description: string }> }>("/api/ai/batches/enrich-keywords", {
+      method: "POST",
+      body: JSON.stringify({ keywords, ...(prompt !== undefined ? { prompt } : {}) }),
+    }),
   updateAiBatchItem: (batchId: string, itemId: string, payload: { keyword: string; description: string }) =>
     request<AiBatchDetail>(`/api/ai/batches/${batchId}/items/${itemId}`, {
       method: "PATCH",
@@ -751,6 +757,11 @@ export type KbEntryPayload = {
   metadataJson?: string | null;
 };
 
+export type KbEntryAppendPayload = {
+  content?: string;
+  keywords?: string;
+};
+
 export type KbResolveResult = {
   context: string;
   entryCount: number;
@@ -776,6 +787,11 @@ export const kbApi = {
     }),
   update: (id: string, payload: Partial<KbEntryPayload>) =>
     request<KbEntry>(`/api/kb/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  append: (id: string, payload: KbEntryAppendPayload) =>
+    request<KbEntry>(`/api/kb/${id}/append`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),

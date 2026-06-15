@@ -108,6 +108,7 @@ import { resolveRelevantKbEntriesDetailed } from "./services/kb-resolver";
 import { buildKbEntriesFromCompanyInfo } from "./services/kb-seed";
 import {
   KB_ENTRY_TYPES,
+  appendKbEntry,
   countKbEntries,
   createKbEntry,
   deleteKbEntry,
@@ -115,7 +116,7 @@ import {
   listKbEntries,
   updateKbEntry,
 } from "./db/repositories/kb-entries";
-import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, testAiConnection, type AiAssistRequest, buildSystemPrompt, buildUserPrompt, aiSuggestionSchema } from "./services/ai";
+import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, requestAiKeywordEnrichment, testAiConnection, type AiAssistRequest, buildSystemPrompt, buildUserPrompt } from "./services/ai";
 import {
   AI_INHERIT_FROM_DEFAULT_KEY,
   AI_SETTING_KEYS,
@@ -223,6 +224,7 @@ const aiConnectionTestSchema = aiSettingsSchema;
 const aiAssistJobCreateSchema = z.object({
   mode: aiAssistModeSchema,
   noteId: z.string().uuid(),
+  templateId: z.string().uuid().optional(),
   note: z.object({
     title: z.string().default(""),
     slug: z.string().default(""),
@@ -317,6 +319,12 @@ const kbResolveSchema = z.object({
   title: z.string().default(""),
   mode: z.string().default("outline_to_post"),
   limit: z.number().int().min(1).max(20).default(10),
+});
+
+const kbEntryAppendSchema = z.object({
+  content: z.string().optional(),
+  keywords: z.string().optional(),
+  mode: z.string().optional(),
 });
 
 const kbImportSchema = z.array(
@@ -1570,14 +1578,38 @@ app.delete("/api/ai/batches/:id/items/:itemId", async (c) => {
   });
 });
 
+app.post("/api/ai/batches/enrich-keywords", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const { keywords, prompt } = z.object({ keywords: z.string(), prompt: z.string().optional() }).parse(await c.req.json());
+  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
+  const aiConfig = toAiConfig(aiSettings.settings);
+
+  if (!aiConfig.apiBaseUrl || !aiConfig.apiKey || !aiConfig.model) {
+    return c.json({ message: "AI env is not configured" }, 400);
+  }
+
+  try {
+    const result = await requestAiKeywordEnrichment(keywords, aiConfig, prompt);
+    return c.json({
+      suggestions: result.suggestions,
+      provider: aiConfig.apiBaseUrl,
+      model: aiConfig.model,
+    });
+  } catch (error) {
+    return c.json(
+      { message: error instanceof Error ? error.message : "Keyword enrichment failed" },
+      500
+    );
+  }
+});
+
 app.get("/api/kb", async (c) => {
   const workspaceId = c.get("workspaceId");
   const query = kbListQuerySchema.parse(c.req.query());
-  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
 
   const [items, total] = await Promise.all([
-    listKbEntries(c.env.DB, workspaceId, query, DEFAULT_WORKSPACE_ID, aiSettings.settings.useDefaultWorkspaceKb),
-    countKbEntries(c.env.DB, workspaceId, query, DEFAULT_WORKSPACE_ID, aiSettings.settings.useDefaultWorkspaceKb),
+    listKbEntries(c.env.DB, workspaceId, query, DEFAULT_WORKSPACE_ID),
+    countKbEntries(c.env.DB, workspaceId, query, DEFAULT_WORKSPACE_ID),
   ]);
   return c.json({ items: items.map(mapKbEntry), total });
 });
@@ -1609,7 +1641,7 @@ app.post("/api/kb", async (c) => {
 
 app.get("/api/kb/:id", async (c) => {
   const workspaceId = c.get("workspaceId");
-  const entry = await findKbEntryById(c.env.DB, workspaceId, c.req.param("id"));
+  const entry = await findKbEntryById(c.env.DB, workspaceId, c.req.param("id"), DEFAULT_WORKSPACE_ID);
   if (!entry) {
     return c.json({ message: "KB entry not found" }, 404);
   }
@@ -1619,7 +1651,7 @@ app.get("/api/kb/:id", async (c) => {
 app.patch("/api/kb/:id", async (c) => {
   const workspaceId = c.get("workspaceId");
   const id = c.req.param("id");
-  const existing = await findKbEntryById(c.env.DB, workspaceId, id);
+  const existing = await findKbEntryById(c.env.DB, workspaceId, id, DEFAULT_WORKSPACE_ID);
 
   if (!existing) {
     return c.json({ message: "KB entry not found" }, 404);
@@ -1629,6 +1661,7 @@ app.patch("/api/kb/:id", async (c) => {
   await updateKbEntry(c.env.DB, {
     id,
     workspaceId,
+    defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
     type: payload.type,
     category: payload.category,
     title: payload.title,
@@ -1641,27 +1674,26 @@ app.patch("/api/kb/:id", async (c) => {
     updatedAt: new Date().toISOString(),
   });
 
-  const updated = await findKbEntryById(c.env.DB, workspaceId, id);
+  const updated = await findKbEntryById(c.env.DB, workspaceId, id, DEFAULT_WORKSPACE_ID);
   return c.json(updated ? mapKbEntry(updated) : { id });
 });
 
 app.delete("/api/kb/:id", async (c) => {
   const workspaceId = c.get("workspaceId");
   const id = c.req.param("id");
-  const existing = await findKbEntryById(c.env.DB, workspaceId, id);
+  const existing = await findKbEntryById(c.env.DB, workspaceId, id, DEFAULT_WORKSPACE_ID);
 
   if (!existing) {
     return c.json({ message: "KB entry not found" }, 404);
   }
 
-  await deleteKbEntry(c.env.DB, workspaceId, id);
+  await deleteKbEntry(c.env.DB, workspaceId, id, DEFAULT_WORKSPACE_ID);
   return c.json({ ok: true });
 });
 
 app.post("/api/kb/resolve", async (c) => {
   const workspaceId = c.get("workspaceId");
   const payload = kbResolveSchema.parse(await c.req.json());
-  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
   const result = await resolveRelevantKbEntriesDetailed(c.env.DB, workspaceId, {
     keywords: payload.keywords,
     title: payload.title,
@@ -1669,7 +1701,6 @@ app.post("/api/kb/resolve", async (c) => {
   }, {
     limit: payload.limit,
     defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
-    useDefaultWorkspaceKb: aiSettings.settings.useDefaultWorkspaceKb,
   });
 
   return c.json(result);
@@ -1683,12 +1714,13 @@ app.post("/api/kb/import", async (c) => {
 
   for (const entry of entries) {
     const id = entry.id || crypto.randomUUID();
-    const existing = entry.id ? await findKbEntryById(c.env.DB, workspaceId, entry.id) : null;
+    const existing = entry.id ? await findKbEntryById(c.env.DB, workspaceId, entry.id, DEFAULT_WORKSPACE_ID) : null;
 
     if (existing) {
       await updateKbEntry(c.env.DB, {
         id,
         workspaceId,
+        defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
         type: entry.type,
         category: entry.category,
         title: entry.title,
@@ -1754,6 +1786,29 @@ app.post("/api/kb/seed-from-company-info", async (c) => {
   }
 
   return c.json({ imported: ids.length, ids }, 201);
+});
+
+app.patch("/api/kb/:id/append", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const id = c.req.param("id");
+  const payload = kbEntryAppendSchema.parse(await c.req.json());
+
+  const existing = await findKbEntryById(c.env.DB, workspaceId, id, DEFAULT_WORKSPACE_ID);
+  if (!existing) {
+    return c.json({ message: "KB entry not found" }, 404);
+  }
+
+  const updated = await appendKbEntry(c.env.DB, {
+    id,
+    workspaceId,
+    defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
+    content: payload.content,
+    keywords: payload.keywords,
+    mode: payload.mode,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return c.json(updated ? mapKbEntry(updated) : { id });
 });
 
 app.get("/api/notes", async (c) => {
@@ -2142,14 +2197,12 @@ app.post("/api/notes/:id/ai-rewrite-preview", async (c) => {
       token: sanitySettings.writeToken,
     });
 
-  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
   const knowledgeContext = await resolveRelevantKbEntries(c.env.DB, workspaceId, {
     keywords: snapshot.seoKeywords,
     title: snapshot.title,
     mode: "draft",
   }, {
     defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
-    useDefaultWorkspaceKb: aiSettings.settings.useDefaultWorkspaceKb,
   });
 
     const suggestion = await requestAiSuggestion(
@@ -2471,77 +2524,28 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 3) {
       }
 
       const request = JSON.parse(job.request_json) as AiAssistRequest;
-      const jobAiSettings = await getAiSettings(env.DB, workspaceId);
       aiConfig.knowledgeContext = await resolveRelevantKbEntries(env.DB, workspaceId, {
         keywords: request.note.seoKeywords,
         title: request.note.title,
         mode: request.mode,
       }, {
         defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
-        useDefaultWorkspaceKb: jobAiSettings.settings.useDefaultWorkspaceKb,
       });
 
-      // Single mode: call AI once
-      let suggestion: z.infer<typeof aiSuggestionSchema>;
-
-      if (request.mode === "all_in_one") {
-        // All-in-one: chain 3 sequential AI calls (metadata → outline → outline_to_post)
-        const promptLogs: string[] = [];
-        const accumulatedNote = { ...request.note };
-
-        // Step 1: metadata
-        const metaSysPrompt = buildSystemPrompt("metadata", aiConfig);
-        const metaUsrPrompt = buildUserPrompt({ mode: "metadata", note: accumulatedNote });
-        promptLogs.push(`=== STEP 1: METADATA ===\n--- SYSTEM PROMPT ---\n${metaSysPrompt}\n\n--- USER PROMPT ---\n${metaUsrPrompt}`);
-        const metaResult = await requestAiSuggestion({ mode: "metadata", note: accumulatedNote }, aiConfig);
-        if (metaResult.title) accumulatedNote.title = metaResult.title;
-        if (metaResult.slug) accumulatedNote.slug = metaResult.slug;
-        if (metaResult.excerpt) accumulatedNote.excerpt = metaResult.excerpt;
-        if (metaResult.seoTitle) accumulatedNote.seoTitle = metaResult.seoTitle;
-        if (metaResult.seoDescription) accumulatedNote.seoDescription = metaResult.seoDescription;
-        if (metaResult.seoKeywords) accumulatedNote.seoKeywords = metaResult.seoKeywords;
-        if (metaResult.ogTitle) accumulatedNote.ogTitle = metaResult.ogTitle;
-        if (metaResult.ogDescription) accumulatedNote.ogDescription = metaResult.ogDescription;
-
-        // Check cancellation after each step
-        const jobAfterMeta = await findAiAssistJobById(env.DB, workspaceId, job.id);
-        if (jobAfterMeta?.status === "cancelled") continue;
-
-        // Step 2: outline
-        const outlineSysPrompt = buildSystemPrompt("outline", aiConfig);
-        const outlineUsrPrompt = buildUserPrompt({ mode: "outline", note: accumulatedNote });
-        promptLogs.push(`=== STEP 2: OUTLINE ===\n--- SYSTEM PROMPT ---\n${outlineSysPrompt}\n\n--- USER PROMPT ---\n${outlineUsrPrompt}`);
-        const outlineResult = await requestAiSuggestion({ mode: "outline", note: accumulatedNote }, aiConfig);
-        if (outlineResult.outlineMd) accumulatedNote.outlineMd = outlineResult.outlineMd;
-        if (outlineResult.title) accumulatedNote.title = outlineResult.title;
-        if (outlineResult.slug) accumulatedNote.slug = outlineResult.slug;
-        if (outlineResult.excerpt) accumulatedNote.excerpt = outlineResult.excerpt;
-
-        // Check cancellation after each step
-        const jobAfterOutline = await findAiAssistJobById(env.DB, workspaceId, job.id);
-        if (jobAfterOutline?.status === "cancelled") continue;
-
-        // Step 3: outline_to_post
-        const contentSysPrompt = buildSystemPrompt("outline_to_post", aiConfig);
-        const contentUsrPrompt = buildUserPrompt({ mode: "outline_to_post", note: accumulatedNote });
-        promptLogs.push(`=== STEP 3: OUTLINE TO POST ===\n--- SYSTEM PROMPT ---\n${contentSysPrompt}\n\n--- USER PROMPT ---\n${contentUsrPrompt}`);
-        const contentResult = await requestAiSuggestion({ mode: "outline_to_post", note: accumulatedNote }, aiConfig);
-
-        // Merge all results, with later steps taking priority
-        suggestion = {
-          ...metaResult,
-          ...outlineResult,
-          ...contentResult,
-        };
-
-        promptLog = promptLogs.join("\n\n");
-      } else {
-        const sysPrompt = buildSystemPrompt(request.mode, aiConfig);
-        const usrPrompt = buildUserPrompt(request);
-        promptLog = `--- SYSTEM PROMPT ---\n${sysPrompt}\n\n--- USER PROMPT ---\n${usrPrompt}`;
-
-        suggestion = await requestAiSuggestion(request, aiConfig);
+      if (request.templateId) {
+        const template = await findAiPromptTemplateById(env.DB, workspaceId, request.templateId);
+        if (template) {
+          if (template.outline_prompt) aiConfig.outlinePrompt = template.outline_prompt;
+          if (template.content_prompt) aiConfig.outlineToPostPrompt = template.content_prompt;
+        }
       }
+
+      // Reconstruct prompt log for recording
+      const sysPrompt = buildSystemPrompt(request.mode, aiConfig);
+      const usrPrompt = buildUserPrompt(request);
+      promptLog = `--- SYSTEM PROMPT ---\n${sysPrompt}\n\n--- USER PROMPT ---\n${usrPrompt}`;
+
+      const suggestion = await requestAiSuggestion(request, aiConfig);
 
       const latestJob = await findAiAssistJobById(env.DB, workspaceId, job.id);
       if (latestJob?.status === "cancelled") {
@@ -2602,15 +2606,22 @@ app.post("/api/ai/assist", async (c) => {
   }
 
   try {
-    const aiSettings = await getAiSettings(c.env.DB, workspaceId);
     aiConfig.knowledgeContext = await resolveRelevantKbEntries(c.env.DB, workspaceId, {
       keywords: payload.note.seoKeywords,
       title: payload.note.title,
       mode: payload.mode,
     }, {
       defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
-      useDefaultWorkspaceKb: aiSettings.settings.useDefaultWorkspaceKb,
     });
+
+    if (payload.templateId) {
+      const template = await findAiPromptTemplateById(c.env.DB, workspaceId, payload.templateId);
+      if (template) {
+        if (template.outline_prompt) aiConfig.outlinePrompt = template.outline_prompt;
+        if (template.content_prompt) aiConfig.outlineToPostPrompt = template.content_prompt;
+      }
+    }
+
     const suggestion = await requestAiSuggestion(payload, aiConfig);
 
     return c.json({
@@ -2648,7 +2659,7 @@ app.post("/api/ai/assist/jobs", async (c) => {
     workspaceId,
     noteId: note.id,
     mode: payload.mode,
-    requestJson: JSON.stringify({ mode: payload.mode, note: payload.note } satisfies AiAssistRequest),
+    requestJson: JSON.stringify({ mode: payload.mode, note: payload.note, templateId: payload.templateId } satisfies AiAssistRequest),
     now,
   });
 

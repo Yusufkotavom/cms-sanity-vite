@@ -20,6 +20,7 @@ import {
   type AiSettings,
   type AiAssistJob,
   type AiConnectionTestResult,
+  type AiPromptTemplate,
   type ApiCategory,
   type ApiConfig,
   type ApiNote,
@@ -352,6 +353,8 @@ function App() {
   const [config, setConfig] = useState<ApiConfig | null>(null);
   const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
   const [aiConnectionTestResult, setAiConnectionTestResult] = useState<AiConnectionTestResult | null>(null);
+  const [aiTemplates, setAiTemplates] = useState<AiPromptTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("__default__");
   const [ogBrandingSettings, setOgBrandingSettings] = useState<OgBrandingSettings | null>(null);
   const [categoryOptions, setCategoryOptions] = useState<ApiCategory[]>([]);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
@@ -1026,6 +1029,7 @@ function App() {
     await loadOgBrandingSettings();
     await loadAuthConfig();
     await loadCategories();
+    await loadTemplates();
     await loadNotes();
   }
 
@@ -1035,6 +1039,15 @@ function App() {
       setCategoryOptions(response.items);
     } catch (error) {
       showLoadError(error, "Failed to load Sanity categories");
+    }
+  }
+
+  async function loadTemplates() {
+    try {
+      const response = await notesApi.listAiPromptTemplates();
+      setAiTemplates(response.items);
+    } catch {
+      setAiTemplates([]);
     }
   }
 
@@ -1450,6 +1463,7 @@ function App() {
       const job = await notesApi.createAiAssistJob({
         mode,
         noteId: targetDraft.id,
+        templateId: (selectedTemplateId && selectedTemplateId !== "__default__") ? selectedTemplateId : undefined,
         note: {
           title: targetDraft.title,
           slug: targetDraft.slug,
@@ -1626,6 +1640,7 @@ function App() {
     void loadAuthConfig();
     void loadWorkspaces();
     void loadCategories();
+    void loadTemplates();
     void loadNotes(selectedId || undefined);
   }
 
@@ -1717,6 +1732,9 @@ function App() {
             updateScheduleDate={updateScheduleDate}
             updateScheduleTime={updateScheduleTime}
             runAiAssist={runAiAssist}
+            aiTemplates={aiTemplates}
+            selectedTemplateId={selectedTemplateId}
+            setSelectedTemplateId={setSelectedTemplateId}
             activeAiAssistJob={activeAiAssistJob?.noteId === draft.id ? activeAiAssistJob : null}
             cancelActiveAiAssistJob={cancelActiveAiAssistJob}
             retryActiveAiAssistJob={retryActiveAiAssistJob}

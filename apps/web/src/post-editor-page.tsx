@@ -16,9 +16,10 @@ import {
   CheckIcon,
 } from "lucide-react";
 
-import type { AiAssistJob, ApiCategory, ApiConfig, ApiNote } from "@/lib/api";
+import type { AiAssistJob, AiPromptTemplate, ApiCategory, ApiConfig, ApiNote } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Card,
   CardContent,
@@ -37,6 +38,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -97,6 +105,9 @@ type PostEditorPageProps = {
   updateScheduleDate: (value: string) => void;
   updateScheduleTime: (value: string) => void;
   runAiAssist: (mode: Exclude<AiRunMode, null>) => Promise<void>;
+  aiTemplates: AiPromptTemplate[];
+  selectedTemplateId: string;
+  setSelectedTemplateId: (id: string) => void;
   activeAiAssistJob: AiAssistJob | null;
   cancelActiveAiAssistJob: () => Promise<void>;
   retryActiveAiAssistJob: () => Promise<void>;
@@ -133,6 +144,15 @@ type PostEditorPageProps = {
   setContentTab: (value: "editor" | "preview") => void;
 };
 
+function Tip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-64 text-xs">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function PostEditorPage({
   draft,
   config,
@@ -142,6 +162,9 @@ export function PostEditorPage({
   updateScheduleDate,
   updateScheduleTime,
   runAiAssist,
+  aiTemplates,
+  selectedTemplateId,
+  setSelectedTemplateId,
   activeAiAssistJob,
   cancelActiveAiAssistJob,
   retryActiveAiAssistJob,
@@ -261,122 +284,161 @@ export function PostEditorPage({
               </div>
             </div>
 
+            <div className="flex flex-col gap-2 xl:w-64">
+              <label className="text-sm font-medium">Template AI</label>
+              <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Default (Workspace)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">Default (Workspace)</SelectItem>
+                  {aiTemplates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex flex-wrap gap-2 xl:justify-end">
-              <Button
-                variant="default"
-                onClick={() => void runAiAssist("all_in_one")}
-                disabled={isAiRunning !== null}
-              >
-                {isAiRunning === "all_in_one" ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <SparklesIcon data-icon="inline-start" />
-                )}
-                AI All-in-One
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void runAiAssist("metadata")}
-                disabled={isAiRunning !== null}
-              >
-                {isAiRunning === "metadata" ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <FileTextIcon data-icon="inline-start" />
-                )}
-                AI Metadata
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void runAiAssist("draft")}
-                disabled={isAiRunning !== null}
-              >
-                {isAiRunning === "draft" ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <FileTextIcon data-icon="inline-start" />
-                )}
-                AI Draft
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void runAiAssist("outline")}
-                disabled={isAiRunning !== null}
-              >
-                {isAiRunning === "outline" ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <FileTextIcon data-icon="inline-start" />
-                )}
-                Generate Outline
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void runAiAssist("outline_to_post")}
-                disabled={isAiRunning !== null}
-              >
-                {isAiRunning === "outline_to_post" ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <SendIcon data-icon="inline-start" />
-                )}
-                Outline to Post
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void runAiAssist("seo_only")}
-                disabled={isAiRunning !== null}
-              >
-                {isAiRunning === "seo_only" ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <FileTextIcon data-icon="inline-start" />
-                )}
-                Generate SEO Only
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void generateOgImage()}
-                disabled={isGeneratingOg || isSaving}
-              >
-                {isGeneratingOg ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <ImagePlusIcon data-icon="inline-start" />
-                )}
-                Generate OG Image
-              </Button>
-              <Button variant="outline" onClick={() => void saveDraft()} disabled={isSaving}>
-                {isSaving ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <SaveIcon data-icon="inline-start" />
-                )}
-                Save
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void scheduleDraft()}
-                disabled={isSaving || isScheduling}
-              >
-                {isScheduling ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <CalendarClockIcon data-icon="inline-start" />
-                )}
-                Schedule
-              </Button>
-              <Button
-                onClick={() => void (draft.status === "failed" ? retryPublishDraft() : publishDraft())}
-                disabled={isSaving || isPublishing}
-              >
-                {isPublishing ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : (
-                  <SendIcon data-icon="inline-start" />
-                )}
-                {draft.status === "failed" ? "Retry Publish" : "Publish"}
-              </Button>
+              <TooltipProvider>
+                <Tip label="Hasilkan outline, artikel lengkap, dan metadata SEO dalam satu klik (3 langkah AI)">
+                  <Button
+                    variant="default"
+                    onClick={() => void runAiAssist("all_in_one")}
+                    disabled={isAiRunning !== null}
+                  >
+                    {isAiRunning === "all_in_one" ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <SparklesIcon data-icon="inline-start" />
+                    )}
+                    AI All-in-One
+                  </Button>
+                </Tip>
+                <Tip label="Optimasi judul, slug, excerpt, dan semua field SEO/OG dari konten yang sudah ada">
+                  <Button
+                    variant="outline"
+                    onClick={() => void runAiAssist("metadata")}
+                    disabled={isAiRunning !== null}
+                  >
+                    {isAiRunning === "metadata" ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <FileTextIcon data-icon="inline-start" />
+                    )}
+                    AI Metadata
+                  </Button>
+                </Tip>
+                <Tip label="Perbaiki draft: struktur, alur, dan tata bahasa tanpa mengubah intent">
+                  <Button
+                    variant="outline"
+                    onClick={() => void runAiAssist("draft")}
+                    disabled={isAiRunning !== null}
+                  >
+                    {isAiRunning === "draft" ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <FileTextIcon data-icon="inline-start" />
+                    )}
+                    AI Draft
+                  </Button>
+                </Tip>
+                <Tip label="Buat outline artikel terstruktur dari judul atau keyword yang ada">
+                  <Button
+                    variant="outline"
+                    onClick={() => void runAiAssist("outline")}
+                    disabled={isAiRunning !== null}
+                  >
+                    {isAiRunning === "outline" ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <FileTextIcon data-icon="inline-start" />
+                    )}
+                    Generate Outline
+                  </Button>
+                </Tip>
+                <Tip label="Ubah outline menjadi artikel lengkap siap publish plus metadata">
+                  <Button
+                    variant="outline"
+                    onClick={() => void runAiAssist("outline_to_post")}
+                    disabled={isAiRunning !== null}
+                  >
+                    {isAiRunning === "outline_to_post" ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <SendIcon data-icon="inline-start" />
+                    )}
+                    Outline to Post
+                  </Button>
+                </Tip>
+                <Tip label="Hasilkan atau optimasi field SEO/OG tanpa menyentuh konten">
+                  <Button
+                    variant="outline"
+                    onClick={() => void runAiAssist("seo_only")}
+                    disabled={isAiRunning !== null}
+                  >
+                    {isAiRunning === "seo_only" ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <FileTextIcon data-icon="inline-start" />
+                    )}
+                    Generate SEO Only
+                  </Button>
+                </Tip>
+                <Tip label="Buat gambar OG preview 1200×630 untuk sosial media">
+                  <Button
+                    variant="outline"
+                    onClick={() => void generateOgImage()}
+                    disabled={isGeneratingOg || isSaving}
+                  >
+                    {isGeneratingOg ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <ImagePlusIcon data-icon="inline-start" />
+                    )}
+                    Generate OG Image
+                  </Button>
+                </Tip>
+                <Tip label="Simpan draft lokal">
+                  <Button variant="outline" onClick={() => void saveDraft()} disabled={isSaving}>
+                    {isSaving ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <SaveIcon data-icon="inline-start" />
+                    )}
+                    Save
+                  </Button>
+                </Tip>
+                <Tip label="Atur jadwal publish ke Sanity">
+                  <Button
+                    variant="outline"
+                    onClick={() => void scheduleDraft()}
+                    disabled={isSaving || isScheduling}
+                  >
+                    {isScheduling ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <CalendarClockIcon data-icon="inline-start" />
+                    )}
+                    Schedule
+                  </Button>
+                </Tip>
+                <Tip label={draft.status === "failed" ? "Coba publish ulang setelah gagal" : "Publish ke Sanity"}>
+                  <Button
+                    onClick={() => void (draft.status === "failed" ? retryPublishDraft() : publishDraft())}
+                    disabled={isSaving || isPublishing}
+                  >
+                    {isPublishing ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : (
+                      <SendIcon data-icon="inline-start" />
+                    )}
+                    {draft.status === "failed" ? "Retry Publish" : "Publish"}
+                  </Button>
+                </Tip>
+              </TooltipProvider>
             </div>
           </div>
         </CardContent>
@@ -447,16 +509,24 @@ export function PostEditorPage({
               </div>
               <div className="flex flex-wrap gap-2">
                 {activeAiAssistJob.status === "queued" || activeAiAssistJob.status === "processing" ? (
-                  <Button variant="outline" size="sm" onClick={() => void cancelActiveAiAssistJob()}>
-                    <XCircleIcon data-icon="inline-start" />
-                    Cancel AI
-                  </Button>
+                  <TooltipProvider>
+                    <Tip label="Batalkan job AI yang sedang berjalan">
+                      <Button variant="outline" size="sm" onClick={() => void cancelActiveAiAssistJob()}>
+                        <XCircleIcon data-icon="inline-start" />
+                        Cancel AI
+                      </Button>
+                    </Tip>
+                  </TooltipProvider>
                 ) : null}
                 {activeAiAssistJob.status === "failed" || activeAiAssistJob.status === "cancelled" ? (
-                  <Button variant="outline" size="sm" onClick={() => void retryActiveAiAssistJob()}>
-                    <RefreshCcwIcon data-icon="inline-start" />
-                    Retry AI
-                  </Button>
+                  <TooltipProvider>
+                    <Tip label="Coba ulang job AI yang gagal">
+                      <Button variant="outline" size="sm" onClick={() => void retryActiveAiAssistJob()}>
+                        <RefreshCcwIcon data-icon="inline-start" />
+                        Retry AI
+                      </Button>
+                    </Tip>
+                  </TooltipProvider>
                 ) : null}
               </div>
             </div>

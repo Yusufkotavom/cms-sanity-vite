@@ -170,6 +170,12 @@ export function KnowledgeBasePage() {
   const [resolveResult, setResolveResult] = useState<KbResolveResult | null>(null);
   const [isResolving, setIsResolving] = useState(false);
 
+  const [appendOpen, setAppendOpen] = useState(false);
+  const [appendEntryId, setAppendEntryId] = useState<string | null>(null);
+  const [appendContent, setAppendContent] = useState("");
+  const [appendKeywords, setAppendKeywords] = useState("");
+  const [isAppending, setIsAppending] = useState(false);
+
   const loadEntries = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -200,6 +206,37 @@ export function KnowledgeBasePage() {
     setEditingId(entry.id);
     setForm(entryToForm(entry));
     setDialogOpen(true);
+  }
+
+  function openAppendDialog(entry: KbEntry) {
+    setAppendEntryId(entry.id);
+    setAppendContent("");
+    setAppendKeywords("");
+    setAppendOpen(true);
+  }
+
+  async function handleAppendSave() {
+    if (!appendContent.trim() && !appendKeywords.trim()) {
+      toast.error("Isi content atau keywords untuk ditambahkan");
+      return;
+    }
+
+    setIsAppending(true);
+    try {
+      if (appendEntryId) {
+        await kbApi.append(appendEntryId, {
+          content: appendContent.trim() || undefined,
+          keywords: appendKeywords.trim() || undefined,
+        });
+        toast.success("KB entry appended");
+      }
+      setAppendOpen(false);
+      loadEntries();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to append KB entry");
+    } finally {
+      setIsAppending(false);
+    }
   }
 
   async function handleSave() {
@@ -624,6 +661,9 @@ export function KnowledgeBasePage() {
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(entry)}>
                           <PencilIcon className="h-3.5 w-3.5" />
                         </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAppendDialog(entry)} title="Append content/keywords">
+                          <PlusIcon className="h-3.5 w-3.5" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(entry.id)}>
                           <Trash2Icon className="h-3.5 w-3.5" />
                         </Button>
@@ -846,6 +886,43 @@ export function KnowledgeBasePage() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={appendOpen} onOpenChange={setAppendOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Append to KB Entry</DialogTitle>
+            <DialogDescription>
+              Tambahkan content dan/atau keywords ke entry yang sudah ada. Content baru akan ditambahkan di akhir content existing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="space-y-1">
+              <Label>Additional Content</Label>
+              <Textarea
+                value={appendContent}
+                onChange={(e) => setAppendContent(e.target.value)}
+                placeholder="Content tambahan yang akan diappend ke entry..."
+                rows={4}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Additional Keywords (comma-separated)</Label>
+              <Input
+                value={appendKeywords}
+                onChange={(e) => setAppendKeywords(e.target.value)}
+                placeholder="keyword baru, keyword tambahan"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAppendOpen(false)}>Cancel</Button>
+            <Button onClick={handleAppendSave} disabled={isAppending}>
+              {isAppending && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+              Append
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

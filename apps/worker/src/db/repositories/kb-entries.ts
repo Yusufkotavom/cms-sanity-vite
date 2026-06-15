@@ -57,9 +57,9 @@ type ListOptions = {
   offset?: number;
 };
 
-export async function listKbEntries(db: D1Database, workspaceId: string, options: ListOptions = {}, defaultWorkspaceId?: string, useDefaultWorkspaceKb?: boolean) {
+export async function listKbEntries(db: D1Database, workspaceId: string, options: ListOptions = {}, defaultWorkspaceId?: string) {
   const drizzleDb = getDb(db);
-  const conditions = useDefaultWorkspaceKb && defaultWorkspaceId
+  const conditions = defaultWorkspaceId
     ? [inArray(kbEntries.workspaceId, [workspaceId, defaultWorkspaceId])]
     : [eq(kbEntries.workspaceId, workspaceId)];
 
@@ -87,9 +87,9 @@ export async function listKbEntries(db: D1Database, workspaceId: string, options
   return rows.map(toRecord);
 }
 
-export async function countKbEntries(db: D1Database, workspaceId: string, options: ListOptions = {}, defaultWorkspaceId?: string, useDefaultWorkspaceKb?: boolean) {
+export async function countKbEntries(db: D1Database, workspaceId: string, options: ListOptions = {}, defaultWorkspaceId?: string) {
   const drizzleDb = getDb(db);
-  const conditions = useDefaultWorkspaceKb && defaultWorkspaceId
+  const conditions = defaultWorkspaceId
     ? [inArray(kbEntries.workspaceId, [workspaceId, defaultWorkspaceId])]
     : [eq(kbEntries.workspaceId, workspaceId)];
 
@@ -111,12 +111,15 @@ export async function countKbEntries(db: D1Database, workspaceId: string, option
   return result[0]?.count ?? 0;
 }
 
-export async function findKbEntryById(db: D1Database, workspaceId: string, id: string) {
+export async function findKbEntryById(db: D1Database, workspaceId: string, id: string, defaultWorkspaceId?: string) {
   const drizzleDb = getDb(db);
+  const wsFilter = defaultWorkspaceId
+    ? inArray(kbEntries.workspaceId, [workspaceId, defaultWorkspaceId])
+    : eq(kbEntries.workspaceId, workspaceId);
   const rows = await drizzleDb
     .select()
     .from(kbEntries)
-    .where(and(eq(kbEntries.workspaceId, workspaceId), eq(kbEntries.id, id)))
+    .where(and(wsFilter, eq(kbEntries.id, id)))
     .limit(1);
 
   const entry = rows[0];
@@ -163,6 +166,7 @@ export async function updateKbEntry(
   input: {
     id: string;
     workspaceId: string;
+    defaultWorkspaceId?: string;
     type?: string;
     category?: string;
     title?: string;
@@ -188,15 +192,69 @@ export async function updateKbEntry(
   if (input.isActive !== undefined) setValues.isActive = input.isActive;
   if (input.metadataJson !== undefined) setValues.metadataJson = input.metadataJson;
 
+  const wsFilter = input.defaultWorkspaceId
+    ? inArray(kbEntries.workspaceId, [input.workspaceId, input.defaultWorkspaceId])
+    : eq(kbEntries.workspaceId, input.workspaceId);
+
   await drizzleDb
     .update(kbEntries)
     .set(setValues)
-    .where(and(eq(kbEntries.workspaceId, input.workspaceId), eq(kbEntries.id, input.id)));
+    .where(and(wsFilter, eq(kbEntries.id, input.id)));
 }
 
-export async function deleteKbEntry(db: D1Database, workspaceId: string, id: string) {
+export async function deleteKbEntry(db: D1Database, workspaceId: string, id: string, defaultWorkspaceId?: string) {
   const drizzleDb = getDb(db);
+  const wsFilter = defaultWorkspaceId
+    ? inArray(kbEntries.workspaceId, [workspaceId, defaultWorkspaceId])
+    : eq(kbEntries.workspaceId, workspaceId);
   await drizzleDb
     .delete(kbEntries)
-    .where(and(eq(kbEntries.workspaceId, workspaceId), eq(kbEntries.id, id)));
+    .where(and(wsFilter, eq(kbEntries.id, id)));
+}
+
+export async function appendKbEntry(
+  db: D1Database,
+  input: {
+    id: string;
+    workspaceId: string;
+    defaultWorkspaceId?: string;
+    content?: string;
+    keywords?: string;
+    mode?: string;
+    updatedAt: string;
+  }
+) {
+  const existing = await findKbEntryById(db, input.workspaceId, input.id, input.defaultWorkspaceId);
+  if (!existing) return null;
+
+  const setValues: Record<string, unknown> = { updatedAt: input.updatedAt };
+
+  if (input.content) {
+    setValues.content = existing.content
+      ? `${existing.content}\n\n${input.content}`
+      : input.content;
+  }
+
+  if (input.keywords) {
+    const existingKeywords = existing.keywords ? existing.keywords.split(",").map((k) => k.trim()) : [];
+    const newKeywords = input.keywords.split(",").map((k) => k.trim());
+    const merged = [...new Set([...existingKeywords, ...newKeywords])];
+    setValues.keywords = merged.join(", ");
+  }
+
+  if (input.mode !== undefined) {
+    setValues.modes = input.mode;
+  }
+
+  const wsFilter = input.defaultWorkspaceId
+    ? inArray(kbEntries.workspaceId, [input.workspaceId, input.defaultWorkspaceId])
+    : eq(kbEntries.workspaceId, input.workspaceId);
+
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(kbEntries)
+    .set(setValues)
+    .where(and(wsFilter, eq(kbEntries.id, input.id)));
+
+  return findKbEntryById(db, input.workspaceId, input.id, input.defaultWorkspaceId);
 }

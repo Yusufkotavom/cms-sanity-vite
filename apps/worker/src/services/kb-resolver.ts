@@ -64,7 +64,6 @@ type ResolveOptions = {
   limit?: number;
   maxChars?: number;
   defaultWorkspaceId?: string;
-  useDefaultWorkspaceKb?: boolean;
 };
 
 export type ResolveResult = {
@@ -94,11 +93,11 @@ export async function resolveRelevantKbEntriesDetailed(
   const terms = extractSearchTerms(context.keywords, context.title);
   const mode = context.mode.trim();
 
-  const baseConditions = options.useDefaultWorkspaceKb && options.defaultWorkspaceId
+  const baseConditions = options.defaultWorkspaceId
     ? ["(workspace_id = ? OR workspace_id = ?)", "is_active = 1"]
     : ["workspace_id = ?", "is_active = 1"];
     
-  const binds: (string | number)[] = options.useDefaultWorkspaceKb && options.defaultWorkspaceId
+  const binds: (string | number)[] = options.defaultWorkspaceId
     ? [workspaceId, options.defaultWorkspaceId]
     : [workspaceId];
 

@@ -433,3 +433,26 @@ Agent handling:
 - note fields minimum sudah terisi
 - jika memakai shortcode, sudah cek `docs/sanity-block-shortcodes.md`
 - jika batch, jumlah item sesuai limit operasional
+
+## 10. Knowledge Base API endpoints
+
+Knowledge Base (KB) menyimpan konteks reusable untuk AI enrichment — profil, glossary, layanan, FAQ, referensi konten.
+
+Endpoint dan operasi detail: [`docs/knowledge-base.md`](knowledge-base.md)
+
+Ringkasan endpoint KB:
+
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/knowledge-base/entries` | List entries (filter by type, category, mode, q) |
+| `GET` | `/api/knowledge-base/entries/:id` | Detail entry |
+| `POST` | `/api/knowledge-base/entries` | Create entry |
+| `PUT` | `/api/knowledge-base/entries/:id` | Update entry |
+| `DELETE` | `/api/knowledge-base/entries/:id` | Delete entry |
+| `POST` | `/api/knowledge-base/entries/:id/append` | Append content + keywords ke entry |
+| `POST` | `/api/knowledge-base/upload` | Upload image ke R2, return URL untuk entry |
+| `POST` | `/api/knowledge-base/import` | Import bulk (JSON, CSV, Parquet) |
+| `GET` | `/api/knowledge-base/export` | Export semua entries (format: json/csv/parquet) |
+| `POST` | `/api/knowledge-base/resolve` | Resolve entries berdasarkan search terms |
+
+Untuk panduan lengkap entry types, field properties, resolver algorithm, cross-workspace behavior, dan best practices, lihat [`docs/knowledge-base.md`](knowledge-base.md).

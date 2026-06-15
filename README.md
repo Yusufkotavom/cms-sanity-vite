@@ -1,12 +1,12 @@
 # CMS Sanity Vite
 
-Cloudflare-native CMS berbasis React + Vite + Worker untuk draft markdown, scheduling, generate OG image, dan publish/update ke dokumen Sanity `post`.
+Cloudflare-native multi-workspace CMS berbasis React + Vite + Worker untuk draft markdown, scheduling, generate OG image, knowledge base, AI enrichment batch, dan publish/update ke dokumen Sanity `post`.
 
 ## Stack
 
-- `apps/web`: React + Vite + shadcn/ui
-- `apps/worker`: Cloudflare Worker + Hono + D1
-- `packages/shared`: shared types / schemas
+- `apps/web`: React + Vite + shadcn/ui + @base-ui/react
+- `apps/worker`: Cloudflare Worker + Hono + D1 + R2 (OG assets & uploads)
+- `packages/shared`: shared types / schemas (Zod)
 - `packages/sanity`: helper client Sanity
 
 ## UI Standard
@@ -49,34 +49,51 @@ Belum ditambahkan ke CMS saat ini:
 - SEO fields manual
 - review / affiliate fields
 
+## Multi-Workspace
+
+Worker mendukung multiple workspace, masing-masing dengan Sanity connection, AI settings, OG branding, dan Knowledge Base sendiri.
+
+- Setiap workspace punya `slug` unik sebagai identifier
+- Header `X-Workspace-Slug: <slug>` menentukan workspace tujuan
+- Default workspace (`slug: default`) ada otomatis
+- Workspace bisa dibuat, diedit, dan dihapus via Settings UI atau API
+- Saat create workspace, Sanity connection diverifikasi dulu
+- AI settings bisa inherit dari default workspace
+
 ## OG Image Status
 
-OG image sekarang digenerate di Worker lalu langsung di-upload ke Sanity asset image.
+OG image digenerate secara lokal di Worker (default) atau remote (opsional via `generatorMode`).
 
-Status saat ini:
+Pipeline:
+1. Generate PNG via `@resvg/resvg-wasm` — layout panel kiri/kanan, title + excerpt
+2. Simpan ke R2 bucket `OG_ASSETS`
+3. Saat publish, otomatis upload ke Sanity asset
+4. Serve via `/og-assets/:workspace/:id` dengan cache `immutable` dari R2, fallback ke Sanity CDN
 
-- layout OG sudah memakai panel kiri/kanan
-- title dan excerpt diambil dari note
-- semua teks OG diminta dengan weight `700`
-- font bundle yang tersedia saat ini baru `Geist-Regular.ttf`, jadi hasil visual paling dekat ke target tapi belum identik dengan setup multi-weight
-- branding OG sekarang bisa diatur dari menu `Settings > OG Branding`
-- branding yang bisa diatur: `logoUrl`, `workflowLabel`, `footerText`
-- branding berlaku global untuk satu app/worker, belum per-profile atau per-business preset
-- bila setting branding dikosongkan, worker fallback ke branding default KOTACOM
+Branding OG diatur per-workspace via menu `Settings > OG Branding`:
 
-Endpoint terkait:
+| Field | Fungsi |
+|-------|--------|
+| `logoUrl` | Logo yang ditampilkan di OG |
+| `brandName` | Nama brand |
+| `workflowLabel` | Label workflow (misal "Blog Post") |
+| `footerText` | Teks footer OG |
+| `ogBaseUrl` | Base URL untuk link OG |
+| `generatorMode` | `local` (default) atau `remote` |
+| `websiteImageUrl` / `softwareImageUrl` / `percetakanImageUrl` / `blogImageUrl` | Fallback image per kategori |
+| `fallbackImageUrl` | Fallback umum |
 
-- `POST /api/notes/:id/generate-og`
-- `GET /api/settings/og-branding`
-- `PUT /api/settings/og-branding`
+Font: `Geist-Regular.ttf` dan `Geist-Bold.ttf` (variable) dibundle di Worker.
 
 ## Current Publish Behavior
 
-- satu note CMS = satu dokumen Sanity
-- publish pertama membuat dokumen `_id = post.<note-id>`
-- publish ulang akan **update dokumen yang sama**, bukan membuat dokumen baru
-- schedule ulang juga tetap akan publish ke dokumen yang sama
-- tombol `Schedule` dan `Publish` sekarang otomatis melakukan `Save` dulu agar edit terbaru tidak hilang
+- satu note CMS = satu dokumen Sanity dengan `_id = post.<note-id>`
+- publish pertama = create, publish ulang = **update dokumen yang sama** (createOrReplace)
+- schedule ulang = publish ke dokumen yang sama
+- saat publish: OG image digenerate (bila belum ada) dan diupload ke Sanity asset
+- retry publish tersedia untuk note dengan status `failed`
+- Sanity sync: import post dari Sanity ke note lokal via `Open in Editor`
+- tombol `Schedule` / `Publish` otomatis melakukan `Save` dulu
 
 ## Auth Model
 
@@ -205,6 +222,10 @@ Env Sanity yang dipakai Worker:
 - `SANITY_API_VERSION`
 - `SANITY_WRITE_TOKEN`
 
+Env R2:
+
+- `OG_ASSETS` — binding ke R2 bucket untuk OG images dan uploads
+
 Env auth yang dipakai Worker:
 
 - `AUTH_ADMIN_EMAIL`
@@ -212,12 +233,6 @@ Env auth yang dipakai Worker:
 - `AUTH_TOKEN_SECRET`
 - `AUTH_INTEGRATION_TOKEN`
 - `AUTH_SESSION_TTL_HOURS`
-
-Default template:
-
-- dataset target: `development`
-- project id target: isi dari secret Worker
-- api version target default: `2026-03-29`
 
 ## Di Mana Env Diset
 
@@ -228,7 +243,7 @@ Default template:
 
 ### Production Cloudflare Worker
 
-Set sebagai Worker secrets, bukan di Pages frontend:
+Set sebagai Worker secrets:
 
 ```bash
 pnpm --filter worker exec wrangler secret put SANITY_PROJECT_ID
@@ -264,34 +279,35 @@ Set `VITE_API_BASE_URL` di project Pages `cms-sanity-vite`.
 
 ## D1 Schema Ringkas
 
-Tabel utama yang dipakai sekarang:
+Tabel utama (Drizzle ORM, lihat `apps/worker/src/db/schema.ts`):
 
-- `notes`
-- `publish_jobs`
-- `note_categories`
-
-`note_categories` dipakai agar category tetap fleksibel dan tidak dipaksa masuk ke kolom string tunggal.
+| Tabel | Fungsi |
+|-------|--------|
+| `workspaces` | Multi-workspace |
+| `workspace_settings` | Key-value settings per workspace (AI, Sanity, OG) |
+| `notes` | Draft post dengan field SEO, OG, Sanity mirror, AI rewrite |
+| `note_categories` | Relasi many-to-many note ↔ Sanity category |
+| `publish_jobs` | Antrean publish terjadwal |
+| `kb_entries` | Knowledge Base entries |
+| `ai_assist_jobs` | Antrean job AI assist async |
+| `ai_prompt_templates` | Template prompt untuk batch mode |
+| `ai_batches` | Batch AI content generation |
+| `ai_batch_items` | Item individual dalam batch |
 
 ## Drizzle Status
 
-Project ini sekarang sudah mulai pindah ke Drizzle untuk layer akses database D1, tapi masih bertahap.
+Semua akses database sudah memakai Drizzle ORM. Tidak ada lagi raw SQL di route handler.
 
-File awal Drizzle:
+Repositories (`apps/worker/src/db/repositories/`):
 
-- `apps/worker/drizzle.config.ts`
-- `apps/worker/src/db/schema.ts`
-- `apps/worker/src/db/client.ts`
-- `apps/worker/src/db/repositories/notes.ts`
-- `apps/worker/src/db/repositories/publish-jobs.ts`
-
-Query yang sudah mulai memakai Drizzle:
-
-- `list notes`
-- `find note by id`
-- `note category relations`
-- `publish_jobs schedule/processing/published/failed flow`
-
-Sisanya masih campuran raw SQL + Drizzle agar transisi tetap aman.
+- `notes.ts` — CRUD notes + category relations
+- `publish-jobs.ts` — antrean publish
+- `kb-entries.ts` — Knowledge Base CRUD + append
+- `ai-assist-jobs.ts` — antrean AI assist
+- `ai-batches.ts` — batch AI content
+- `ai-prompt-templates.ts` — template prompt
+- `app-settings.ts` — settings key-value
+- `workspaces.ts` — multi-workspace
 
 ## API Yang Tersedia
 
@@ -301,164 +317,63 @@ Base URL production:
 https://cms-sanity-vite-worker.<your-subdomain>.workers.dev
 ```
 
-OpenAPI spec:
+OpenAPI spec awal: [`docs/openapi.yaml`](docs/openapi.yaml) (perlu diperbarui)
 
-- [docs/openapi.yaml](/home/kotacom/seo/cms-sanity-vite/docs/openapi.yaml)
+### Cara Komunikasi
 
-### Cara Komunikasi Frontend -> Worker
+- frontend → `${VITE_API_BASE_URL}/api/...`
+- fallback base URL lokal: `http://127.0.0.1:8787`
+- override manual: localStorage key `cms-sanity-vite.api-base-url`
+- semua request (kecuali public path) butuh `Authorization: Bearer <token>`
+- workspace dikirim via header `X-Workspace-Slug: <slug>` (default: `default`)
+- request body: JSON, `Content-Type: application/json`
+- response sukses: JSON
+- response error: `{ "message": "..." }`
+- CORS aktif: `GET,HEAD,PUT,POST,DELETE,PATCH`
 
-- frontend memanggil `${VITE_API_BASE_URL}/api/...`
-- fallback base URL:
-  - lokal `http://127.0.0.1:8787`
-  - production: pakai `VITE_API_BASE_URL`, kalau tidak ada akan fallback ke origin halaman saat ini
-- override manual bisa disimpan di localStorage key `cms-sanity-vite.api-base-url`
-- request body dikirim sebagai JSON dengan header `Content-Type: application/json`
-- response sukses berbentuk JSON
-- response error mengikuti pola `{ "message": "..." }`
-- CORS aktif untuk `/api/*`
-- method CORS worker: `GET,HEAD,PUT,POST,DELETE,PATCH`
+### Auth
 
-### Health & Config
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/health` | Public health check |
+| `GET` | `/api/auth/status` | Cek apakah auth dikonfigurasi |
+| `POST` | `/api/auth/login` | Login, return `token` + `expiresAt` |
+| `GET` | `/api/auth/me` | Info session saat ini |
+| `GET` | `/api/settings/auth` | Lihat konfigurasi auth (email, TTL, integration token) |
 
-- `GET /api/health`
-  Response:
+### Workspace
 
-```json
-{ "ok": true }
-```
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/workspaces` | List semua workspace |
+| `POST` | `/api/workspaces` | Buat workspace baru (+ test Sanity) |
+| `PATCH` | `/api/workspaces/:id` | Update workspace (+ Sanity test) |
+| `DELETE` | `/api/workspaces/:id` | Hapus workspace (default tidak bisa) |
 
-- `GET /api/config`
-  Response:
+### Config & Sanity
 
-```json
-{
-  "sanityConfigured": false,
-  "sanityProjectId": null,
-  "sanityDataset": "development",
-  "aiConfigured": false,
-  "aiBaseUrl": null,
-  "aiModel": null,
-  "cron": "*/15 * * * *",
-  "aiBatchMaxItemsPerRun": 3,
-  "d1Binding": "DB"
-}
-```
-
-### Sanity Options
-
-- `GET /api/sanity/categories`
-  Mengambil daftar category dari Sanity untuk dipilih di CMS.
-
-  Response shape:
-
-```json
-{
-  "items": [
-    {
-      "id": "af65b787-ff34-4d0a-a44c-8398f7ade3a1",
-      "title": "Sanity",
-      "slug": "sanity"
-    }
-  ]
-}
-```
-
-- `GET /api/sanity/status`
-  Mengecek status secret Sanity yang aktif di Worker.
-
-  Response shape:
-
-```json
-{
-  "configured": false,
-  "projectId": null,
-  "dataset": "development",
-  "apiVersion": "2026-03-29",
-  "hasWriteToken": false
-}
-```
-
-- `POST /api/sanity/test`
-  Mengetes koneksi Worker ke Sanity dengan mengambil sample category.
-
-- `POST /api/sanity/publish`
-  Publish note berdasarkan `noteId`.
-
-  Payload:
-
-```json
-{
-  "noteId": "uuid"
-}
-```
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/config` | Status konfigurasi (Sanity, AI, cron) |
+| `GET` | `/api/sanity/categories` | Daftar kategori dari Sanity |
+| `GET` | `/api/sanity/posts` | Daftar post dari Sanity |
+| `POST` | `/api/sanity/posts/open` | Import post Sanity ke note lokal |
+| `GET` | `/api/sanity/status` | Status koneksi Sanity |
+| `POST` | `/api/sanity/test` | Test koneksi ambil sample kategori |
+| `POST` | `/api/sanity/publish` | Publish via `noteId` langsung |
+| `GET` | `/api/settings/sanity` | Lihat settings Sanity |
+| `PUT` | `/api/settings/sanity` | Simpan settings Sanity |
+| `POST` | `/api/settings/sanity/test` | Test Sanity dengan payload tertentu |
 
 ### Notes CRUD
 
-- `GET /api/notes`
-  Mengambil daftar note.
-
-- `GET /api/notes/:id`
-  Mengambil detail note.
-
-- `POST /api/notes`
-  Membuat note baru.
-
-  Payload:
-
-```json
-{
-  "title": "Judul post",
-  "slug": "judul-post",
-  "outlineMd": "# Outline",
-  "excerpt": "Ringkasan singkat",
-  "seoTitle": "SEO title",
-  "seoDescription": "SEO description",
-  "seoKeywords": "keyword 1, keyword 2",
-  "ogTitle": "OG title",
-  "ogDescription": "OG description",
-  "contentMd": "# Judul\n\nIsi markdown",
-  "categoryIds": ["af65b787-ff34-4d0a-a44c-8398f7ade3a1"]
-}
-```
-
-- `PATCH /api/notes/:id`
-  Update draft note.
-
-- `DELETE /api/notes/:id`
-  Hapus note dan publish jobs terkait.
-
-### Settings
-
-- `GET /api/settings/ai`
-- `PUT /api/settings/ai`
-- `GET /api/settings/og-branding`
-- `PUT /api/settings/og-branding`
-
-AI settings response shape:
-
-```json
-{
-  "apiBaseUrl": "https://api.openai.com/v1",
-  "apiKey": "********",
-  "hasApiKey": true,
-  "model": "gpt-4.1-mini",
-  "systemPrompt": "...",
-  "metadataPrompt": "...",
-  "draftPrompt": "...",
-  "outlinePrompt": "...",
-  "outlineToPostPrompt": "..."
-}
-```
-
-OG branding response shape:
-
-```json
-{
-  "logoUrl": "https://example.com/logo.png",
-  "workflowLabel": "Workflow",
-  "footerText": "Footer text"
-}
-```
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/notes` | List notes |
+| `GET` | `/api/notes/:id` | Detail note |
+| `POST` | `/api/notes` | Buat note baru |
+| `PATCH` | `/api/notes/:id` | Update draft note |
+| `DELETE` | `/api/notes/:id` | Hapus note + jobs terkait |
 
 Response note shape:
 
@@ -476,72 +391,133 @@ Response note shape:
   "ogTitle": "OG title",
   "ogDescription": "OG description",
   "ogImageAssetId": null,
-  "categoryIds": ["af65b787-ff34-4d0a-a44c-8398f7ade3a1"],
+  "ogImageGeneratedAt": null,
+  "ogImageUrl": null,
+  "categoryIds": ["uuid"],
   "status": "draft",
   "publishAt": null,
   "sanityDocumentId": null,
+  "sanityRevision": null,
   "lastError": null,
+  "aiRewriteContentMd": null,
+  "aiRewriteExcerpt": null,
+  "aiRewriteSeoTitle": null,
+  "aiRewriteSeoDescription": null,
+  "aiRewriteSeoKeywords": null,
+  "aiRewriteOgTitle": null,
+  "aiRewriteOgDescription": null,
+  "aiRewriteUpdatedAt": null,
   "createdAt": "2026-06-02T19:00:00.000Z",
   "updatedAt": "2026-06-02T19:00:00.000Z"
 }
 ```
 
-### Schedule & Publish
+### Publish, Schedule, OG
 
-- `POST /api/notes/:id/schedule`
-  Menjadwalkan publish.
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `POST` | `/api/notes/:id/schedule` | Jadwalkan publish (`publishAt` ISO) |
+| `POST` | `/api/notes/:id/publish` | Publish langsung ke Sanity |
+| `POST` | `/api/notes/:id/retry-publish` | Retry publish untuk note failed |
+| `POST` | `/api/notes/:id/generate-og` | Generate OG image (lokal → R2) |
+| `GET` | `/api/notes/:id/og-image` | Serve OG image langsung |
+| `POST` | `/api/notes/:id/refresh-from-sanity` | Refresh konten dari Sanity |
+| `DELETE` | `/api/notes/:id/sanity-post` | Hapus post Sanity (draft lokal tetap) |
+| `POST` | `/api/notes/:id/ai-rewrite-preview` | AI rewrite preview dari Sanity snapshot |
+| `GET` | `/api/notes/:id/ai-assist/latest` | Cek AI assist job terakhir untuk note |
 
-  Payload:
+### AI Assist
 
-```json
-{
-  "publishAt": "2026-06-03T02:00:00.000Z"
-}
-```
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `POST` | `/api/ai/assist` | Synchronous AI assist (metadata/draft/outline/outline_to_post/seo_only/all_in_one) |
+| `POST` | `/api/ai/assist/jobs` | Buat async AI assist job |
+| `GET` | `/api/ai/assist/jobs/:id` | Poll status job |
+| `POST` | `/api/ai/assist/jobs/:id/cancel` | Cancel job |
+| `POST` | `/api/ai/assist/jobs/:id/retry` | Retry job |
 
-- `POST /api/notes/:id/publish`
-  Publish langsung ke Sanity.
+### AI Batch
 
-- `POST /api/notes/:id/generate-og`
-  Generate OG image berdasarkan metadata note, lalu upload ke Sanity asset image.
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/ai/batches/templates` | List prompt templates |
+| `POST` | `/api/ai/batches/templates` | Buat template |
+| `PATCH` | `/api/ai/batches/templates/:id` | Update template |
+| `GET` | `/api/ai/batches` | List batches |
+| `GET` | `/api/ai/batches/:id` | Detail batch + items |
+| `POST` | `/api/ai/batches` | Buat batch (1-20 items) |
+| `PATCH` | `/api/ai/batches/:id` | Update batch (name, mode, status, template) |
+| `DELETE` | `/api/ai/batches/:id` | Hapus batch (tidak boleh processing) |
+| `POST` | `/api/ai/batches/process` | Process items (limit 1-10, default 2) |
+| `PATCH` | `/api/ai/batches/:id/items/:itemId` | Edit keyword dalam batch |
+| `DELETE` | `/api/ai/batches/:id/items/:itemId` | Hapus item dari batch |
+| `POST` | `/api/ai/batches/enrich-keywords` | Enrich keywords via AI |
 
-### AI Assist & Batch
+### AI Settings
 
-- `POST /api/ai/assist`
-- `GET /api/ai/batches/templates`
-- `POST /api/ai/batches/templates`
-- `PATCH /api/ai/batches/templates/:id`
-- `GET /api/ai/batches`
-- `GET /api/ai/batches/:id`
-- `POST /api/ai/batches`
-- `POST /api/ai/batches/process`
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/settings/ai` | Lihat AI settings workspace (dengan inherit) |
+| `PUT` | `/api/settings/ai` | Simpan AI settings (support multi-model) |
+| `POST` | `/api/settings/ai/test` | Test koneksi AI provider |
 
-Catatan:
+### OG Branding Settings
 
-- `POST /api/ai/batches` menerima `1-20` item
-- `POST /api/ai/batches/process` menerima `limit` `1-5`
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/settings/og-branding` | Lihat OG branding per workspace |
+| `PUT` | `/api/settings/og-branding` | Simpan OG branding |
 
-Catatan behavior:
+### Knowledge Base
 
-- publish memakai `createOrReplace`
-- `_id` Sanity selalu stabil: `post.<note-id>`
-- publish ulang akan overwrite dokumen sebelumnya
+Endpoint lengkap di [`docs/knowledge-base.md`](docs/knowledge-base.md).
+
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/kb` | List entries (filter: type, category, isActive, limit, offset) |
+| `GET` | `/api/kb/:id` | Detail entry |
+| `POST` | `/api/kb` | Buat entry |
+| `PATCH` | `/api/kb/:id` | Update entry |
+| `DELETE` | `/api/kb/:id` | Hapus entry |
+| `PATCH` | `/api/kb/:id/append` | Append content + keywords |
+| `POST` | `/api/kb/resolve` | Resolve entries untuk AI context |
+| `POST` | `/api/kb/import` | Import bulk (JSON, max 200 entries) |
+| `POST` | `/api/kb/seed-from-company-info` | Seed entries dari company info JSON |
+
+### Upload & Assets
+
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `POST` | `/api/upload` | Upload file ke R2 (multipart FormData) |
+| `GET` | `/api/uploads/:workspaceId/:filename` | Serve uploaded file dari R2 |
+| `GET` | `/og-assets/:workspace/:id` | Serve OG image (R2 → Sanity CDN fallback) |
+
+### Worker Logs
+
+| Method | Path | Deskripsi |
+|--------|------|-----------|
+| `GET` | `/api/worker-logs` | Snapshot terbaru: AI assist jobs, batch, publish jobs |
 
 ## Script Workspace
 
 Root:
 
-- `pnpm dev`
-- `pnpm dev:web`
-- `pnpm dev:worker`
-- `pnpm build`
-- `pnpm typecheck`
-- `pnpm build:web:prod`
-- `pnpm deploy:web`
-- `pnpm deploy:worker`
-- `pnpm db:apply:local`
-- `pnpm db:apply:remote`
-- `pnpm cf:whoami`
+| Script | Fungsi |
+|--------|--------|
+| `pnpm dev` | Jalankan web + worker bersamaan |
+| `pnpm dev:web` | Jalankan frontend aja |
+| `pnpm dev:worker` | Jalankan worker aja |
+| `pnpm build` | Build semua package |
+| `pnpm typecheck` | TypeScript check |
+| `pnpm build:web:prod` | Build frontend production |
+| `pnpm deploy:web` | Deploy frontend ke Pages |
+| `pnpm deploy:worker` | Deploy worker |
+| `pnpm db:apply:local` | Apply schema D1 lokal |
+| `pnpm db:apply:remote` | Apply schema D1 remote |
+| `pnpm cf:whoami` | Cek login Cloudflare |
+| `pnpm test` | Jalankan semua test |
+| `pnpm lint` | ESLint check |
+| `pnpm format` | Prettier format |
 
 ## Test Cron Lokal
 
@@ -568,13 +544,21 @@ pnpm --filter worker exec wrangler d1 create cms-sanity-vite
 
 3. Pastikan `database_id` di `apps/worker/wrangler.jsonc` benar.
 
-4. Apply schema ke database remote:
+4. Buat R2 bucket (bila belum ada):
+
+```bash
+pnpm --filter worker exec wrangler r2 bucket create cms-sanity-vite-og
+```
+
+Pastikan binding `OG_ASSETS` di `apps/worker/wrangler.jsonc` mengarah ke bucket ini.
+
+5. Apply schema ke database remote:
 
 ```bash
 pnpm db:apply:remote
 ```
 
-5. Set secret Sanity di Worker:
+6. Set secret Sanity di Worker:
 
 ```bash
 pnpm --filter worker exec wrangler secret put SANITY_PROJECT_ID
@@ -583,19 +567,19 @@ pnpm --filter worker exec wrangler secret put SANITY_API_VERSION
 pnpm --filter worker exec wrangler secret put SANITY_WRITE_TOKEN
 ```
 
-6. Deploy Worker:
+7. Deploy Worker:
 
 ```bash
 pnpm deploy:worker
 ```
 
-7. Build frontend dengan URL Worker production:
+8. Build frontend dengan URL Worker production:
 
 ```bash
 VITE_API_BASE_URL=https://cms-sanity-vite-worker.<your-subdomain>.workers.dev pnpm build:web:prod
 ```
 
-8. Deploy frontend ke Pages:
+9. Deploy frontend ke Pages:
 
 ```bash
 pnpm deploy:web
@@ -624,44 +608,24 @@ Catatan:
 
 ## Verifikasi Saat Ini
 
-- `apps/web`: `pnpm run typecheck` dan `pnpm run build` lulus
-- `apps/worker`: `pnpm run build` lulus
-- `apps/worker`: `pnpm run typecheck` masih gagal pada deklarasi module `@resvg/resvg-wasm/index_bg.wasm`
+- `apps/web`: `pnpm run typecheck` dan `pnpm run build` ✅
+- `apps/worker`: `pnpm run build` ✅
+- `apps/worker`: `pnpm run typecheck` ✅
+- `pnpm test` ✅
 
-## Tentang Prisma / Drizzle
+## Knowledge Base
 
-Untuk kondisi sekarang: **tidak perlu Prisma**.
+Knowledge Base (KB) adalah sistem penyimpanan konteks untuk AI enrichment dan publish workflow. Menyimpan data pendukung seperti profil klien, glossary teknis, daftar layanan, FAQ, dan referensi konten.
 
-Alasan:
+Dokumentasi lengkap: [`docs/knowledge-base.md`](docs/knowledge-base.md)
 
-- backend masih satu Worker kecil
-- query D1 masih sedikit dan sederhana
-- schema sekarang hanya `notes`, `publish_jobs`, `note_categories`
-- kompleksitas relasi masih rendah
+## Database ORM
 
-Kalau modul baru di frontend nantinya makin banyak, itu **tidak otomatis berarti perlu Prisma**. Yang menentukan justru pertumbuhan model data dan query backend.
+Semua akses database sudah memakai **Drizzle ORM** (`apps/worker/src/db/`). Tidak ada raw SQL di route handler.
 
-Saran saya:
+Keputusan ini diambil karena:
 
-1. Jangan tambah Prisma ke project ini.
-2. Lanjutkan migrasi bertahap ke **Drizzle** karena sekarang fondasinya sudah mulai ada.
-3. Pakai Drizzle untuk query baru, lalu pindahkan query raw lama sedikit demi sedikit.
-
-Kenapa Drizzle lebih cocok di sini:
-
-- lebih ringan untuk Worker runtime
+- Drizzle lebih ringan untuk Worker runtime (dibanding Prisma)
 - lebih dekat ke SQL dan D1
 - cocok untuk edge / Cloudflare environment
-- lebih mudah dipakai bertahap tanpa refactor total besar
-
-Kapan Drizzle layak masuk:
-
-- tabel sudah lebih dari 5-7 dan mulai sering join
-- query raw mulai tersebar di banyak file
-- validasi migration/schema jadi susah dilacak
-- mulai ada modul baru seperti authors, tags, revisions, approvals, assets, roles, comments, atau SEO queues
-
-Jadi rekomendasi sekarang:
-
-- **tanpa Prisma**
-- **lanjutkan Drizzle bertahap**
+- 9 tabel aktif saat ini

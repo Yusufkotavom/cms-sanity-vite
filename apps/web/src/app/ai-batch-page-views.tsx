@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function formatDate(value: string) {
   const date = new Date(value);
@@ -67,6 +68,15 @@ function describeItemStatus(status: AiBatchDetail["items"][number]["status"]) {
     case "failed":
       return "Proses terakhir gagal. Edit akan mengembalikan item ke pending.";
   }
+}
+
+function Tip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-64 text-xs">{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function AiBatchOverviewCard({
@@ -112,22 +122,30 @@ export function AiBatchOverviewCard({
                 Max {config?.aiBatchMaxItemsPerRun ?? 10} item per manual run.
               </span>
             </div>
-            <Button variant="outline" onClick={refresh} disabled={isLoading}>
-              <RefreshCcwIcon data-icon="inline-start" />
-              Refresh
-            </Button>
-            <Button variant="outline" onClick={openCreateView}>
-              <PlusIcon data-icon="inline-start" />
-              New Batch
-            </Button>
-            <Button onClick={processNow} disabled={isProcessing || !config?.aiConfigured}>
-              {isProcessing ? (
-                <Loader2Icon data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <PlayIcon data-icon="inline-start" />
-              )}
-              Process Now
-            </Button>
+            <TooltipProvider>
+              <Tip label="Muat ulang daftar batch dari server">
+                <Button variant="outline" onClick={refresh} disabled={isLoading}>
+                  <RefreshCcwIcon data-icon="inline-start" />
+                  Refresh
+                </Button>
+              </Tip>
+              <Tip label="Buat antrean batch keyword baru">
+                <Button variant="outline" onClick={openCreateView}>
+                  <PlusIcon data-icon="inline-start" />
+                  New Batch
+                </Button>
+              </Tip>
+              <Tip label="Jalankan proses batch secara manual">
+                <Button onClick={processNow} disabled={isProcessing || !config?.aiConfigured}>
+                  {isProcessing ? (
+                    <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                  ) : (
+                    <PlayIcon data-icon="inline-start" />
+                  )}
+                  Process Now
+                </Button>
+              </Tip>
+            </TooltipProvider>
           </div>
         </div>
       </CardHeader>
@@ -208,57 +226,65 @@ export function AiBatchRunsView({
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(batch.updatedAt)}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openBatch(batch.id);
-                        }}
-                      >
-                        <PencilIcon className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleBatchStatus(batch);
-                        }}
-                        disabled={
-                          togglingBatchId === batch.id ||
-                          batch.status === "processing" ||
-                          (batch.status !== "queued" && batch.status !== "paused")
-                        }
-                      >
-                        {togglingBatchId === batch.id ? (
-                          <Loader2Icon className="size-3.5 animate-spin" />
-                        ) : batch.status === "paused" ? (
-                          <PlayIcon className="size-3.5" />
-                        ) : (
-                          <PauseIcon className="size-3.5" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          removeBatch(batch.id, batch.name);
-                        }}
-                        disabled={Boolean(deletingBatchId) || batch.status === "processing"}
-                      >
-                        {deletingBatchId === batch.id ? (
-                          <Loader2Icon className="size-3.5 animate-spin" />
-                        ) : (
-                          <Trash2Icon className="size-3.5" />
-                        )}
-                      </Button>
-                    </div>
+                    <TooltipProvider>
+                      <div className="flex justify-end gap-1">
+                        <Tip label="Buka halaman detail batch">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openBatch(batch.id);
+                            }}
+                          >
+                            <PencilIcon className="size-3.5" />
+                          </Button>
+                        </Tip>
+                        <Tip label="Jeda atau lanjutkan batch">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleBatchStatus(batch);
+                            }}
+                            disabled={
+                              togglingBatchId === batch.id ||
+                              batch.status === "processing" ||
+                              (batch.status !== "queued" && batch.status !== "paused")
+                            }
+                          >
+                            {togglingBatchId === batch.id ? (
+                              <Loader2Icon className="size-3.5 animate-spin" />
+                            ) : batch.status === "paused" ? (
+                              <PlayIcon className="size-3.5" />
+                            ) : (
+                              <PauseIcon className="size-3.5" />
+                            )}
+                          </Button>
+                        </Tip>
+                        <Tip label="Hapus batch dari daftar">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeBatch(batch.id, batch.name);
+                            }}
+                            disabled={Boolean(deletingBatchId) || batch.status === "processing"}
+                          >
+                            {deletingBatchId === batch.id ? (
+                              <Loader2Icon className="size-3.5 animate-spin" />
+                            ) : (
+                              <Trash2Icon className="size-3.5" />
+                            )}
+                          </Button>
+                        </Tip>
+                      </div>
+                    </TooltipProvider>
                   </TableCell>
                 </TableRow>
               ))
@@ -284,6 +310,7 @@ export function AiBatchCreateView({
   createBatch,
   isCreating,
   cancel,
+  onEnrichKeywords,
 }: {
   batchName: string;
   setBatchName: (value: string) => void;
@@ -298,6 +325,7 @@ export function AiBatchCreateView({
   createBatch: () => void;
   isCreating: boolean;
   cancel: () => void;
+  onEnrichKeywords?: () => void;
 }) {
   return (
     <Card>
@@ -309,10 +337,14 @@ export function AiBatchCreateView({
               Form create dipisahkan dari table utama agar pembuatan run terasa seperti langkah terfokus, bukan bagian dari dashboard list.
             </CardDescription>
           </div>
-          <Button variant="outline" onClick={cancel}>
-            <ArrowLeftIcon data-icon="inline-start" />
-            Back to Runs
-          </Button>
+          <TooltipProvider>
+            <Tip label="Kembali ke daftar batch tanpa menyimpan">
+              <Button variant="outline" onClick={cancel}>
+                <ArrowLeftIcon data-icon="inline-start" />
+                Back to Runs
+              </Button>
+            </Tip>
+          </TooltipProvider>
         </div>
       </CardHeader>
       <CardContent className="grid gap-6">
@@ -368,7 +400,19 @@ export function AiBatchCreateView({
         </div>
 
         <div className="grid gap-2">
-          <span className="text-sm font-medium">Keywords + description</span>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Keywords + description</span>
+            {onEnrichKeywords ? (
+              <TooltipProvider>
+                <Tip label="Kembangkan keyword dengan AI — hasilkan variasi short-tail hingga long-tail berdasarkan prinsip SEO">
+                  <Button variant="outline" size="sm" onClick={onEnrichKeywords} disabled={!batchLines.trim()}>
+                    <SparklesIcon data-icon="inline-start" />
+                    Enrich Keywords
+                  </Button>
+                </Tip>
+              </TooltipProvider>
+            ) : null}
+          </div>
           <Textarea
             value={batchLines}
             onChange={(event) => setBatchLines(event.target.value)}
@@ -379,17 +423,23 @@ export function AiBatchCreateView({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button onClick={createBatch} disabled={isCreating || parsedItemsCount === 0}>
-            {isCreating ? (
-              <Loader2Icon data-icon="inline-start" className="animate-spin" />
-            ) : (
-              <SparklesIcon data-icon="inline-start" />
-            )}
-            Create Batch
-          </Button>
-          <Button variant="outline" onClick={cancel} disabled={isCreating}>
-            Cancel
-          </Button>
+          <TooltipProvider>
+            <Tip label="Buat antrean batch baru dan mulai proses">
+              <Button onClick={createBatch} disabled={isCreating || parsedItemsCount === 0}>
+                {isCreating ? (
+                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <SparklesIcon data-icon="inline-start" />
+                )}
+                Create Batch
+              </Button>
+            </Tip>
+            <Tip label="Batalkan pembuatan batch">
+              <Button variant="outline" onClick={cancel} disabled={isCreating}>
+                Cancel
+              </Button>
+            </Tip>
+          </TooltipProvider>
         </div>
       </CardContent>
     </Card>
@@ -451,10 +501,14 @@ export function AiBatchDetailView({
               Halaman detail dipakai untuk edit metadata batch, memantau progress, dan mengelola keyword tanpa berdesakan dengan list utama.
             </CardDescription>
           </div>
-          <Button variant="outline" onClick={backToRuns}>
-            <ArrowLeftIcon data-icon="inline-start" />
-            Back to Runs
-          </Button>
+          <TooltipProvider>
+            <Tip label="Kembali ke daftar batch">
+              <Button variant="outline" onClick={backToRuns}>
+                <ArrowLeftIcon data-icon="inline-start" />
+                Back to Runs
+              </Button>
+            </Tip>
+          </TooltipProvider>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-6 text-sm text-muted-foreground">
@@ -564,10 +618,14 @@ export function AiBatchDetailView({
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={saveBatch} disabled={isSavingBatch || selectedBatch.status === "processing"}>
-                      {isSavingBatch ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
-                      Save Batch
-                    </Button>
+                    <TooltipProvider>
+                      <Tip label="Simpan perubahan nama, mode, atau template batch">
+                        <Button onClick={saveBatch} disabled={isSavingBatch || selectedBatch.status === "processing"}>
+                          {isSavingBatch ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+                          Save Batch
+                        </Button>
+                      </Tip>
+                    </TooltipProvider>
                     {selectedBatch.status === "processing" ? (
                       <span className="text-xs">Batch sedang diproses, ubahan status dikunci sampai run selesai.</span>
                     ) : null}
@@ -659,30 +717,36 @@ export function AiBatchDetailView({
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                disabled={selectedBatch.status !== "paused" || item.status === "processing"}
-                                onClick={() => startEditingItem(item)}
-                              >
-                                <PencilIcon className="size-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                disabled={selectedBatch.status !== "paused" || item.status === "processing" || deletingItemId === item.id}
-                                onClick={() => removeItem(item.id, item.keyword)}
-                              >
-                                {deletingItemId === item.id ? (
-                                  <Loader2Icon className="size-3.5 animate-spin" />
-                                ) : (
-                                  <Trash2Icon className="size-3.5" />
-                                )}
-                              </Button>
-                            </div>
+                            <TooltipProvider>
+                              <div className="flex justify-end gap-1">
+                                <Tip label="Edit keyword dan deskripsi">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    disabled={selectedBatch.status !== "paused" || item.status === "processing"}
+                                    onClick={() => startEditingItem(item)}
+                                  >
+                                    <PencilIcon className="size-3.5" />
+                                  </Button>
+                                </Tip>
+                                <Tip label="Hapus keyword dari batch">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                    disabled={selectedBatch.status !== "paused" || item.status === "processing" || deletingItemId === item.id}
+                                    onClick={() => removeItem(item.id, item.keyword)}
+                                  >
+                                    {deletingItemId === item.id ? (
+                                      <Loader2Icon className="size-3.5 animate-spin" />
+                                    ) : (
+                                      <Trash2Icon className="size-3.5" />
+                                    )}
+                                  </Button>
+                                </Tip>
+                              </div>
+                            </TooltipProvider>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -717,13 +781,19 @@ export function AiBatchDetailView({
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button onClick={saveItem} disabled={selectedBatch.status !== "paused" || isSavingItem}>
-                        {isSavingItem ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
-                        Save Keyword
-                      </Button>
-                      <Button variant="outline" onClick={() => startEditingItem(null)} disabled={isSavingItem}>
-                        Cancel
-                      </Button>
+                      <TooltipProvider>
+                        <Tip label="Simpan perubahan keyword dan reset status">
+                          <Button onClick={saveItem} disabled={selectedBatch.status !== "paused" || isSavingItem}>
+                            {isSavingItem ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : null}
+                            Save Keyword
+                          </Button>
+                        </Tip>
+                        <Tip label="Batalkan edit keyword">
+                          <Button variant="outline" onClick={() => startEditingItem(null)} disabled={isSavingItem}>
+                            Cancel
+                          </Button>
+                        </Tip>
+                      </TooltipProvider>
                     </div>
                   </div>
                 ) : null}
@@ -774,20 +844,24 @@ export function AiBatchTemplatesView({
             <CardDescription>Pilih template untuk diedit atau buat baru.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                setTemplateDraft({
-                  id: "",
-                  name: "",
-                  description: "",
-                  outlinePrompt: "",
-                  contentPrompt: "",
-                })
-              }
-            >
-              Template Baru
-            </Button>
+            <TooltipProvider>
+              <Tip label="Buat template prompt baru">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setTemplateDraft({
+                      id: "",
+                      name: "",
+                      description: "",
+                      outlinePrompt: "",
+                      contentPrompt: "",
+                    })
+                  }
+                >
+                  Template Baru
+                </Button>
+              </Tip>
+            </TooltipProvider>
             {templates.map((template) => (
               <Button
                 key={template.id}
@@ -830,12 +904,16 @@ export function AiBatchTemplatesView({
               onChange={(event) => setTemplateDraft({ ...templateDraft, contentPrompt: event.target.value })}
             />
             <div className="flex gap-2">
-              <Button onClick={saveTemplate} disabled={isSavingTemplate}>
-                {isSavingTemplate ? (
-                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
-                ) : null}
-                Save Template
-              </Button>
+              <TooltipProvider>
+                <Tip label="Simpan template prompt">
+                  <Button onClick={saveTemplate} disabled={isSavingTemplate}>
+                    {isSavingTemplate ? (
+                      <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                    ) : null}
+                    Save Template
+                  </Button>
+                </Tip>
+              </TooltipProvider>
             </div>
           </CardContent>
         </Card>
