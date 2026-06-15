@@ -153,6 +153,7 @@ export type AiSettings = {
   sourceWorkspaceSlug: string;
   sourceWorkspaceName: string;
   isDefaultWorkspace: boolean;
+  useDefaultWorkspaceKb: boolean;
 };
 
 export type AiConnectionTestResult = {

@@ -257,6 +257,25 @@ export function AiSettingsTab({
                     <span>{aiSettings.sourceWorkspaceName}</span>
                     {isInheritMode ? <Badge>Inherited</Badge> : <Badge variant="outline">Custom / Active</Badge>}
                   </div>
+
+                  {!aiSettings.isDefaultWorkspace ? (
+                    <label className="flex items-start gap-3 rounded-xl border border-border p-4">
+                      <Checkbox
+                        checked={aiSettings.useDefaultWorkspaceKb}
+                        onCheckedChange={(checked) =>
+                          setAiSettings((current) =>
+                            current ? { ...current, useDefaultWorkspaceKb: Boolean(checked) } : current
+                          )
+                        }
+                      />
+                      <div className="grid gap-1">
+                        <span className="font-medium text-foreground">Include default workspace KB entries</span>
+                        <span>
+                          Jika aktif, knowledge base entries dari workspace `{aiSettings.sourceWorkspaceSlug}` akan ikut dipakai sebagai konteks AI, tidak hanya entries milik workspace ini sendiri.
+                        </span>
+                      </div>
+                    </label>
+                  ) : null}
                 </CardContent>
               </Card>
 
