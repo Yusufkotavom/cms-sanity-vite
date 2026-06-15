@@ -291,7 +291,6 @@ const kbEntryCreateSchema = z.object({
   modes: z.string().default(""),
   priority: z.number().int().default(0),
   isActive: z.boolean().default(true),
-  metadataJson: z.string().nullable().default(null),
 });
 
 const kbEntryUpdateSchema = z.object({
@@ -303,7 +302,6 @@ const kbEntryUpdateSchema = z.object({
   modes: z.string().optional(),
   priority: z.number().int().optional(),
   isActive: z.boolean().optional(),
-  metadataJson: z.string().nullable().optional(),
 });
 
 const kbListQuerySchema = z.object({
@@ -1631,7 +1629,6 @@ app.post("/api/kb", async (c) => {
     modes: payload.modes,
     priority: payload.priority,
     isActive: payload.isActive ? 1 : 0,
-    metadataJson: payload.metadataJson,
     now,
   });
 
@@ -1658,6 +1655,7 @@ app.patch("/api/kb/:id", async (c) => {
   }
 
   const payload = kbEntryUpdateSchema.parse(await c.req.json());
+  const now = new Date().toISOString();
   await updateKbEntry(c.env.DB, {
     id,
     workspaceId,
@@ -1670,8 +1668,7 @@ app.patch("/api/kb/:id", async (c) => {
     modes: payload.modes,
     priority: payload.priority,
     isActive: payload.isActive !== undefined ? (payload.isActive ? 1 : 0) : undefined,
-    metadataJson: payload.metadataJson,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   });
 
   const updated = await findKbEntryById(c.env.DB, workspaceId, id, DEFAULT_WORKSPACE_ID);
@@ -1729,7 +1726,6 @@ app.post("/api/kb/import", async (c) => {
         modes: entry.modes,
         priority: entry.priority,
         isActive: entry.isActive ? 1 : 0,
-        metadataJson: entry.metadataJson,
         updatedAt: now,
       });
     } else {
@@ -1744,7 +1740,6 @@ app.post("/api/kb/import", async (c) => {
         modes: entry.modes,
         priority: entry.priority,
         isActive: entry.isActive ? 1 : 0,
-        metadataJson: entry.metadataJson,
         now,
       });
     }
@@ -1779,7 +1774,6 @@ app.post("/api/kb/seed-from-company-info", async (c) => {
       modes: entry.modes,
       priority: entry.priority,
       isActive: entry.isActive ? 1 : 0,
-      metadataJson: entry.metadataJson,
       now,
     });
     ids.push(id);
@@ -2870,7 +2864,6 @@ function mapKbEntry(entry: {
   modes: string;
   priority: number;
   is_active: number;
-  metadata_json: string | null;
   created_at: string;
   updated_at: string;
 }) {
@@ -2885,7 +2878,6 @@ function mapKbEntry(entry: {
     modes: entry.modes,
     priority: entry.priority,
     isActive: entry.is_active === 1,
-    metadataJson: entry.metadata_json,
     createdAt: entry.created_at,
     updatedAt: entry.updated_at,
   };

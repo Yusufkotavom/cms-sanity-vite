@@ -23,35 +23,7 @@ export function formatKbEntryForPrompt(entry: KbEntryRecord, maxContentChars = M
     content = `${content.slice(0, maxContentChars - 3)}...`;
   }
 
-  const metaParts: string[] = [];
-  if (entry.metadata_json) {
-    try {
-      const meta = JSON.parse(entry.metadata_json) as Record<string, unknown>;
-      if (Array.isArray(meta.url)) {
-        meta.url.forEach((u, idx) => {
-          if (typeof u === "string" && u) {
-            metaParts.push(`URL ${idx + 1}: ${u.trim()}`);
-          }
-        });
-      } else if (typeof meta.url === "string" && meta.url) {
-        if (meta.url.includes(",")) {
-          meta.url.split(",").map(u => u.trim()).filter(Boolean).forEach((u, idx) => {
-            metaParts.push(`URL ${idx + 1}: ${u}`);
-          });
-        } else {
-          metaParts.push(`URL: ${meta.url.trim()}`);
-        }
-      }
-      if (typeof meta.imageUrl === "string" && meta.imageUrl) {
-        metaParts.push(`Image: ${meta.imageUrl}`);
-      }
-    } catch {
-      // ignore malformed JSON
-    }
-  }
-
-  const metaLine = metaParts.length > 0 ? `\n${metaParts.join(" | ")}` : "";
-  return `${header}${metaLine}\n${content}`;
+  return `${header}\n${content}`;
 }
 
 type ResolveContext = {

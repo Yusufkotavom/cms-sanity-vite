@@ -173,7 +173,6 @@ export const kbEntries = sqliteTable("kb_entries", {
   modes: text("modes").notNull().default(""),
   priority: integer("priority").notNull().default(0),
   isActive: integer("is_active").notNull().default(1),
-  metadataJson: text("metadata_json"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [

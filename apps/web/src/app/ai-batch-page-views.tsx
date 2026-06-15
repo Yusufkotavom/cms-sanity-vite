@@ -73,7 +73,7 @@ function describeItemStatus(status: AiBatchDetail["items"][number]["status"]) {
 function Tip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipTrigger>{children}</TooltipTrigger>
       <TooltipContent side="bottom" className="max-w-64 text-xs">{label}</TooltipContent>
     </Tooltip>
   );

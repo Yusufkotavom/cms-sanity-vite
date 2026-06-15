@@ -740,7 +740,6 @@ export type KbEntry = {
   modes: string;
   priority: number;
   isActive: boolean;
-  metadataJson: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -754,7 +753,6 @@ export type KbEntryPayload = {
   modes?: string;
   priority?: number;
   isActive?: boolean;
-  metadataJson?: string | null;
 };
 
 export type KbEntryAppendPayload = {

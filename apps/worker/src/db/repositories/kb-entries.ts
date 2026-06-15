@@ -26,7 +26,6 @@ export type KbEntryRecord = {
   modes: string;
   priority: number;
   is_active: number;
-  metadata_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -43,7 +42,6 @@ function toRecord(entry: typeof kbEntries.$inferSelect): KbEntryRecord {
     modes: entry.modes,
     priority: entry.priority,
     is_active: entry.isActive,
-    metadata_json: entry.metadataJson,
     created_at: entry.createdAt,
     updated_at: entry.updatedAt,
   };
@@ -139,7 +137,6 @@ export async function createKbEntry(
     modes: string;
     priority: number;
     isActive: number;
-    metadataJson: string | null;
     now: string;
   }
 ) {
@@ -155,7 +152,6 @@ export async function createKbEntry(
     modes: input.modes,
     priority: input.priority,
     isActive: input.isActive,
-    metadataJson: input.metadataJson,
     createdAt: input.now,
     updatedAt: input.now,
   });
@@ -175,7 +171,6 @@ export async function updateKbEntry(
     modes?: string;
     priority?: number;
     isActive?: number;
-    metadataJson?: string | null;
     updatedAt: string;
   }
 ) {
@@ -189,8 +184,7 @@ export async function updateKbEntry(
   if (input.keywords !== undefined) setValues.keywords = input.keywords;
   if (input.modes !== undefined) setValues.modes = input.modes;
   if (input.priority !== undefined) setValues.priority = input.priority;
-  if (input.isActive !== undefined) setValues.isActive = input.isActive;
-  if (input.metadataJson !== undefined) setValues.metadataJson = input.metadataJson;
+  if (input.isActive !== undefined) setValues.is_active = input.isActive;
 
   const wsFilter = input.defaultWorkspaceId
     ? inArray(kbEntries.workspaceId, [input.workspaceId, input.defaultWorkspaceId])

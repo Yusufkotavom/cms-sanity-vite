@@ -41,7 +41,6 @@ type SeedEntry = {
   modes: string;
   priority: number;
   isActive: boolean;
-  metadataJson: string | null;
 };
 
 const WEBSITE_KEYWORDS = "website, web, landing page, company profile, toko online, web app, e-commerce";
@@ -72,7 +71,6 @@ function buildLinkEntries(links: CompanyInfoLink[]): SeedEntry[] {
       modes: "",
       priority: 8,
       isActive: true,
-      metadataJson: JSON.stringify({ url: link.url }),
     };
   });
 }
@@ -90,7 +88,6 @@ function buildServiceEntries(services: string[]): SeedEntry[] {
       modes: "",
       priority: 5,
       isActive: true,
-      metadataJson: null,
     };
   });
 }
@@ -105,7 +102,6 @@ function buildValuePropEntries(propositions: string[]): SeedEntry[] {
     modes: "",
     priority: 3,
     isActive: true,
-    metadataJson: null,
   }));
 }
 
@@ -119,7 +115,6 @@ function buildProofPointEntries(proofPoints: string[]): SeedEntry[] {
     modes: "",
     priority: 4,
     isActive: true,
-    metadataJson: null,
   }));
 }
 
@@ -133,7 +128,6 @@ function buildGuardrailEntries(guardrails: string[]): SeedEntry[] {
     modes: "",
     priority: 10,
     isActive: true,
-    metadataJson: null,
   }));
 }
 
@@ -154,7 +148,6 @@ function buildTemplateEntries(
       modes,
       priority: 7,
       isActive: true,
-      metadataJson: null,
     });
   }
 

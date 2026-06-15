@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  ChevronDownIcon,
   Loader2Icon,
   PlusIcon,
   PencilIcon,
@@ -56,7 +57,6 @@ type EntryFormState = {
   modes: string;
   priority: number;
   isActive: boolean;
-  metadataJson: string;
 };
 
 const EMPTY_FORM: EntryFormState = {
@@ -68,7 +68,6 @@ const EMPTY_FORM: EntryFormState = {
   modes: "",
   priority: 0,
   isActive: true,
-  metadataJson: "",
 };
 
 function entryToForm(entry: KbEntry): EntryFormState {
@@ -81,7 +80,6 @@ function entryToForm(entry: KbEntry): EntryFormState {
     modes: entry.modes,
     priority: entry.priority,
     isActive: entry.isActive,
-    metadataJson: entry.metadataJson ?? "",
   };
 }
 
@@ -95,7 +93,6 @@ function formToPayload(form: EntryFormState): KbEntryPayload {
     modes: form.modes,
     priority: form.priority,
     isActive: form.isActive,
-    metadataJson: form.metadataJson || null,
   };
 }
 
@@ -162,6 +159,7 @@ export function KnowledgeBasePage() {
   const [form, setForm] = useState<EntryFormState>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showModesDropdown, setShowModesDropdown] = useState(false);
 
   const [resolveOpen, setResolveOpen] = useState(false);
   const [resolveKeywords, setResolveKeywords] = useState("");
@@ -271,19 +269,11 @@ export function KnowledgeBasePage() {
     try {
       const result = await kbApi.upload(file);
       toast.success("Gambar berhasil diupload!");
-      if (form.type === "image") {
-        setForm({
-          ...form,
-          content: result.url,
-          metadataJson: JSON.stringify({ imageUrl: result.url }, null, 2),
-        });
-      } else {
-        const separator = form.content.trim() ? "\n\n" : "";
-        setForm({
-          ...form,
-          content: `${form.content}${separator}![${file.name.split(".")[0]}](${result.url})`,
-        });
-      }
+      const separator = form.content.trim() ? "\n\n" : "";
+      setForm({
+        ...form,
+        content: `${form.content}${separator}![${file.name.split(".")[0]}](${result.url})`,
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal mengupload gambar");
     } finally {
@@ -348,7 +338,6 @@ export function KnowledgeBasePage() {
             modes: row.modes || "",
             priority: Number(row.priority || 0),
             isActive: row.isActive === "true" || row.isActive === "1" || row.isActive === "yes",
-            metadataJson: row.metadataJson || null,
           }));
 
           const result = await kbApi.import(payload as KbEntryPayload[]);
@@ -444,7 +433,6 @@ export function KnowledgeBasePage() {
         modes: entry.modes,
         priority: entry.priority,
         isActive: entry.isActive,
-        metadataJson: entry.metadataJson,
       }));
 
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
@@ -467,7 +455,7 @@ export function KnowledgeBasePage() {
       const params: { limit: number } = { limit: 1000 };
       const result = await kbApi.list(params);
       
-      const headers = ["id", "type", "category", "title", "content", "keywords", "modes", "priority", "isActive", "metadataJson"];
+      const headers = ["id", "type", "category", "title", "content", "keywords", "modes", "priority", "isActive"];
       const csvRows = [
         headers.join(","),
         ...result.items.map(item => {
@@ -788,12 +776,49 @@ export function KnowledgeBasePage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label>Modes (comma-separated, empty = all)</Label>
-                <Input
-                  value={form.modes}
-                  onChange={(e) => setForm({ ...form, modes: e.target.value })}
-                  placeholder="outline,outline_to_post"
-                />
+                <Label>Modes (kosongkan = semua mode)</Label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowModesDropdown(!showModesDropdown)}
+                    className="flex w-full items-center justify-between rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm text-left transition-colors hover:bg-accent"
+                  >
+                    <span className={form.modes ? "" : "text-muted-foreground"}>
+                      {form.modes || "Semua mode"}
+                    </span>
+                    <ChevronDownIcon className="size-4 text-muted-foreground" />
+                  </button>
+                  {showModesDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowModesDropdown(false)} />
+                      <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-lg border bg-popover p-1 shadow-md">
+                        {MODES.map((mode) => {
+                          const selected = form.modes.split(",").filter(Boolean).includes(mode);
+                          return (
+                            <label
+                              key={mode}
+                              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => {
+                                  const current = form.modes.split(",").filter(Boolean);
+                                  const next = selected
+                                    ? current.filter((m) => m !== mode)
+                                    : [...current, mode];
+                                  setForm({ ...form, modes: next.join(",") });
+                                }}
+                                className="h-4 w-4 rounded border-input accent-primary"
+                              />
+                              <span>{mode}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="space-y-1">
                 <Label>Priority (higher = first)</Label>
@@ -803,14 +828,6 @@ export function KnowledgeBasePage() {
                   onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
                 />
               </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Metadata JSON (optional)</Label>
-              <Input
-                value={form.metadataJson}
-                onChange={(e) => setForm({ ...form, metadataJson: e.target.value })}
-                placeholder='{"url": "https://..."} or {"imageUrl": "https://..."}'
-              />
             </div>
             <div className="flex items-center gap-2">
               <input

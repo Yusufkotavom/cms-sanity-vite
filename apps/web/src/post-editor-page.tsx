@@ -147,7 +147,7 @@ type PostEditorPageProps = {
 function Tip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipTrigger>{children}</TooltipTrigger>
       <TooltipContent side="bottom" className="max-w-64 text-xs">{label}</TooltipContent>
     </Tooltip>
   );
@@ -286,7 +286,7 @@ export function PostEditorPage({
 
             <div className="flex flex-col gap-2 xl:w-64">
               <label className="text-sm font-medium">Template AI</label>
-              <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+              <Select value={selectedTemplateId} onValueChange={(v) => setSelectedTemplateId(v ?? "__default__")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Default (Workspace)" />
                 </SelectTrigger>

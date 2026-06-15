@@ -36,7 +36,7 @@ const STATEMENTS = [
   "alter table notes add column ai_rewrite_og_title text",
   "alter table notes add column ai_rewrite_og_description text",
   "alter table notes add column ai_rewrite_updated_at text",
-  "create table if not exists kb_entries (id text primary key, workspace_id text not null, type text not null, category text not null default '', title text not null, content text not null, keywords text not null default '', modes text not null default '', priority integer not null default 0, is_active integer not null default 1, metadata_json text, created_at text not null, updated_at text not null);",
+  "create table if not exists kb_entries (id text primary key, workspace_id text not null, type text not null, category text not null default '', title text not null, content text not null, keywords text not null default '', modes text not null default '', priority integer not null default 0, is_active integer not null default 1, created_at text not null, updated_at text not null);",
   "create index if not exists kb_entries_workspace_active_idx on kb_entries(workspace_id, is_active);",
   "alter table ai_assist_jobs add column prompt_log text",
 ] as const;

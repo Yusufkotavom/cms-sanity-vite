@@ -537,7 +537,6 @@ export function AiBatchPage({ config, workspaceSlug }: { config: ApiConfig | nul
         onOpenChange={setIsEnrichOpen}
         initialKeywords={batchLines}
         onApply={(keywords) => setBatchLines((prev) => [prev, keywords].filter(Boolean).join("\n"))}
-        workspaceSlug={workspaceSlug}
       />
     </section>
   );

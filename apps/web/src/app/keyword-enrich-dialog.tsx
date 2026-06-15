@@ -45,13 +45,11 @@ export function KeywordEnrichDialog({
   onOpenChange,
   initialKeywords,
   onApply,
-  workspaceSlug,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialKeywords: string;
   onApply: (keywords: string) => void;
-  workspaceSlug: string;
 }) {
   const [seedText, setSeedText] = useState(initialKeywords);
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
