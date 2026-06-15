@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "../client";
 import { kbEntries } from "../schema";
@@ -57,9 +57,11 @@ type ListOptions = {
   offset?: number;
 };
 
-export async function listKbEntries(db: D1Database, workspaceId: string, options: ListOptions = {}) {
+export async function listKbEntries(db: D1Database, workspaceId: string, options: ListOptions = {}, defaultWorkspaceId?: string, useDefaultWorkspaceKb?: boolean) {
   const drizzleDb = getDb(db);
-  const conditions = [eq(kbEntries.workspaceId, workspaceId)];
+  const conditions = useDefaultWorkspaceKb && defaultWorkspaceId
+    ? [inArray(kbEntries.workspaceId, [workspaceId, defaultWorkspaceId])]
+    : [eq(kbEntries.workspaceId, workspaceId)];
 
   if (options.type) {
     conditions.push(eq(kbEntries.type, options.type));
@@ -85,9 +87,11 @@ export async function listKbEntries(db: D1Database, workspaceId: string, options
   return rows.map(toRecord);
 }
 
-export async function countKbEntries(db: D1Database, workspaceId: string, options: ListOptions = {}) {
+export async function countKbEntries(db: D1Database, workspaceId: string, options: ListOptions = {}, defaultWorkspaceId?: string, useDefaultWorkspaceKb?: boolean) {
   const drizzleDb = getDb(db);
-  const conditions = [eq(kbEntries.workspaceId, workspaceId)];
+  const conditions = useDefaultWorkspaceKb && defaultWorkspaceId
+    ? [inArray(kbEntries.workspaceId, [workspaceId, defaultWorkspaceId])]
+    : [eq(kbEntries.workspaceId, workspaceId)];
 
   if (options.type) {
     conditions.push(eq(kbEntries.type, options.type));

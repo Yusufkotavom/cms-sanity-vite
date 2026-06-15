@@ -168,6 +168,7 @@ const aiSettingsSchema = z.object({
   outlinePrompt: z.string().default(""),
   outlineToPostPrompt: z.string().default(""),
   inheritFromDefault: z.boolean().default(false),
+  useDefaultWorkspaceKb: z.boolean().default(false),
 });
 
 const ogBrandingSettingsSchema = z.object({
@@ -394,6 +395,7 @@ function toAiSettingsResponse(settings: AiWorkspaceSettings) {
     draftPrompt: settings.draftPrompt,
     outlinePrompt: settings.outlinePrompt,
     outlineToPostPrompt: settings.outlineToPostPrompt,
+    useDefaultWorkspaceKb: settings.useDefaultWorkspaceKb,
   };
 }
 
@@ -1105,6 +1107,7 @@ app.put("/api/settings/ai", async (c) => {
       "ai.draftPrompt": payload.draftPrompt,
       "ai.outlinePrompt": payload.outlinePrompt,
       "ai.outlineToPostPrompt": payload.outlineToPostPrompt,
+      "ai.useDefaultWorkspaceKb": payload.useDefaultWorkspaceKb ? "true" : "false",
     });
 
     const saved = await getAiSettings(c.env.DB, workspaceId);
@@ -1146,6 +1149,7 @@ app.put("/api/settings/ai", async (c) => {
     "ai.draftPrompt": payload.draftPrompt,
     "ai.outlinePrompt": payload.outlinePrompt,
     "ai.outlineToPostPrompt": payload.outlineToPostPrompt,
+    "ai.useDefaultWorkspaceKb": payload.useDefaultWorkspaceKb ? "true" : "false",
   });
 
   const saved = await getAiSettings(c.env.DB, workspaceId);
@@ -1182,6 +1186,7 @@ app.post("/api/settings/ai/test", async (c) => {
     draftPrompt: payload.draftPrompt,
     outlinePrompt: payload.outlinePrompt,
     outlineToPostPrompt: payload.outlineToPostPrompt,
+    useDefaultWorkspaceKb: payload.useDefaultWorkspaceKb,
   } as AiWorkspaceSettings;
 
   if (workspaceId !== DEFAULT_WORKSPACE_ID && payload.inheritFromDefault) {
@@ -1564,9 +1569,11 @@ app.delete("/api/ai/batches/:id/items/:itemId", async (c) => {
 app.get("/api/kb", async (c) => {
   const workspaceId = c.get("workspaceId");
   const query = kbListQuerySchema.parse(c.req.query());
+  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
+
   const [items, total] = await Promise.all([
-    listKbEntries(c.env.DB, workspaceId, query),
-    countKbEntries(c.env.DB, workspaceId, query),
+    listKbEntries(c.env.DB, workspaceId, query, DEFAULT_WORKSPACE_ID, aiSettings.settings.useDefaultWorkspaceKb),
+    countKbEntries(c.env.DB, workspaceId, query, DEFAULT_WORKSPACE_ID, aiSettings.settings.useDefaultWorkspaceKb),
   ]);
   return c.json({ items: items.map(mapKbEntry), total });
 });
@@ -1650,11 +1657,16 @@ app.delete("/api/kb/:id", async (c) => {
 app.post("/api/kb/resolve", async (c) => {
   const workspaceId = c.get("workspaceId");
   const payload = kbResolveSchema.parse(await c.req.json());
+  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
   const result = await resolveRelevantKbEntriesDetailed(c.env.DB, workspaceId, {
     keywords: payload.keywords,
     title: payload.title,
     mode: payload.mode,
-  }, { limit: payload.limit });
+  }, {
+    limit: payload.limit,
+    defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
+    useDefaultWorkspaceKb: aiSettings.settings.useDefaultWorkspaceKb,
+  });
 
   return c.json(result);
 });
@@ -2126,11 +2138,15 @@ app.post("/api/notes/:id/ai-rewrite-preview", async (c) => {
       token: sanitySettings.writeToken,
     });
 
-    const knowledgeContext = await resolveRelevantKbEntries(c.env.DB, workspaceId, {
-      keywords: snapshot.seoKeywords,
-      title: snapshot.title,
-      mode: "draft",
-    });
+  const aiSettings = await getAiSettings(c.env.DB, workspaceId);
+  const knowledgeContext = await resolveRelevantKbEntries(c.env.DB, workspaceId, {
+    keywords: snapshot.seoKeywords,
+    title: snapshot.title,
+    mode: "draft",
+  }, {
+    defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
+    useDefaultWorkspaceKb: aiSettings.settings.useDefaultWorkspaceKb,
+  });
 
     const suggestion = await requestAiSuggestion(
       {
@@ -2451,10 +2467,14 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 3) {
       }
 
       const request = JSON.parse(job.request_json) as AiAssistRequest;
+      const jobAiSettings = await getAiSettings(env.DB, workspaceId);
       aiConfig.knowledgeContext = await resolveRelevantKbEntries(env.DB, workspaceId, {
         keywords: request.note.seoKeywords,
         title: request.note.title,
         mode: request.mode,
+      }, {
+        defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
+        useDefaultWorkspaceKb: jobAiSettings.settings.useDefaultWorkspaceKb,
       });
 
       // Reconstruct prompt log for recording
@@ -2522,10 +2542,14 @@ app.post("/api/ai/assist", async (c) => {
   }
 
   try {
+    const aiSettings = await getAiSettings(c.env.DB, workspaceId);
     aiConfig.knowledgeContext = await resolveRelevantKbEntries(c.env.DB, workspaceId, {
       keywords: payload.note.seoKeywords,
       title: payload.note.title,
       mode: payload.mode,
+    }, {
+      defaultWorkspaceId: DEFAULT_WORKSPACE_ID,
+      useDefaultWorkspaceKb: aiSettings.settings.useDefaultWorkspaceKb,
     });
     const suggestion = await requestAiSuggestion(payload, aiConfig);
 

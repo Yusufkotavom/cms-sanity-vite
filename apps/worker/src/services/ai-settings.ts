@@ -12,6 +12,7 @@ export const AI_SETTING_KEYS = [
   "ai.draftPrompt",
   "ai.outlinePrompt",
   "ai.outlineToPostPrompt",
+  "ai.useDefaultWorkspaceKb",
 ] as const;
 
 export const AI_INHERIT_FROM_DEFAULT_KEY = "ai.inheritFromDefault";
@@ -52,6 +53,7 @@ export type AiWorkspaceSettings = {
   draftPrompt: string;
   outlinePrompt: string;
   outlineToPostPrompt: string;
+  useDefaultWorkspaceKb: boolean;
 };
 
 export const DEFAULT_COMPANY_INFO = `Brand: KOTACOM
@@ -151,6 +153,7 @@ export function normalizeAiWorkspaceSettings(settings: Map<string, string>): AiW
       settings.get("ai.outlineToPostPrompt"),
       DEFAULT_AI_PROMPTS.outlineToPostPrompt
     ),
+    useDefaultWorkspaceKb: settings.get("ai.useDefaultWorkspaceKb") === "true",
   };
 }
 

@@ -63,6 +63,8 @@ type ResolveContext = {
 type ResolveOptions = {
   limit?: number;
   maxChars?: number;
+  defaultWorkspaceId?: string;
+  useDefaultWorkspaceKb?: boolean;
 };
 
 export type ResolveResult = {
@@ -92,8 +94,13 @@ export async function resolveRelevantKbEntriesDetailed(
   const terms = extractSearchTerms(context.keywords, context.title);
   const mode = context.mode.trim();
 
-  const baseConditions = ["workspace_id = ?", "is_active = 1"];
-  const binds: (string | number)[] = [workspaceId];
+  const baseConditions = options.useDefaultWorkspaceKb && options.defaultWorkspaceId
+    ? ["(workspace_id = ? OR workspace_id = ?)", "is_active = 1"]
+    : ["workspace_id = ?", "is_active = 1"];
+    
+  const binds: (string | number)[] = options.useDefaultWorkspaceKb && options.defaultWorkspaceId
+    ? [workspaceId, options.defaultWorkspaceId]
+    : [workspaceId];
 
   if (mode) {
     baseConditions.push("(modes = '' OR modes LIKE ?)");
