@@ -280,7 +280,7 @@ export async function requestAiSuggestion(
       model: config.model,
       temperature: input.mode === "metadata" ? 0.4 : 0.7,
       max_tokens: input.mode === "outline_to_post" || input.mode === "draft"
-        ? Math.max(config.maxTokens || 8192, 8192)
+        ? Math.max(config.maxTokens || 16384, 16384)
         : (config.maxTokens || 4096),
       messages: [
         {
