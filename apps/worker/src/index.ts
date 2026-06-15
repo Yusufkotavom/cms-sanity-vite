@@ -115,10 +115,11 @@ import {
   listKbEntries,
   updateKbEntry,
 } from "./db/repositories/kb-entries";
-import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, testAiConnection, type AiAssistRequest, buildSystemPrompt, buildUserPrompt } from "./services/ai";
+import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, testAiConnection, type AiAssistRequest, buildSystemPrompt, buildUserPrompt, aiSuggestionSchema } from "./services/ai";
 import {
   AI_INHERIT_FROM_DEFAULT_KEY,
   AI_SETTING_KEYS,
+  AI_SETTING_KEYS_MODELS,
   AI_SETTING_KEYS_PROMPTS,
   normalizeAiWorkspaceSettings,
   resolveDefaultAiModel,
@@ -447,11 +448,14 @@ async function getAiSettings(db: D1Database, workspaceId: string) {
 
   if (inheritFromDefault) {
     const defaultWorkspace = await ensureDefaultWorkspace(db);
-    const defaultSettingsMap = await getSettingsMap(db, DEFAULT_WORKSPACE_ID, [...AI_SETTING_KEYS_PROMPTS]);
+    const defaultSettingsMap = await getSettingsMap(db, DEFAULT_WORKSPACE_ID, [
+      ...AI_SETTING_KEYS_PROMPTS,
+      ...AI_SETTING_KEYS_MODELS,
+    ]);
     const workspaceSettings = await getSettingsMap(db, workspaceId, [...AI_SETTING_KEYS]);
     
-    // Merge workspace settings with default prompts
-    for (const key of AI_SETTING_KEYS_PROMPTS) {
+    // Merge default workspace settings (models + prompts) over workspace settings
+    for (const key of [...AI_SETTING_KEYS_PROMPTS, ...AI_SETTING_KEYS_MODELS]) {
       if (defaultSettingsMap.has(key)) {
         workspaceSettings.set(key, defaultSettingsMap.get(key)!);
       }
@@ -2477,12 +2481,68 @@ async function processAiAssistJobs(env: Env, workspaceId: string, limit = 3) {
         useDefaultWorkspaceKb: jobAiSettings.settings.useDefaultWorkspaceKb,
       });
 
-      // Reconstruct prompt log for recording
-      const sysPrompt = buildSystemPrompt(request.mode, aiConfig);
-      const usrPrompt = buildUserPrompt(request);
-      promptLog = `--- SYSTEM PROMPT ---\n${sysPrompt}\n\n--- USER PROMPT ---\n${usrPrompt}`;
+      // Single mode: call AI once
+      let suggestion: z.infer<typeof aiSuggestionSchema>;
 
-      const suggestion = await requestAiSuggestion(request, aiConfig);
+      if (request.mode === "all_in_one") {
+        // All-in-one: chain 3 sequential AI calls (metadata → outline → outline_to_post)
+        const promptLogs: string[] = [];
+        const accumulatedNote = { ...request.note };
+
+        // Step 1: metadata
+        const metaSysPrompt = buildSystemPrompt("metadata", aiConfig);
+        const metaUsrPrompt = buildUserPrompt({ mode: "metadata", note: accumulatedNote });
+        promptLogs.push(`=== STEP 1: METADATA ===\n--- SYSTEM PROMPT ---\n${metaSysPrompt}\n\n--- USER PROMPT ---\n${metaUsrPrompt}`);
+        const metaResult = await requestAiSuggestion({ mode: "metadata", note: accumulatedNote }, aiConfig);
+        if (metaResult.title) accumulatedNote.title = metaResult.title;
+        if (metaResult.slug) accumulatedNote.slug = metaResult.slug;
+        if (metaResult.excerpt) accumulatedNote.excerpt = metaResult.excerpt;
+        if (metaResult.seoTitle) accumulatedNote.seoTitle = metaResult.seoTitle;
+        if (metaResult.seoDescription) accumulatedNote.seoDescription = metaResult.seoDescription;
+        if (metaResult.seoKeywords) accumulatedNote.seoKeywords = metaResult.seoKeywords;
+        if (metaResult.ogTitle) accumulatedNote.ogTitle = metaResult.ogTitle;
+        if (metaResult.ogDescription) accumulatedNote.ogDescription = metaResult.ogDescription;
+
+        // Check cancellation after each step
+        const jobAfterMeta = await findAiAssistJobById(env.DB, workspaceId, job.id);
+        if (jobAfterMeta?.status === "cancelled") continue;
+
+        // Step 2: outline
+        const outlineSysPrompt = buildSystemPrompt("outline", aiConfig);
+        const outlineUsrPrompt = buildUserPrompt({ mode: "outline", note: accumulatedNote });
+        promptLogs.push(`=== STEP 2: OUTLINE ===\n--- SYSTEM PROMPT ---\n${outlineSysPrompt}\n\n--- USER PROMPT ---\n${outlineUsrPrompt}`);
+        const outlineResult = await requestAiSuggestion({ mode: "outline", note: accumulatedNote }, aiConfig);
+        if (outlineResult.outlineMd) accumulatedNote.outlineMd = outlineResult.outlineMd;
+        if (outlineResult.title) accumulatedNote.title = outlineResult.title;
+        if (outlineResult.slug) accumulatedNote.slug = outlineResult.slug;
+        if (outlineResult.excerpt) accumulatedNote.excerpt = outlineResult.excerpt;
+
+        // Check cancellation after each step
+        const jobAfterOutline = await findAiAssistJobById(env.DB, workspaceId, job.id);
+        if (jobAfterOutline?.status === "cancelled") continue;
+
+        // Step 3: outline_to_post
+        const contentSysPrompt = buildSystemPrompt("outline_to_post", aiConfig);
+        const contentUsrPrompt = buildUserPrompt({ mode: "outline_to_post", note: accumulatedNote });
+        promptLogs.push(`=== STEP 3: OUTLINE TO POST ===\n--- SYSTEM PROMPT ---\n${contentSysPrompt}\n\n--- USER PROMPT ---\n${contentUsrPrompt}`);
+        const contentResult = await requestAiSuggestion({ mode: "outline_to_post", note: accumulatedNote }, aiConfig);
+
+        // Merge all results, with later steps taking priority
+        suggestion = {
+          ...metaResult,
+          ...outlineResult,
+          ...contentResult,
+        };
+
+        promptLog = promptLogs.join("\n\n");
+      } else {
+        const sysPrompt = buildSystemPrompt(request.mode, aiConfig);
+        const usrPrompt = buildUserPrompt(request);
+        promptLog = `--- SYSTEM PROMPT ---\n${sysPrompt}\n\n--- USER PROMPT ---\n${usrPrompt}`;
+
+        suggestion = await requestAiSuggestion(request, aiConfig);
+      }
+
       const latestJob = await findAiAssistJobById(env.DB, workspaceId, job.id);
       if (latestJob?.status === "cancelled") {
         continue;

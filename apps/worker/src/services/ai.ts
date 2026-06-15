@@ -29,14 +29,14 @@ const aiNoteSchema = z.object({
   contentMd: z.string().default(""),
 });
 
-export const aiAssistModeSchema = z.enum(["metadata", "draft", "outline", "outline_to_post", "seo_only"]);
+export const aiAssistModeSchema = z.enum(["metadata", "draft", "outline", "outline_to_post", "seo_only", "all_in_one"]);
 
 export const aiAssistRequestSchema = z.object({
   mode: aiAssistModeSchema,
   note: aiNoteSchema,
 });
 
-const aiSuggestionSchema = z.object({
+export const aiSuggestionSchema = z.object({
   title: z.string().optional(),
   slug: z.string().optional(),
   excerpt: z.string().optional(),
@@ -163,7 +163,17 @@ export function buildSystemPrompt(mode: AiAssistRequest["mode"], config: AiConfi
               "Preserve facts, avoid fluff, and keep the same language as the input note.",
               'Respond with keys: "contentMd", "title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription", optional "notes".',
             ]
-            : [
+            : mode === "all_in_one"
+              ? [
+                "You are an editorial strategist and writer for a markdown CMS.",
+                "Return only valid JSON.",
+                "Generate a complete SEO-optimized article from scratch based on the provided title and keywords.",
+                "First create a structured outline, then write the full article content.",
+                "Fill all metadata and SEO fields coherently.",
+                "Keep the same language as the input.",
+                'Respond with keys: "contentMd", "title", "slug", "excerpt", "outlineMd", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription", optional "notes".',
+              ]
+              : [
                 "You are an SEO editor for a markdown CMS.",
                 "Return only valid JSON.",
                 "Generate or improve SEO metadata from the current note, outline, and draft.",
@@ -180,6 +190,8 @@ export function buildSystemPrompt(mode: AiAssistRequest["mode"], config: AiConfi
           ? config.outlinePrompt
           : mode === "outline_to_post"
             ? config.outlineToPostPrompt
+            : mode === "all_in_one"
+              ? [config.outlinePrompt, config.outlineToPostPrompt].filter(Boolean).join("\n\n")
             : config.metadataPrompt;
 
   const companyInfoPrompt = config.companyInfo?.trim()
@@ -208,6 +220,8 @@ export function buildUserPrompt(input: AiAssistRequest) {
         ? ["outlineMd", "title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"]
         : input.mode === "outline_to_post"
           ? ["contentMd", "title", "slug", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"]
+        : input.mode === "all_in_one"
+          ? ["contentMd", "title", "slug", "excerpt", "outlineMd", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"]
       : ["contentMd", "title", "excerpt", "seoTitle", "seoDescription", "seoKeywords", "ogTitle", "ogDescription"];
 
   return JSON.stringify(
@@ -279,7 +293,7 @@ export async function requestAiSuggestion(
     body: JSON.stringify({
       model: config.model,
       temperature: input.mode === "metadata" ? 0.4 : 0.7,
-      max_tokens: input.mode === "outline_to_post" || input.mode === "draft"
+      max_tokens: input.mode === "outline_to_post" || input.mode === "draft" || input.mode === "all_in_one"
         ? Math.max(config.maxTokens || 16384, 16384)
         : (config.maxTokens || 4096),
       messages: [
@@ -316,6 +330,9 @@ export async function requestAiSuggestion(
     if (input.mode === "draft") {
       return aiSuggestionSchema.parse({ contentMd: content });
     }
+    if (input.mode === "all_in_one") {
+      return aiSuggestionSchema.parse({ contentMd: content });
+    }
     throw new Error("AI response did not contain a JSON object");
   }
 
@@ -324,7 +341,7 @@ export async function requestAiSuggestion(
     parsed = JSON.parse(jsonCandidate);
   } catch {
     // Truncated JSON fallback for content generation
-    if (input.mode === "outline_to_post" || input.mode === "draft") {
+    if (input.mode === "outline_to_post" || input.mode === "draft" || input.mode === "all_in_one") {
       return aiSuggestionSchema.parse({ contentMd: content });
     }
     throw new Error("AI response JSON is malformed");

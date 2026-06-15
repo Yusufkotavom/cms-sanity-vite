@@ -62,7 +62,7 @@ function sanityAssetToUrl(assetId: string | null, projectId: string | null, data
   return `https://cdn.sanity.io/images/${projectId}/${dataset}/${filename}`;
 }
 
-type AiRunMode = null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only";
+type AiRunMode = null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only" | "all_in_one";
 
 function aiJobStatusVariant(status: AiAssistJob["status"]): "default" | "secondary" | "destructive" | "outline" {
   if (status === "completed") return "default";
@@ -83,6 +83,8 @@ function formatAiModeLabel(mode: AiAssistJob["mode"]) {
       return "Outline to Post";
     case "seo_only":
       return "SEO Only";
+    case "all_in_one":
+      return "All in One";
   }
 }
 
@@ -260,6 +262,18 @@ export function PostEditorPage({
             </div>
 
             <div className="flex flex-wrap gap-2 xl:justify-end">
+              <Button
+                variant="default"
+                onClick={() => void runAiAssist("all_in_one")}
+                disabled={isAiRunning !== null}
+              >
+                {isAiRunning === "all_in_one" ? (
+                  <Loader2Icon data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <SparklesIcon data-icon="inline-start" />
+                )}
+                AI All-in-One
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => void runAiAssist("metadata")}

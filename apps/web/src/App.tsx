@@ -382,7 +382,7 @@ function App() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [retryingNoteId, setRetryingNoteId] = useState<string | null>(null);
-  const [isAiRunning, setIsAiRunning] = useState<null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only">(null);
+  const [isAiRunning, setIsAiRunning] = useState<null | "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only" | "all_in_one">(null);
   const [activeAiAssistJob, setActiveAiAssistJob] = useState<AiAssistJob | null>(null);
   const [isGeneratingOg, setIsGeneratingOg] = useState(false);
   const [isRefreshingFromSanity, setIsRefreshingFromSanity] = useState(false);
@@ -1436,7 +1436,7 @@ function App() {
     }
   }
 
-  async function runAiAssist(mode: "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only") {
+  async function runAiAssist(mode: "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only" | "all_in_one") {
     if (!draft) return;
     if (!config?.aiConfigured) {
       toast.error("AI belum aktif karena settings AI belum diisi");

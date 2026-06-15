@@ -92,7 +92,7 @@ export type SanityPostSummary = {
   categoryTitles: string[];
 };
 
-export type AiAssistMode = "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only";
+export type AiAssistMode = "metadata" | "draft" | "outline" | "outline_to_post" | "seo_only" | "all_in_one";
 
 export type AiAssistRequest = {
   mode: AiAssistMode;
