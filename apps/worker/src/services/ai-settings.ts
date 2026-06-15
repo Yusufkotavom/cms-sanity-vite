@@ -16,6 +16,23 @@ export const AI_SETTING_KEYS = [
 
 export const AI_INHERIT_FROM_DEFAULT_KEY = "ai.inheritFromDefault";
 
+export const AI_SETTING_KEYS_MODELS = [
+  "ai.models",
+  "ai.defaultModelId",
+  "ai.apiBaseUrl",
+  "ai.apiKey",
+  "ai.model",
+] as const;
+
+export const AI_SETTING_KEYS_PROMPTS = [
+  "ai.systemPrompt",
+  "ai.companyInfo",
+  "ai.metadataPrompt",
+  "ai.draftPrompt",
+  "ai.outlinePrompt",
+  "ai.outlineToPostPrompt",
+] as const;
+
 export type AiModelSettings = {
   id: string;
   name: string;
@@ -154,22 +171,6 @@ export function toAiConfig(settings: AiWorkspaceSettings): AiConfig {
     outlinePrompt: settings.outlinePrompt,
     outlineToPostPrompt: settings.outlineToPostPrompt,
     maxTokens: model?.maxTokens,
-  };
-}
-
-export function mergeAiSettingsModelsOnly(
-  workspaceSettings: AiWorkspaceSettings,
-  defaultSettings: AiWorkspaceSettings
-): AiWorkspaceSettings {
-  return {
-    models: defaultSettings.models,
-    defaultModelId: defaultSettings.defaultModelId,
-    systemPrompt: workspaceSettings.systemPrompt,
-    companyInfo: workspaceSettings.companyInfo,
-    metadataPrompt: workspaceSettings.metadataPrompt,
-    draftPrompt: workspaceSettings.draftPrompt,
-    outlinePrompt: workspaceSettings.outlinePrompt,
-    outlineToPostPrompt: workspaceSettings.outlineToPostPrompt,
   };
 }
 

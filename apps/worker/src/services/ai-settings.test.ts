@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  mergeAiSettingsModelsOnly,
   normalizeAiWorkspaceSettings,
   resolveDefaultAiModel,
   shouldInheritDefaultAiSettings,
@@ -61,48 +60,6 @@ describe("ai settings service", () => {
     expect(shouldInheritDefaultAiSettings("workspace-1", null, "default")).toBe(false);
     expect(shouldInheritDefaultAiSettings("workspace-1", "false", "default")).toBe(false);
     expect(shouldInheritDefaultAiSettings("workspace-1", "true", "default")).toBe(true);
-  });
-
-  it("inherits only model settings while keeping workspace prompts", () => {
-    const workspaceSettings = normalizeAiWorkspaceSettings(
-      new Map([
-        ["ai.systemPrompt", "workspace-system"],
-        ["ai.companyInfo", "workspace-company"],
-        ["ai.metadataPrompt", "workspace-metadata"],
-      ])
-    );
-    const defaultSettings = normalizeAiWorkspaceSettings(
-      new Map([
-        [
-          "ai.models",
-          JSON.stringify([
-            {
-              id: "default-model",
-              name: "Default",
-              providerPreset: "custom",
-              apiBaseUrl: "https://provider.example/v1",
-              apiKey: "secret",
-              model: "model-default",
-            },
-          ]),
-        ],
-        ["ai.defaultModelId", "default-model"],
-        ["ai.systemPrompt", "default-system"],
-      ])
-    );
-
-    expect(mergeAiSettingsModelsOnly(workspaceSettings, defaultSettings)).toMatchObject({
-      defaultModelId: "default-model",
-      systemPrompt: "workspace-system",
-      companyInfo: "workspace-company",
-      metadataPrompt: "workspace-metadata",
-      models: [
-        {
-          id: "default-model",
-          model: "model-default",
-        },
-      ],
-    });
   });
 
   it("fills empty prompt fields with default ai prompts", () => {

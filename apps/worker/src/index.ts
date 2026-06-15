@@ -119,7 +119,7 @@ import { aiAssistModeSchema, aiAssistRequestSchema, requestAiSuggestion, testAiC
 import {
   AI_INHERIT_FROM_DEFAULT_KEY,
   AI_SETTING_KEYS,
-  mergeAiSettingsModelsOnly,
+  AI_SETTING_KEYS_PROMPTS,
   normalizeAiWorkspaceSettings,
   resolveDefaultAiModel,
   shouldInheritDefaultAiSettings,
@@ -445,14 +445,18 @@ async function getAiSettings(db: D1Database, workspaceId: string) {
 
   if (inheritFromDefault) {
     const defaultWorkspace = await ensureDefaultWorkspace(db);
-    const defaultSettings = await getSettingsMap(db, DEFAULT_WORKSPACE_ID, [...AI_SETTING_KEYS]);
+    const defaultSettingsMap = await getSettingsMap(db, DEFAULT_WORKSPACE_ID, [...AI_SETTING_KEYS_PROMPTS]);
     const workspaceSettings = await getSettingsMap(db, workspaceId, [...AI_SETTING_KEYS]);
+    
+    // Merge workspace settings with default prompts
+    for (const key of AI_SETTING_KEYS_PROMPTS) {
+      if (defaultSettingsMap.has(key)) {
+        workspaceSettings.set(key, defaultSettingsMap.get(key)!);
+      }
+    }
 
     return {
-      settings: mergeAiSettingsModelsOnly(
-        normalizeAiWorkspaceSettings(workspaceSettings),
-        normalizeAiWorkspaceSettings(defaultSettings)
-      ),
+      settings: normalizeAiWorkspaceSettings(workspaceSettings),
       inheritFromDefault: true,
       sourceWorkspaceId: defaultWorkspace.id,
       sourceWorkspaceSlug: defaultWorkspace.slug,
@@ -1159,34 +1163,46 @@ app.post("/api/settings/ai/test", async (c) => {
   const payload = aiConnectionTestSchema.parse(await c.req.json());
   const existing = await getStoredAiSettings(c.env.DB, workspaceId);
 
+  let mergedTestSettings = {
+    models: payload.models.map((model) => ({
+      id: model.id,
+      name: model.name,
+      providerPreset: model.providerPreset,
+      apiBaseUrl: model.apiBaseUrl,
+      apiKey:
+        model.apiKey === "********"
+          ? (existing.settings.models.find((entry) => entry.id === model.id)?.apiKey ?? "")
+          : model.apiKey,
+      model: model.model,
+    })),
+    defaultModelId: payload.defaultModelId,
+    systemPrompt: payload.systemPrompt,
+    companyInfo: payload.companyInfo,
+    metadataPrompt: payload.metadataPrompt,
+    draftPrompt: payload.draftPrompt,
+    outlinePrompt: payload.outlinePrompt,
+    outlineToPostPrompt: payload.outlineToPostPrompt,
+  } as AiWorkspaceSettings;
+
+  if (workspaceId !== DEFAULT_WORKSPACE_ID && payload.inheritFromDefault) {
+    const defaultSettingsMap = await getSettingsMap(c.env.DB, DEFAULT_WORKSPACE_ID, [...AI_SETTING_KEYS_PROMPTS]);
+    for (const key of AI_SETTING_KEYS_PROMPTS) {
+      if (defaultSettingsMap.has(key)) {
+        const value = defaultSettingsMap.get(key)!;
+        if (key === "ai.systemPrompt") mergedTestSettings.systemPrompt = value;
+        if (key === "ai.companyInfo") mergedTestSettings.companyInfo = value;
+        if (key === "ai.metadataPrompt") mergedTestSettings.metadataPrompt = value;
+        if (key === "ai.draftPrompt") mergedTestSettings.draftPrompt = value;
+        if (key === "ai.outlinePrompt") mergedTestSettings.outlinePrompt = value;
+        if (key === "ai.outlineToPostPrompt") mergedTestSettings.outlineToPostPrompt = value;
+      }
+    }
+  }
+
   const effectiveSettings =
     workspaceId !== DEFAULT_WORKSPACE_ID && payload.inheritFromDefault
       ? {
-          settings: mergeAiSettingsModelsOnly(
-            {
-              models: payload.models.map((model) => ({
-                id: model.id,
-                name: model.name,
-                providerPreset: model.providerPreset,
-                apiBaseUrl: model.apiBaseUrl,
-                apiKey:
-                  model.apiKey === "********"
-                    ? (existing.settings.models.find((entry) => entry.id === model.id)?.apiKey ?? "")
-                    : model.apiKey,
-                model: model.model,
-              })),
-              defaultModelId: payload.defaultModelId,
-              systemPrompt: payload.systemPrompt,
-              companyInfo: payload.companyInfo,
-              metadataPrompt: payload.metadataPrompt,
-              draftPrompt: payload.draftPrompt,
-              outlinePrompt: payload.outlinePrompt,
-              outlineToPostPrompt: payload.outlineToPostPrompt,
-            },
-            normalizeAiWorkspaceSettings(
-              await getSettingsMap(c.env.DB, DEFAULT_WORKSPACE_ID, [...AI_SETTING_KEYS])
-            )
-          ),
+          settings: mergedTestSettings,
           inheritFromDefault: true,
           sourceWorkspaceSlug: DEFAULT_WORKSPACE_SLUG,
           sourceWorkspaceName: (await ensureDefaultWorkspace(c.env.DB)).name,
@@ -1194,26 +1210,7 @@ app.post("/api/settings/ai/test", async (c) => {
           isDefaultWorkspace: false,
         }
       : {
-          settings: {
-            models: payload.models.map((model) => ({
-              id: model.id,
-              name: model.name,
-              providerPreset: model.providerPreset,
-              apiBaseUrl: model.apiBaseUrl,
-              apiKey:
-                model.apiKey === "********"
-                  ? (existing.settings.models.find((entry) => entry.id === model.id)?.apiKey ?? "")
-                  : model.apiKey,
-              model: model.model,
-            })),
-            defaultModelId: payload.defaultModelId,
-            systemPrompt: payload.systemPrompt,
-            companyInfo: payload.companyInfo,
-            metadataPrompt: payload.metadataPrompt,
-            draftPrompt: payload.draftPrompt,
-            outlinePrompt: payload.outlinePrompt,
-            outlineToPostPrompt: payload.outlineToPostPrompt,
-          } satisfies AiWorkspaceSettings,
+          settings: mergedTestSettings,
           inheritFromDefault: false,
           sourceWorkspaceSlug: c.get("workspaceSlug"),
           sourceWorkspaceName: "Current Workspace",
