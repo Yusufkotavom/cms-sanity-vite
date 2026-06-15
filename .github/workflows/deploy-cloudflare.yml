@@ -7,39 +7,50 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-cloudflare-production
+  group: deploy-cloudflare-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy-worker:
-    name: Deploy Worker
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-
       - uses: pnpm/action-setup@v6
         with:
           version: 10.33.0
-
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run worker tests
+      - run: pnpm install --frozen-lockfile
+      - name: Worker tests
         run: pnpm --filter worker test
+      - name: Web typecheck
+        run: pnpm --filter web typecheck
 
-      - name: Dry-run worker build
+  deploy-worker:
+    name: Deploy Worker
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build
         run: pnpm --filter worker build
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy Worker
+      - name: Deploy
         run: pnpm --filter worker exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -47,33 +58,24 @@ jobs:
 
   deploy-web:
     name: Deploy Web
-    needs: deploy-worker
+    needs: [test]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-
       - uses: pnpm/action-setup@v6
         with:
           version: 10.33.0
-
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck web
-        run: pnpm --filter web typecheck
-
-      - name: Build web
+      - run: pnpm install --frozen-lockfile
+      - name: Build
         run: pnpm build:web:prod
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-
-      - name: Deploy Pages
+      - name: Deploy
         run: pnpm --filter web exec wrangler pages deploy dist --project-name cms-sanity-vite --branch main --commit-hash "${GITHUB_SHA}" --commit-message "${GITHUB_SHA}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
