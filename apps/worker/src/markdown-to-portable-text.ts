@@ -1037,6 +1037,60 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       badge: badge || undefined,
     })) ?? parseArray(val)?.map((title) => ({ _type: "feature", _key: createKey(), title }));
 
+  const parseSplitColumns = (val?: string) =>
+    parseStructured(val)?.map(([kind, title, description, extra]) => {
+      if (kind === "content") {
+        return {
+          _type: "split-content" as const,
+          _key: createKey(),
+          title: title || undefined,
+          body: makeBody(description),
+          link: extra ? { _type: "link" as const, _key: createKey(), isExternal: isExternalHref(extra), title: title || extra, href: extra } : undefined,
+        };
+      }
+      if (kind === "cards") {
+        return {
+          _type: "split-cards-list" as const,
+          _key: createKey(),
+          list: [title, extra || description].filter(Boolean).map((item) => ({ _type: "splitCard" as const, _key: createKey(), title: item })),
+        };
+      }
+      if (kind === "info") {
+        return {
+          _type: "split-info-list" as const,
+          _key: createKey(),
+          list: [
+            {
+              _type: "splitInfo" as const,
+              _key: createKey(),
+              title: title || undefined,
+              body: makeBody(description),
+              tags: extra ? extra.split(",").map((tag) => tag.trim()).filter(Boolean) : undefined,
+            },
+          ],
+        };
+      }
+      return undefined;
+    }).filter(Boolean);
+
+  const parseGridCards = (val?: string) =>
+    parseStructured(val)?.map(([uiIcon, title, excerpt, href]) => ({
+      _type: "gridCard" as const,
+      _key: createKey(),
+      uiIcon: uiIcon || undefined,
+      title: title || undefined,
+      excerpt: excerpt || undefined,
+      link: href ? { _type: "link" as const, _key: createKey(), isExternal: isExternalHref(href), title: title || href, href } : undefined,
+    }));
+
+  const parseTimelines = (val?: string) =>
+    parseStructured(val)?.map(([title, text]) => ({
+      _type: "timelines-1" as const,
+      _key: createKey(),
+      title: title || undefined,
+      body: makeBody(text),
+    })) ?? parseArray(val)?.map((title) => ({ _type: "timelines-1" as const, _key: createKey(), title }));
+
   // Hero blocks
   if (type === "hero-1") {
     return {
@@ -1162,8 +1216,10 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "split-row",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
-      noGap: attrs.noGap === "true",
+      noGap: parseBoolean(attrs.noGap, false),
+      splitColumns: parseSplitColumns(attrs.splitColumns),
     };
   }
 
@@ -1197,10 +1253,12 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "grid-row",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       textAlign: attrs.textAlign || undefined,
       cardStyle: attrs.cardStyle || undefined,
       gridColumns: attrs.gridColumns || undefined,
+      cards: parseGridCards(attrs.cards),
     };
   }
 
@@ -1239,7 +1297,9 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "timeline-row",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
+      timelines: parseTimelines(attrs.timelines || attrs.items),
     };
   }
 

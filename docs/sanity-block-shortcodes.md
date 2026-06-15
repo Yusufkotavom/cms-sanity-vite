@@ -135,12 +135,18 @@ Schema fields supported by shortcode:
 - `padding`
 - `colorVariant`
 - `noGap`
-- `splitColumns` Studio-only / composer-only
+- `splitColumns` practical nested syntax
+
+Nested `splitColumns` format:
+
+- `content::title::text::href`
+- `cards::cardTitleA::ignored::cardTitleB`
+- `info::title::text::Tag1,Tag2`
 
 Shortcode:
 
 ```markdown
-[block:split-row paddingTop="true" paddingBottom="true" colorVariant="background" noGap="false" /]
+[block:split-row paddingTop="true" paddingBottom="true" colorVariant="background" noGap="true" splitColumns="content::Konsultasi::Audit kebutuhan dan prioritas bisnis::/services|cards::Cepat::Respon cepat::Aman|info::Support::Tim membantu setelah live::Maintenance,Monitoring" /]
 ```
 
 ### `grid-row` = Grid Row
@@ -152,12 +158,16 @@ Schema fields supported by shortcode:
 - `textAlign`
 - `cardStyle`
 - `gridColumns`
-- nested cards/posts Studio-only / composer-only
+- `cards` practical nested syntax
+
+Nested `cards` format:
+
+- `uiIcon::title::excerpt::href|...`
 
 Shortcode:
 
 ```markdown
-[block:grid-row paddingTop="true" paddingBottom="true" colorVariant="background" textAlign="left" cardStyle="default" gridColumns="grid-cols-3" /]
+[block:grid-row paddingTop="true" paddingBottom="true" colorVariant="background" textAlign="center" cardStyle="bordered" gridColumns="grid-cols-3" cards="monitor::Website Development::Company profile dan landing page::/services/website|server::IT Support::Maintenance perangkat dan jaringan::/services/it-support" /]
 ```
 
 ### `carousel-1` = Carousel 1
@@ -198,10 +208,14 @@ Schema fields:
 - `colorVariant`
 - `timelines` array of `timelines-1`
 
+Nested `timelines` format:
+
+- `title::text|...`
+
 Shortcode:
 
 ```markdown
-[block:timeline-row paddingTop="true" paddingBottom="true" colorVariant="background" items="Discovery|Desain solusi|Implementasi|Support" /]
+[block:timeline-row paddingTop="true" paddingBottom="true" colorVariant="background" timelines="Discovery::Pemetaan kebutuhan bisnis|Proposal::Scope dan estimasi jelas|Implementasi::Eksekusi bertahap" /]
 ```
 
 ### `cta-1` = CTA 1

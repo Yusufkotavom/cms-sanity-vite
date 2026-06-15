@@ -145,4 +145,46 @@ describe("markdownToPortableText", () => {
       limit: 4,
     });
   });
+
+  it("supports nested split, grid, and timeline block shortcode arrays", async () => {
+    const blocks = await markdownToPortableText(
+      [
+        '[block:split-row paddingTop="true" paddingBottom="true" colorVariant="background" noGap="true" splitColumns="content::Konsultasi::Audit kebutuhan dan prioritas bisnis::Pelajari::/services|cards::Cepat::Respon cepat::Aman::Implementasi defensif|info::Support::Tim membantu setelah live::Maintenance,Monitoring" /]',
+        '[block:grid-row paddingTop="true" paddingBottom="true" colorVariant="background" textAlign="center" cardStyle="bordered" gridColumns="grid-cols-3" cards="monitor::Website Development::Company profile dan landing page::/services/website|server::IT Support::Maintenance perangkat dan jaringan::/services/it-support" /]',
+        '[block:timeline-row paddingTop="true" paddingBottom="true" colorVariant="background" timelines="Discovery::Pemetaan kebutuhan bisnis|Proposal::Scope dan estimasi jelas|Implementasi::Eksekusi bertahap" /]',
+      ].join("\n\n")
+    );
+
+    expect(blocks[0]).toMatchObject({
+      _type: "split-row",
+      padding: { _type: "sectionPadding", top: true, bottom: true },
+      colorVariant: "background",
+      noGap: true,
+      splitColumns: [
+        { _type: "split-content", title: "Konsultasi" },
+        { _type: "split-cards-list", list: [{ title: "Cepat" }, { title: "Aman" }] },
+        { _type: "split-info-list", list: [{ title: "Support", tags: ["Maintenance", "Monitoring"] }] },
+      ],
+    });
+
+    expect(blocks[1]).toMatchObject({
+      _type: "grid-row",
+      textAlign: "center",
+      cardStyle: "bordered",
+      gridColumns: "grid-cols-3",
+      cards: [
+        { _type: "gridCard", uiIcon: "monitor", title: "Website Development", excerpt: "Company profile dan landing page" },
+        { _type: "gridCard", uiIcon: "server", title: "IT Support", excerpt: "Maintenance perangkat dan jaringan" },
+      ],
+    });
+
+    expect(blocks[2]).toMatchObject({
+      _type: "timeline-row",
+      timelines: [
+        { _type: "timelines-1", title: "Discovery" },
+        { _type: "timelines-1", title: "Proposal" },
+        { _type: "timelines-1", title: "Implementasi" },
+      ],
+    });
+  });
 });

@@ -136,6 +136,12 @@ Dokumentasi lengkap semua block Sanity, field, dan contoh shortcode valid tersed
 docs/sanity-block-shortcodes.md
 ```
 
+Panduan operasional untuk AI agent dan API tersedia di:
+
+```txt
+docs/ai-agent-operations.md
+```
+
 Shortcode yang paling aman untuk AI draft artikel:
 
 ```markdown
