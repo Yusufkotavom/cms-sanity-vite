@@ -536,7 +536,6 @@ export async function patchNoteToSanity({
           id: note.sanity_document_id,
           ...(note.sanity_revision ? { ifRevisionID: note.sanity_revision } : {}),
           set: setFields,
-          unset: ["blocks"],
         },
       },
     ],
