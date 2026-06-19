@@ -79,6 +79,11 @@ const WorkerLogsPage = lazy(async () => {
   return { default: module.WorkerLogsPage };
 });
 
+const CreateNotePage = lazy(async () => {
+  const module = await import("./create-note-page");
+  return { default: module.CreateNotePage };
+});
+
 type Note = ApiNote;
 type LoginState = "checking" | "authenticated" | "unauthenticated";
 type AppRoute =
@@ -90,7 +95,8 @@ type AppRoute =
   | "knowledge-base"
   | "worker-logs"
   | "settings"
-  | "api-status";
+  | "api-status"
+  | "create";
 
 type RouteState = {
   workspaceSlug: string | null;
@@ -148,6 +154,10 @@ const routeMeta: Record<AppRoute, { title: string; description: string }> = {
   "api-status": {
     title: "API Status",
     description: "Periksa koneksi worker, D1, dan readiness publish.",
+  },
+  create: {
+    title: "Create",
+    description: "Buat note baru dengan tipe dokumen yang sesuai.",
   },
 };
 
@@ -208,6 +218,7 @@ function getRouteFromHash(hash: string): RouteState {
     "worker-logs",
     "settings",
     "api-status",
+    "create",
   ];
 
   const route = allowedRoutes.includes((segments[routeOffset] ?? "") as AppRoute)
@@ -397,6 +408,7 @@ function App() {
   const [isLoadingSanityServices, setIsLoadingSanityServices] = useState(false);
   const [isLoadingSanityProjects, setIsLoadingSanityProjects] = useState(false);
   const [openingSanityDocumentId, setOpeningSanityDocumentId] = useState<string | null>(null);
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
@@ -1399,6 +1411,38 @@ function App() {
     }
   }
 
+  async function createNoteWithType(type: string, title: string, slug: string) {
+    setIsCreatingNote(true);
+    try {
+      const created = await notesApi.create({
+        title: title || "Untitled note",
+        slug: slug || `untitled-note-${Date.now()}`,
+        excerpt: "",
+        seoTitle: "",
+        seoDescription: "",
+        seoKeywords: "",
+        ogTitle: "",
+        ogDescription: "",
+        outlineMd: "",
+        contentMd: "# Judul baru\n\nTulis draft di sini.",
+        categoryIds: [],
+        status: "draft",
+        sanityType: type,
+      });
+      toast.success("Note created");
+      setSelectedId(created.id);
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts", created.id));
+      }
+      setContentTab("editor");
+      await loadNotes(created.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create note");
+    } finally {
+      setIsCreatingNote(false);
+    }
+  }
+
   async function saveDraft(showToast = true) {
     if (!draft) return;
 
@@ -2120,6 +2164,21 @@ function App() {
         );
       case "settings":
         return renderSettingsView();
+      case "create":
+        return (
+          <Suspense
+            fallback={
+              <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border bg-card/60 text-sm text-muted-foreground">
+                Loading...
+              </div>
+            }
+          >
+            <CreateNotePage
+              onCreateNote={(type, title, slug) => void createNoteWithType(type, title, slug)}
+              isCreating={isCreatingNote}
+            />
+          </Suspense>
+        );
       case "api-status":
         return (
           <ApiStatusView
@@ -2180,7 +2239,7 @@ function App() {
       <AppSidebar
         currentUrl={window.location.hash || buildWorkspaceHash(activeWorkspaceSlug, route, routeState.noteId, routeState.isNewNote)}
         onNavigate={navigate}
-        onCreate={() => void createNote()}
+        onCreate={() => navigate(buildWorkspaceHash(activeWorkspaceSlug, "create"))}
         userEmail={authEmail}
         onLogout={logout}
         workspaces={workspaces}

@@ -28,6 +28,7 @@ import {
   SearchIcon,
   SparklesIcon,
   Settings2Icon,
+  SquarePenIcon,
 } from "lucide-react";
 import type { Workspace } from "@/lib/api";
 
@@ -37,6 +38,11 @@ const data = {
       title: "Dashboard",
       route: "dashboard",
       icon: <LayoutDashboardIcon />,
+    },
+    {
+      title: "Create",
+      route: "create",
+      icon: <SquarePenIcon />,
     },
     {
       title: "Posts",
