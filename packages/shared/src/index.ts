@@ -17,6 +17,7 @@ export const noteSchema = z.object({
   categoryIds: z.array(z.string()).default([]),
   status: noteStatusSchema.default("draft"),
   publishAt: z.string().datetime().optional(),
+  sanityType: z.string().optional(),
 });
 
 export type NoteInput = z.infer<typeof noteSchema>;

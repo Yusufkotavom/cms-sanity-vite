@@ -22,6 +22,7 @@ export type NoteRecord = {
   publish_at: string | null;
   sanity_document_id: string | null;
   sanity_revision: string | null;
+  sanity_type: string | null;
   last_error: string | null;
   ai_rewrite_content_md: string | null;
   ai_rewrite_excerpt: string | null;
@@ -55,6 +56,7 @@ function toNoteRecord(note: typeof notes.$inferSelect): NoteRecord {
     publish_at: note.publishAt,
     sanity_document_id: note.sanityDocumentId,
     sanity_revision: note.sanityRevision,
+    sanity_type: note.sanityType,
     last_error: note.lastError,
     ai_rewrite_content_md: note.aiRewriteContentMd,
     ai_rewrite_excerpt: note.aiRewriteExcerpt,
@@ -133,6 +135,7 @@ export async function createNote(
     ogImageAssetId?: string;
     sanityDocumentId?: string | null;
     sanityRevision?: string | null;
+    sanityType?: string | null;
     createdAt: string;
   }
 ) {
@@ -153,6 +156,7 @@ export async function createNote(
       ogImageAssetId: input.ogImageAssetId ?? null,
       sanityDocumentId: input.sanityDocumentId ?? null,
       sanityRevision: input.sanityRevision ?? null,
+      sanityType: input.sanityType ?? null,
       status: "draft",
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
@@ -175,6 +179,7 @@ export async function updateNoteDraft(
     ogTitle: string;
     ogDescription: string;
     ogImageAssetId?: string | null;
+    sanityType?: string | null;
     currentStatus: string;
     updatedAt: string;
   }
@@ -194,6 +199,7 @@ export async function updateNoteDraft(
       ogTitle: input.ogTitle,
       ogDescription: input.ogDescription,
       ...(input.ogImageAssetId !== undefined ? { ogImageAssetId: input.ogImageAssetId } : {}),
+      ...(input.sanityType !== undefined ? { sanityType: input.sanityType } : {}),
       status: input.currentStatus === "failed" ? "draft" : input.currentStatus,
       lastError: null,
       updatedAt: input.updatedAt,
@@ -236,6 +242,7 @@ export async function updateNoteSanityMirror(
     ogTitle: string;
     ogDescription: string;
     sanityRevision: string | null;
+    sanityType?: string | null;
     updatedAt: string;
   }
 ) {
@@ -253,6 +260,7 @@ export async function updateNoteSanityMirror(
       ogTitle: input.ogTitle,
       ogDescription: input.ogDescription,
       sanityRevision: input.sanityRevision,
+      ...(input.sanityType !== undefined ? { sanityType: input.sanityType } : {}),
       lastError: null,
       updatedAt: input.updatedAt,
     })

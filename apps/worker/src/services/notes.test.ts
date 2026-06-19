@@ -22,6 +22,7 @@ const note: NoteRecord = {
   publish_at: null,
   sanity_document_id: null,
   sanity_revision: null,
+  sanity_type: null,
   last_error: null,
   ai_rewrite_content_md: null,
   ai_rewrite_excerpt: null,

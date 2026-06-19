@@ -36,6 +36,7 @@ export type ApiNote = {
   publishAt: string | null;
   sanityDocumentId: string | null;
   sanityRevision: string | null;
+  sanityType: string | null;
   lastError: string | null;
   aiRewriteContentMd: string | null;
   aiRewriteExcerpt: string | null;
@@ -84,6 +85,41 @@ export type SanityConnectionTestResult = {
 };
 
 export type SanityPostSummary = {
+  sanityDocumentId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  updatedAt: string | null;
+  categoryTitles: string[];
+};
+
+export type SanityPageSummary = {
+  sanityDocumentId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  updatedAt: string | null;
+};
+
+export type SanityProductSummary = {
+  sanityDocumentId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  updatedAt: string | null;
+  categoryTitles: string[];
+};
+
+export type SanityServiceSummary = {
+  sanityDocumentId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  updatedAt: string | null;
+  categoryTitles: string[];
+};
+
+export type SanityProjectSummary = {
   sanityDocumentId: string;
   title: string;
   slug: string;
@@ -724,6 +760,58 @@ export const notesApi = {
   deleteAiBatchItem: (batchId: string, itemId: string) =>
     request<AiBatchDetail>(`/api/ai/batches/${batchId}/items/${itemId}`, {
       method: "DELETE",
+    }),
+};
+
+export const pagesApi = {
+  list: (workspaceSlug?: string) =>
+    request<{ items: SanityPageSummary[] }>("/api/sanity/pages", {
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+    }),
+  open: (sanityDocumentId: string, workspaceSlug?: string) =>
+    request<ApiNote>("/api/sanity/pages/open", {
+      method: "POST",
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+      body: JSON.stringify({ sanityDocumentId }),
+    }),
+};
+
+export const productsApi = {
+  list: (workspaceSlug?: string) =>
+    request<{ items: SanityProductSummary[] }>("/api/sanity/products", {
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+    }),
+  open: (sanityDocumentId: string, workspaceSlug?: string) =>
+    request<ApiNote>("/api/sanity/products/open", {
+      method: "POST",
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+      body: JSON.stringify({ sanityDocumentId }),
+    }),
+};
+
+export const servicesApi = {
+  list: (workspaceSlug?: string) =>
+    request<{ items: SanityServiceSummary[] }>("/api/sanity/services", {
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+    }),
+  open: (sanityDocumentId: string, workspaceSlug?: string) =>
+    request<ApiNote>("/api/sanity/services/open", {
+      method: "POST",
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+      body: JSON.stringify({ sanityDocumentId }),
+    }),
+};
+
+export const projectsApi = {
+  list: (workspaceSlug?: string) =>
+    request<{ items: SanityProjectSummary[] }>("/api/sanity/projects", {
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+    }),
+  open: (sanityDocumentId: string, workspaceSlug?: string) =>
+    request<ApiNote>("/api/sanity/projects/open", {
+      method: "POST",
+      headers: workspaceSlug ? { "X-Workspace-Slug": workspaceSlug } : undefined,
+      body: JSON.stringify({ sanityDocumentId }),
     }),
 };
 

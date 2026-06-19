@@ -14,6 +14,7 @@ import {
   getStoredAuthToken,
   getStoredApiBaseUrlOverride,
   notesApi,
+  pagesApi,
   setStoredActiveWorkspaceSlug,
   setStoredAuthToken,
   setStoredApiBaseUrlOverride,
@@ -27,11 +28,18 @@ import {
   type AuthSettings,
   type AuthStatus,
   type OgBrandingSettings,
-  type SanityPostSummary,
+  type   SanityPageSummary,
+  type   SanityPostSummary,
+  type   SanityProductSummary,
+  type   SanityServiceSummary,
+  type   SanityProjectSummary,
   type SanitySettings,
   type Workspace,
   type WorkspacePayload,
   workspacesApi,
+  productsApi,
+  servicesApi,
+  projectsApi,
 } from "@/lib/api";
 import {
   ApiStatusView,
@@ -346,7 +354,11 @@ function App() {
   const [draft, setDraft] = useState<Note | null>(null);
   const [savedDraft, setSavedDraft] = useState<Note | null>(null);
   const [sanityPosts, setSanityPosts] = useState<SanityPostSummary[]>([]);
-  const [postsSourceTab, setPostsSourceTab] = useState<"local" | "sanity">("local");
+  const [sanityPages, setSanityPages] = useState<SanityPageSummary[]>([]);
+  const [sanityProducts, setSanityProducts] = useState<SanityProductSummary[]>([]);
+  const [sanityServices, setSanityServices] = useState<SanityServiceSummary[]>([]);
+  const [sanityProjects, setSanityProjects] = useState<SanityProjectSummary[]>([]);
+  const [postsSourceTab, setPostsSourceTab] = useState<"local" | "sanity" | "pages" | "products" | "services" | "projects">("local");
   const [scheduleAt, setScheduleAt] = useState("");
   const [editorSectionTab, setEditorSectionTab] = useState<"overview" | "seo-og" | "outline" | "content" | "sanity">("overview");
   const [contentTab, setContentTab] = useState<"editor" | "preview">("editor");
@@ -380,6 +392,10 @@ function App() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingSanityPosts, setIsLoadingSanityPosts] = useState(false);
+  const [isLoadingSanityPages, setIsLoadingSanityPages] = useState(false);
+  const [isLoadingSanityProducts, setIsLoadingSanityProducts] = useState(false);
+  const [isLoadingSanityServices, setIsLoadingSanityServices] = useState(false);
+  const [isLoadingSanityProjects, setIsLoadingSanityProjects] = useState(false);
   const [openingSanityDocumentId, setOpeningSanityDocumentId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -557,11 +573,21 @@ function App() {
       return;
     }
 
-    if (route !== "posts" || postsSourceTab !== "sanity") {
+    if (route !== "posts") {
       return;
     }
 
-    void loadSanityPosts();
+    if (postsSourceTab === "sanity") {
+      void loadSanityPosts();
+    } else if (postsSourceTab === "pages") {
+      void loadSanityPages();
+    } else if (postsSourceTab === "products") {
+      void loadSanityProducts();
+    } else if (postsSourceTab === "services") {
+      void loadSanityServices();
+    } else if (postsSourceTab === "projects") {
+      void loadSanityProjects();
+    }
   }, [activeWorkspaceSlug, authStatus, postsSourceTab, route]);
 
   useEffect(() => {
@@ -1119,6 +1145,54 @@ function App() {
     }
   }
 
+  async function loadSanityPages() {
+    setIsLoadingSanityPages(true);
+    try {
+      const response = await pagesApi.list(activeWorkspaceSlug || undefined);
+      setSanityPages(response.items);
+    } catch (error) {
+      showLoadError(error, "Failed to load Sanity pages");
+    } finally {
+      setIsLoadingSanityPages(false);
+    }
+  }
+
+  async function loadSanityProducts() {
+    setIsLoadingSanityProducts(true);
+    try {
+      const response = await productsApi.list(activeWorkspaceSlug || undefined);
+      setSanityProducts(response.items);
+    } catch (error) {
+      showLoadError(error, "Failed to load Sanity products");
+    } finally {
+      setIsLoadingSanityProducts(false);
+    }
+  }
+
+  async function loadSanityServices() {
+    setIsLoadingSanityServices(true);
+    try {
+      const response = await servicesApi.list(activeWorkspaceSlug || undefined);
+      setSanityServices(response.items);
+    } catch (error) {
+      showLoadError(error, "Failed to load Sanity services");
+    } finally {
+      setIsLoadingSanityServices(false);
+    }
+  }
+
+  async function loadSanityProjects() {
+    setIsLoadingSanityProjects(true);
+    try {
+      const response = await projectsApi.list(activeWorkspaceSlug || undefined);
+      setSanityProjects(response.items);
+    } catch (error) {
+      showLoadError(error, "Failed to load Sanity projects");
+    } finally {
+      setIsLoadingSanityProjects(false);
+    }
+  }
+
   async function openSanityPost(sanityDocumentId: string) {
     setOpeningSanityDocumentId(sanityDocumentId);
     try {
@@ -1138,6 +1212,102 @@ function App() {
       toast.success("Sanity post loaded into editor");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to open Sanity post");
+    } finally {
+      setOpeningSanityDocumentId(null);
+    }
+  }
+
+  async function openSanityPage(sanityDocumentId: string) {
+    setOpeningSanityDocumentId(sanityDocumentId);
+    try {
+      const page = await pagesApi.open(sanityDocumentId, activeWorkspaceSlug || undefined);
+      setDraft(page);
+      setSavedDraft(page);
+      setNotes((current) => {
+        const exists = current.some((item) => item.id === page.id);
+        return exists ? current.map((item) => (item.id === page.id ? page : item)) : [page, ...current];
+      });
+      setSelectedId(page.id);
+      setScheduleAt(toJakartaScheduleValue(page.publishAt));
+      setEditorSectionTab("sanity");
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts", page.id));
+      }
+      toast.success("Sanity page loaded into editor");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open Sanity page");
+    } finally {
+      setOpeningSanityDocumentId(null);
+    }
+  }
+
+  async function openSanityProduct(sanityDocumentId: string) {
+    setOpeningSanityDocumentId(sanityDocumentId);
+    try {
+      const item = await productsApi.open(sanityDocumentId, activeWorkspaceSlug || undefined);
+      setDraft(item);
+      setSavedDraft(item);
+      setNotes((current) => {
+        const exists = current.some((n) => n.id === item.id);
+        return exists ? current.map((n) => (n.id === item.id ? item : n)) : [item, ...current];
+      });
+      setSelectedId(item.id);
+      setScheduleAt(toJakartaScheduleValue(item.publishAt));
+      setEditorSectionTab("sanity");
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts", item.id));
+      }
+      toast.success("Sanity product loaded into editor");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open Sanity product");
+    } finally {
+      setOpeningSanityDocumentId(null);
+    }
+  }
+
+  async function openSanityService(sanityDocumentId: string) {
+    setOpeningSanityDocumentId(sanityDocumentId);
+    try {
+      const item = await servicesApi.open(sanityDocumentId, activeWorkspaceSlug || undefined);
+      setDraft(item);
+      setSavedDraft(item);
+      setNotes((current) => {
+        const exists = current.some((n) => n.id === item.id);
+        return exists ? current.map((n) => (n.id === item.id ? item : n)) : [item, ...current];
+      });
+      setSelectedId(item.id);
+      setScheduleAt(toJakartaScheduleValue(item.publishAt));
+      setEditorSectionTab("sanity");
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts", item.id));
+      }
+      toast.success("Sanity service loaded into editor");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open Sanity service");
+    } finally {
+      setOpeningSanityDocumentId(null);
+    }
+  }
+
+  async function openSanityProject(sanityDocumentId: string) {
+    setOpeningSanityDocumentId(sanityDocumentId);
+    try {
+      const item = await projectsApi.open(sanityDocumentId, activeWorkspaceSlug || undefined);
+      setDraft(item);
+      setSavedDraft(item);
+      setNotes((current) => {
+        const exists = current.some((n) => n.id === item.id);
+        return exists ? current.map((n) => (n.id === item.id ? item : n)) : [item, ...current];
+      });
+      setSelectedId(item.id);
+      setScheduleAt(toJakartaScheduleValue(item.publishAt));
+      setEditorSectionTab("sanity");
+      if (activeWorkspaceSlug) {
+        navigate(buildWorkspaceHash(activeWorkspaceSlug, "posts", item.id));
+      }
+      toast.success("Sanity project loaded into editor");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open Sanity project");
     } finally {
       setOpeningSanityDocumentId(null);
     }
@@ -1257,6 +1427,7 @@ function App() {
         outlineMd: draft.outlineMd,
         contentMd: draft.contentMd,
         categoryIds: draft.categoryIds,
+        sanityType: draft.sanityType ?? undefined,
       });
 
       setDraft(updated);
@@ -1866,6 +2037,22 @@ function App() {
             sanityPosts={sanityPosts}
             isLoadingSanityPosts={isLoadingSanityPosts}
             openSanityPost={(sanityDocumentId) => void openSanityPost(sanityDocumentId)}
+            loadSanityPages={() => void loadSanityPages()}
+            sanityPages={sanityPages}
+            isLoadingSanityPages={isLoadingSanityPages}
+            openSanityPage={(sanityDocumentId) => void openSanityPage(sanityDocumentId)}
+            loadSanityProducts={() => void loadSanityProducts()}
+            products={sanityProducts}
+            isLoadingSanityProducts={isLoadingSanityProducts}
+            openSanityProduct={(sanityDocumentId) => void openSanityProduct(sanityDocumentId)}
+            loadSanityServices={() => void loadSanityServices()}
+            services={sanityServices}
+            isLoadingSanityServices={isLoadingSanityServices}
+            openSanityService={(sanityDocumentId) => void openSanityService(sanityDocumentId)}
+            loadSanityProjects={() => void loadSanityProjects()}
+            projects={sanityProjects}
+            isLoadingSanityProjects={isLoadingSanityProjects}
+            openSanityProject={(sanityDocumentId) => void openSanityProject(sanityDocumentId)}
           />
         );
       case "scheduled":

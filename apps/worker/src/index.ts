@@ -93,13 +93,29 @@ import {
   mapNoteSummary as mapNoteSummaryService,
 } from "./services/notes";
 import {
+  deleteSanityPage,
   deleteSanityPost,
   fetchSanityCategories,
+  fetchSanityPages,
+  fetchSanityPageSnapshot,
   fetchSanityPosts,
   fetchSanityPostSnapshot,
+  fetchSanityProducts,
+  fetchSanityProductSnapshot,
+  fetchSanityServices,
+  fetchSanityServiceSnapshot,
+  fetchSanityProjects,
+  fetchSanityProjectSnapshot,
   patchNoteToSanity,
   publishNoteToSanity,
+  publishNoteToSanityAsProduct,
+  publishNoteToSanityAsService,
+  publishNoteToSanityAsProject,
   type SanityCategory,
+  type SanityPageSummary,
+  type SanityProductSummary,
+  type SanityServiceSummary,
+  type SanityProjectSummary,
 } from "./services/publish";
 import { generateAndUploadOgImage, generateOgImageBytes, uploadOgImageBytesToSanity, type OgBranding } from "./services/og-image";
 import { processAiBatchWork } from "./services/ai-batch";
@@ -148,6 +164,7 @@ const noteSchema = z.object({
   ogTitle: z.string().default(""),
   ogDescription: z.string().default(""),
   categoryIds: z.array(z.string()).default([]),
+  sanityType: z.string().optional(),
 });
 
 const aiSettingsSchema = z.object({
@@ -1909,6 +1926,7 @@ app.post("/api/sanity/posts/open", async (c) => {
         ogTitle: snapshot.ogTitle,
         ogDescription: snapshot.ogDescription,
         sanityRevision: snapshot.revision,
+        sanityType: "post",
         updatedAt: now,
       });
       await replaceNoteCategories(c.env.DB, workspaceId, note.id, snapshot.categoryIds);
@@ -1931,6 +1949,7 @@ app.post("/api/sanity/posts/open", async (c) => {
         ogDescription: snapshot.ogDescription,
         sanityDocumentId: snapshot.sanityDocumentId,
         sanityRevision: snapshot.revision,
+        sanityType: "post",
         createdAt: now,
       });
       await replaceNoteCategories(c.env.DB, workspaceId, id, snapshot.categoryIds);
@@ -1941,6 +1960,380 @@ app.post("/api/sanity/posts/open", async (c) => {
     return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
   } catch (error) {
     return c.json({ message: error instanceof Error ? error.message : "Failed to open Sanity post" }, 500);
+  }
+});
+
+app.get("/api/sanity/pages", async (c) => {
+  const sanitySettings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset) {
+    return c.json({ items: [] });
+  }
+
+  try {
+    return c.json({
+      items: await fetchSanityPages({
+        projectId: sanitySettings.projectId,
+        dataset: sanitySettings.dataset,
+        apiVersion: sanitySettings.apiVersion || "2026-03-29",
+        token: sanitySettings.writeToken || undefined,
+      }),
+    });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to load Sanity pages" }, 500);
+  }
+});
+
+app.post("/api/sanity/pages/open", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const payload = sanityOpenPostSchema.parse(await c.req.json());
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are not configured" }, 400);
+  }
+
+  try {
+    const snapshot = await fetchSanityPageSnapshot({
+      sanityDocumentId: payload.sanityDocumentId,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
+      apiVersion: sanitySettings.apiVersion || "2026-03-29",
+      token: sanitySettings.writeToken,
+    });
+
+    const now = new Date().toISOString();
+    let note = await findNoteBySanityDocumentId(c.env.DB, workspaceId, payload.sanityDocumentId);
+
+    if (note) {
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || note.slug, note.id);
+      await updateNoteSanityMirror(c.env.DB, {
+        workspaceId,
+        id: note.id,
+        title: snapshot.title || note.title,
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityRevision: snapshot.revision,
+        sanityType: "page",
+        updatedAt: now,
+      });
+      await clearNoteAiRewriteCandidate(c.env.DB, workspaceId, note.id, now);
+    } else {
+      const id = crypto.randomUUID();
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || `sanity-page-${Date.now()}`);
+      await createNote(c.env.DB, {
+        id,
+        workspaceId,
+        title: snapshot.title || "Untitled Sanity Page",
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        outlineMd: "",
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityDocumentId: snapshot.sanityDocumentId,
+        sanityRevision: snapshot.revision,
+        sanityType: "page",
+        createdAt: now,
+      });
+      note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+    }
+
+    const updated = note ? await findNoteByIdInWorkspace(c.env.DB, workspaceId, note.id) : null;
+    return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to open Sanity page" }, 500);
+  }
+});
+
+app.get("/api/sanity/products", async (c) => {
+  const sanitySettings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset) {
+    return c.json({ items: [] });
+  }
+
+  try {
+    return c.json({
+      items: await fetchSanityProducts({
+        projectId: sanitySettings.projectId,
+        dataset: sanitySettings.dataset,
+        apiVersion: sanitySettings.apiVersion || "2026-03-29",
+        token: sanitySettings.writeToken || undefined,
+      }),
+    });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to load Sanity products" }, 500);
+  }
+});
+
+app.post("/api/sanity/products/open", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const payload = sanityOpenPostSchema.parse(await c.req.json());
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are not configured" }, 400);
+  }
+
+  try {
+    const snapshot = await fetchSanityProductSnapshot({
+      sanityDocumentId: payload.sanityDocumentId,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
+      apiVersion: sanitySettings.apiVersion || "2026-03-29",
+      token: sanitySettings.writeToken,
+    });
+
+    const now = new Date().toISOString();
+    let note = await findNoteBySanityDocumentId(c.env.DB, workspaceId, payload.sanityDocumentId);
+
+    if (note) {
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || note.slug, note.id);
+      await updateNoteSanityMirror(c.env.DB, {
+        workspaceId,
+        id: note.id,
+        title: snapshot.title || note.title,
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityRevision: snapshot.revision,
+        sanityType: "product",
+        updatedAt: now,
+      });
+      await replaceNoteCategories(c.env.DB, workspaceId, note.id, snapshot.categoryIds);
+      await clearNoteAiRewriteCandidate(c.env.DB, workspaceId, note.id, now);
+    } else {
+      const id = crypto.randomUUID();
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || `sanity-product-${Date.now()}`);
+      await createNote(c.env.DB, {
+        id,
+        workspaceId,
+        title: snapshot.title || "Untitled Sanity Product",
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        outlineMd: "",
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityDocumentId: snapshot.sanityDocumentId,
+        sanityRevision: snapshot.revision,
+        sanityType: "product",
+        createdAt: now,
+      });
+      await replaceNoteCategories(c.env.DB, workspaceId, id, snapshot.categoryIds);
+      note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+    }
+
+    const updated = note ? await findNoteByIdInWorkspace(c.env.DB, workspaceId, note.id) : null;
+    return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to open Sanity product" }, 500);
+  }
+});
+
+app.get("/api/sanity/services", async (c) => {
+  const sanitySettings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset) {
+    return c.json({ items: [] });
+  }
+
+  try {
+    return c.json({
+      items: await fetchSanityServices({
+        projectId: sanitySettings.projectId,
+        dataset: sanitySettings.dataset,
+        apiVersion: sanitySettings.apiVersion || "2026-03-29",
+        token: sanitySettings.writeToken || undefined,
+      }),
+    });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to load Sanity services" }, 500);
+  }
+});
+
+app.post("/api/sanity/services/open", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const payload = sanityOpenPostSchema.parse(await c.req.json());
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are not configured" }, 400);
+  }
+
+  try {
+    const snapshot = await fetchSanityServiceSnapshot({
+      sanityDocumentId: payload.sanityDocumentId,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
+      apiVersion: sanitySettings.apiVersion || "2026-03-29",
+      token: sanitySettings.writeToken,
+    });
+
+    const now = new Date().toISOString();
+    let note = await findNoteBySanityDocumentId(c.env.DB, workspaceId, payload.sanityDocumentId);
+
+    if (note) {
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || note.slug, note.id);
+      await updateNoteSanityMirror(c.env.DB, {
+        workspaceId,
+        id: note.id,
+        title: snapshot.title || note.title,
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityRevision: snapshot.revision,
+        sanityType: "service",
+        updatedAt: now,
+      });
+      await replaceNoteCategories(c.env.DB, workspaceId, note.id, snapshot.categoryIds);
+      await clearNoteAiRewriteCandidate(c.env.DB, workspaceId, note.id, now);
+    } else {
+      const id = crypto.randomUUID();
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || `sanity-service-${Date.now()}`);
+      await createNote(c.env.DB, {
+        id,
+        workspaceId,
+        title: snapshot.title || "Untitled Sanity Service",
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        outlineMd: "",
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityDocumentId: snapshot.sanityDocumentId,
+        sanityRevision: snapshot.revision,
+        sanityType: "service",
+        createdAt: now,
+      });
+      await replaceNoteCategories(c.env.DB, workspaceId, id, snapshot.categoryIds);
+      note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+    }
+
+    const updated = note ? await findNoteByIdInWorkspace(c.env.DB, workspaceId, note.id) : null;
+    return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to open Sanity service" }, 500);
+  }
+});
+
+app.get("/api/sanity/projects", async (c) => {
+  const sanitySettings = await getSanitySettings(c.env.DB, c.get("workspaceId"), c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset) {
+    return c.json({ items: [] });
+  }
+
+  try {
+    return c.json({
+      items: await fetchSanityProjects({
+        projectId: sanitySettings.projectId,
+        dataset: sanitySettings.dataset,
+        apiVersion: sanitySettings.apiVersion || "2026-03-29",
+        token: sanitySettings.writeToken || undefined,
+      }),
+    });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to load Sanity projects" }, 500);
+  }
+});
+
+app.post("/api/sanity/projects/open", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const payload = sanityOpenPostSchema.parse(await c.req.json());
+  const sanitySettings = await getSanitySettings(c.env.DB, workspaceId, c.env);
+
+  if (!sanitySettings.projectId || !sanitySettings.dataset || !sanitySettings.writeToken) {
+    return c.json({ message: "Sanity settings are not configured" }, 400);
+  }
+
+  try {
+    const snapshot = await fetchSanityProjectSnapshot({
+      sanityDocumentId: payload.sanityDocumentId,
+      projectId: sanitySettings.projectId,
+      dataset: sanitySettings.dataset,
+      apiVersion: sanitySettings.apiVersion || "2026-03-29",
+      token: sanitySettings.writeToken,
+    });
+
+    const now = new Date().toISOString();
+    let note = await findNoteBySanityDocumentId(c.env.DB, workspaceId, payload.sanityDocumentId);
+
+    if (note) {
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || note.slug, note.id);
+      await updateNoteSanityMirror(c.env.DB, {
+        workspaceId,
+        id: note.id,
+        title: snapshot.title || note.title,
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityRevision: snapshot.revision,
+        sanityType: "project",
+        updatedAt: now,
+      });
+      await replaceNoteCategories(c.env.DB, workspaceId, note.id, snapshot.categoryIds);
+      await clearNoteAiRewriteCandidate(c.env.DB, workspaceId, note.id, now);
+    } else {
+      const id = crypto.randomUUID();
+      const uniqueSlug = await resolveUniqueNoteSlug(c.env.DB, workspaceId, snapshot.slug || `sanity-project-${Date.now()}`);
+      await createNote(c.env.DB, {
+        id,
+        workspaceId,
+        title: snapshot.title || "Untitled Sanity Project",
+        slug: uniqueSlug,
+        contentMd: snapshot.contentMd,
+        outlineMd: "",
+        excerpt: snapshot.excerpt,
+        seoTitle: snapshot.seoTitle,
+        seoDescription: snapshot.seoDescription,
+        seoKeywords: snapshot.seoKeywords,
+        ogTitle: snapshot.ogTitle,
+        ogDescription: snapshot.ogDescription,
+        sanityDocumentId: snapshot.sanityDocumentId,
+        sanityRevision: snapshot.revision,
+        sanityType: "project",
+        createdAt: now,
+      });
+      await replaceNoteCategories(c.env.DB, workspaceId, id, snapshot.categoryIds);
+      note = await findNoteByIdInWorkspace(c.env.DB, workspaceId, id);
+    }
+
+    const updated = note ? await findNoteByIdInWorkspace(c.env.DB, workspaceId, note.id) : null;
+    return c.json(updated ? await mapNote(c.env.DB, updated) : { ok: true });
+  } catch (error) {
+    return c.json({ message: error instanceof Error ? error.message : "Failed to open Sanity project" }, 500);
   }
 });
 
@@ -2110,7 +2503,8 @@ app.post("/api/notes/:id/refresh-from-sanity", async (c) => {
       seoKeywords: snapshot.seoKeywords,
       ogTitle: snapshot.ogTitle,
       ogDescription: snapshot.ogDescription,
-      sanityRevision: snapshot.revision,
+        sanityRevision: snapshot.revision,
+        sanityType: note.sanity_type,
       updatedAt: now,
     });
     await replaceNoteCategories(c.env.DB, workspaceId, id, snapshot.categoryIds);
@@ -2263,6 +2657,7 @@ app.post("/api/notes", async (c) => {
       seoKeywords: payload.seoKeywords,
       ogTitle: payload.ogTitle,
       ogDescription: payload.ogDescription,
+      sanityType: payload.sanityType || null,
       createdAt: now,
     });
     await replaceNoteCategories(c.env.DB, workspaceId, id, payload.categoryIds);
@@ -2298,6 +2693,7 @@ app.patch("/api/notes/:id", async (c) => {
       seoKeywords: payload.seoKeywords ?? existing.seo_keywords ?? "",
       ogTitle: payload.ogTitle ?? existing.og_title ?? "",
       ogDescription: payload.ogDescription ?? existing.og_description ?? "",
+      sanityType: payload.sanityType !== undefined ? (payload.sanityType || null) : undefined,
       currentStatus: existing.status,
       updatedAt: new Date().toISOString(),
     });
@@ -3021,6 +3417,7 @@ async function publishNoteById(env: Env, noteId: string, origin?: string | null)
         ogTitle: note.og_title ?? "",
         ogDescription: note.og_description ?? "",
         sanityRevision: snapshot.revision,
+        sanityType: note.sanity_type,
         updatedAt: now,
       });
       note = (await findNoteById(env.DB, note.id)) ?? { ...note, sanity_revision: snapshot.revision, updated_at: now };
@@ -3072,6 +3469,7 @@ async function publishNoteById(env: Env, noteId: string, origin?: string | null)
       };
     }
 
+    const sanityType = note.sanity_type || "post";
     const publishResult = note.sanity_document_id
       ? await patchNoteToSanity({
           note,
@@ -3081,6 +3479,7 @@ async function publishNoteById(env: Env, noteId: string, origin?: string | null)
           dataset: sanitySettings.dataset,
           apiVersion,
           token: sanitySettings.writeToken,
+          sanityType,
         })
       : await publishNoteToSanity({
           note,
@@ -3090,6 +3489,7 @@ async function publishNoteById(env: Env, noteId: string, origin?: string | null)
           dataset: sanitySettings.dataset,
           apiVersion,
           token: sanitySettings.writeToken,
+          sanityType,
         });
 
     const now = new Date().toISOString();

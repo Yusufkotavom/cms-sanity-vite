@@ -36,6 +36,7 @@ create table if not exists notes (
   status text not null default 'draft',
   publish_at text,
   sanity_document_id text,
+  sanity_type text,
   last_error text,
   created_at text not null,
   updated_at text not null

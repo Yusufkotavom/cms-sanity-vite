@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ApiConfig, ApiNote, AuthStatus, SanityPostSummary } from "@/lib/api";
+import type { ApiConfig, ApiNote, AuthStatus, SanityPageSummary, SanityPostSummary, SanityProductSummary, SanityServiceSummary, SanityProjectSummary } from "@/lib/api";
 
 type Note = ApiNote;
 
@@ -246,9 +246,25 @@ export function PostsView({
   sanityPosts,
   isLoadingSanityPosts,
   openSanityPost,
+  loadSanityPages,
+  sanityPages,
+  isLoadingSanityPages,
+  openSanityPage,
+  loadSanityProducts,
+  products,
+  isLoadingSanityProducts,
+  openSanityProduct,
+  loadSanityServices,
+  services,
+  isLoadingSanityServices,
+  openSanityService,
+  loadSanityProjects,
+  projects,
+  isLoadingSanityProjects,
+  openSanityProject,
 }: {
-  postsSourceTab: "local" | "sanity";
-  setPostsSourceTab: (value: "local" | "sanity") => void;
+  postsSourceTab: "local" | "sanity" | "pages" | "products" | "services" | "projects";
+  setPostsSourceTab: (value: typeof postsSourceTab) => void;
   createNote: () => void;
   notes: Note[];
   isLoading: boolean;
@@ -262,19 +278,39 @@ export function PostsView({
   sanityPosts: SanityPostSummary[];
   isLoadingSanityPosts: boolean;
   openSanityPost: (sanityDocumentId: string) => void;
+  loadSanityPages: () => void;
+  sanityPages: SanityPageSummary[];
+  isLoadingSanityPages: boolean;
+  openSanityPage: (sanityDocumentId: string) => void;
+  loadSanityProducts: () => void;
+  products: SanityProductSummary[];
+  isLoadingSanityProducts: boolean;
+  openSanityProduct: (sanityDocumentId: string) => void;
+  loadSanityServices: () => void;
+  services: SanityServiceSummary[];
+  isLoadingSanityServices: boolean;
+  openSanityService: (sanityDocumentId: string) => void;
+  loadSanityProjects: () => void;
+  projects: SanityProjectSummary[];
+  isLoadingSanityProjects: boolean;
+  openSanityProject: (sanityDocumentId: string) => void;
 }) {
   return (
     <section className="grid gap-6">
       <Card>
         <CardHeader>
           <CardTitle>Notes</CardTitle>
-          <CardDescription>Kelola draft lokal atau buka post Sanity di editor yang sama.</CardDescription>
+          <CardDescription>Kelola draft lokal atau buka post/page Sanity di editor yang sama.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <Tabs value={postsSourceTab} onValueChange={(value) => setPostsSourceTab(value as "local" | "sanity")}>
+          <Tabs value={postsSourceTab} onValueChange={(value) => setPostsSourceTab(value as typeof postsSourceTab)}>
             <TabsList>
               <TabsTrigger value="local">Local Notes</TabsTrigger>
               <TabsTrigger value="sanity">Sanity Posts</TabsTrigger>
+              <TabsTrigger value="pages">Sanity Pages</TabsTrigger>
+              <TabsTrigger value="products">Sanity Products</TabsTrigger>
+              <TabsTrigger value="services">Sanity Services</TabsTrigger>
+              <TabsTrigger value="projects">Sanity Projects</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -294,6 +330,74 @@ export function PostsView({
                 onOpenNote={openNote}
                 onRetryPublish={retryPublishNote}
                 retryingNoteId={retryingNoteId}
+              />
+            </>
+          ) : postsSourceTab === "pages" ? (
+            <>
+              <div className="flex gap-2">
+                <Button variant="outline" className="w-full md:w-auto" onClick={loadSanityPages}>
+                  Refresh Sanity Pages
+                </Button>
+                {openingSanityDocumentId ? (
+                  <span className="text-sm text-muted-foreground">Membuka page Sanity ke editor...</span>
+                ) : null}
+              </div>
+              <PagesView
+                sanityPages={sanityPages}
+                isLoadingSanityPages={isLoadingSanityPages}
+                formatRelativeDate={formatRelativeDate}
+                onOpenSanityPage={openSanityPage}
+              />
+            </>
+          ) : postsSourceTab === "products" ? (
+            <>
+              <div className="flex gap-2">
+                <Button variant="outline" className="w-full md:w-auto" onClick={loadSanityProducts}>
+                  Refresh Sanity Products
+                </Button>
+                {openingSanityDocumentId ? (
+                  <span className="text-sm text-muted-foreground">Membuka product Sanity ke editor...</span>
+                ) : null}
+              </div>
+              <ProductsTable
+                items={products}
+                isLoading={isLoadingSanityProducts}
+                formatRelativeDate={formatRelativeDate}
+                onOpen={openSanityProduct}
+              />
+            </>
+          ) : postsSourceTab === "services" ? (
+            <>
+              <div className="flex gap-2">
+                <Button variant="outline" className="w-full md:w-auto" onClick={loadSanityServices}>
+                  Refresh Sanity Services
+                </Button>
+                {openingSanityDocumentId ? (
+                  <span className="text-sm text-muted-foreground">Membuka service Sanity ke editor...</span>
+                ) : null}
+              </div>
+              <ServicesTable
+                items={services}
+                isLoading={isLoadingSanityServices}
+                formatRelativeDate={formatRelativeDate}
+                onOpen={openSanityService}
+              />
+            </>
+          ) : postsSourceTab === "projects" ? (
+            <>
+              <div className="flex gap-2">
+                <Button variant="outline" className="w-full md:w-auto" onClick={loadSanityProjects}>
+                  Refresh Sanity Projects
+                </Button>
+                {openingSanityDocumentId ? (
+                  <span className="text-sm text-muted-foreground">Membuka project Sanity ke editor...</span>
+                ) : null}
+              </div>
+              <ProjectsTable
+                items={projects}
+                isLoading={isLoadingSanityProjects}
+                formatRelativeDate={formatRelativeDate}
+                onOpen={openSanityProject}
               />
             </>
           ) : (
@@ -378,6 +482,214 @@ function SanityPostsTable({
                   )}
                 </div>
               </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function PagesView({
+  sanityPages,
+  isLoadingSanityPages,
+  formatRelativeDate,
+  onOpenSanityPage,
+}: {
+  sanityPages: SanityPageSummary[];
+  isLoadingSanityPages: boolean;
+  formatRelativeDate: (value: string | null) => string;
+  onOpenSanityPage: (sanityDocumentId: string) => void;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Title</TableHead>
+          <TableHead>Slug</TableHead>
+          <TableHead>Updated</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {isLoadingSanityPages ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground">
+              Loading Sanity pages...
+            </TableCell>
+          </TableRow>
+        ) : sanityPages.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground">
+              Belum ada page Sanity atau koneksi belum siap.
+            </TableCell>
+          </TableRow>
+        ) : (
+          sanityPages.map((page) => (
+            <TableRow key={page.sanityDocumentId} onClick={() => onOpenSanityPage(page.sanityDocumentId)}>
+              <TableCell>
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium text-foreground">{page.title}</span>
+                  <span className="truncate text-xs text-muted-foreground">{page.sanityDocumentId}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground">/{page.slug}</TableCell>
+              <TableCell className="text-muted-foreground">{formatRelativeDate(page.updatedAt)}</TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function ProductsTable({
+  items,
+  isLoading,
+  formatRelativeDate,
+  onOpen,
+}: {
+  items: SanityProductSummary[];
+  isLoading: boolean;
+  formatRelativeDate: (value: string | null) => string;
+  onOpen: (sanityDocumentId: string) => void;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Title</TableHead>
+          <TableHead>Slug</TableHead>
+          <TableHead>Updated</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {isLoading ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground">
+              Loading Sanity products...
+            </TableCell>
+          </TableRow>
+        ) : items.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground">
+              Belum ada product Sanity atau koneksi belum siap.
+            </TableCell>
+          </TableRow>
+        ) : (
+          items.map((item) => (
+            <TableRow key={item.sanityDocumentId} onClick={() => onOpen(item.sanityDocumentId)}>
+              <TableCell>
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium text-foreground">{item.title}</span>
+                  <span className="truncate text-xs text-muted-foreground">{item.sanityDocumentId}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground">/{item.slug}</TableCell>
+              <TableCell className="text-muted-foreground">{formatRelativeDate(item.updatedAt)}</TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function ServicesTable({
+  items,
+  isLoading,
+  formatRelativeDate,
+  onOpen,
+}: {
+  items: SanityServiceSummary[];
+  isLoading: boolean;
+  formatRelativeDate: (value: string | null) => string;
+  onOpen: (sanityDocumentId: string) => void;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Title</TableHead>
+          <TableHead>Slug</TableHead>
+          <TableHead>Updated</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {isLoading ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground">
+              Loading Sanity services...
+            </TableCell>
+          </TableRow>
+        ) : items.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground">
+              Belum ada service Sanity atau koneksi belum siap.
+            </TableCell>
+          </TableRow>
+        ) : (
+          items.map((item) => (
+            <TableRow key={item.sanityDocumentId} onClick={() => onOpen(item.sanityDocumentId)}>
+              <TableCell>
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium text-foreground">{item.title}</span>
+                  <span className="truncate text-xs text-muted-foreground">{item.sanityDocumentId}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground">/{item.slug}</TableCell>
+              <TableCell className="text-muted-foreground">{formatRelativeDate(item.updatedAt)}</TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
+function ProjectsTable({
+  items,
+  isLoading,
+  formatRelativeDate,
+  onOpen,
+}: {
+  items: SanityProjectSummary[];
+  isLoading: boolean;
+  formatRelativeDate: (value: string | null) => string;
+  onOpen: (sanityDocumentId: string) => void;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Title</TableHead>
+          <TableHead>Slug</TableHead>
+          <TableHead>Updated</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {isLoading ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground">
+              Loading Sanity projects...
+            </TableCell>
+          </TableRow>
+        ) : items.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={3} className="text-center text-muted-foreground">
+              Belum ada project Sanity atau koneksi belum siap.
+            </TableCell>
+          </TableRow>
+        ) : (
+          items.map((item) => (
+            <TableRow key={item.sanityDocumentId} onClick={() => onOpen(item.sanityDocumentId)}>
+              <TableCell>
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium text-foreground">{item.title}</span>
+                  <span className="truncate text-xs text-muted-foreground">{item.sanityDocumentId}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground">/{item.slug}</TableCell>
+              <TableCell className="text-muted-foreground">{formatRelativeDate(item.updatedAt)}</TableCell>
             </TableRow>
           ))
         )}

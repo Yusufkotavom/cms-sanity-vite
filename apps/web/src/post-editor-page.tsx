@@ -593,6 +593,30 @@ export function PostEditorPage({
                 />
               </div>
 
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium" htmlFor="note-type">
+                  Tipe Dokumen
+                </label>
+                <Select
+                  value={draft.sanityType || "post"}
+                  onValueChange={(v) => updateDraft({ sanityType: v })}
+                >
+                  <SelectTrigger id="note-type" className="w-full md:w-64">
+                    <SelectValue placeholder="Pilih tipe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="post">Post</SelectItem>
+                    <SelectItem value="service">Service</SelectItem>
+                    <SelectItem value="product">Product</SelectItem>
+                    <SelectItem value="project">Project</SelectItem>
+                    <SelectItem value="page">Page</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground">
+                  Menentukan tipe dokumen Sanity saat publish. {draft.sanityDocumentId ? "Note yang sudah terhubung ke Sanity tidak bisa diubah tipenya." : "Ubah sebelum publish perdana."}
+                </span>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                   <div className="grid gap-2">

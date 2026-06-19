@@ -43,6 +43,7 @@ export const notes = sqliteTable("notes", {
   publishAt: text("publish_at"),
   sanityDocumentId: text("sanity_document_id"),
   sanityRevision: text("sanity_revision"),
+  sanityType: text("sanity_type"),
   lastError: text("last_error"),
   aiRewriteContentMd: text("ai_rewrite_content_md"),
   aiRewriteExcerpt: text("ai_rewrite_excerpt"),
