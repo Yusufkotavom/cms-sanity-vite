@@ -2174,7 +2174,7 @@ function App() {
             }
           >
             <CreateNotePage
-              onCreateNote={(type, title, slug) => void createNoteWithType(type, title, slug)}
+              onCreateNote={(type, title, slug) => createNoteWithType(type, title, slug)}
               isCreating={isCreatingNote}
             />
           </Suspense>
