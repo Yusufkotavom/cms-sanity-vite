@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { swaggerUI } from "@hono/swagger-ui";
+import { openapiSpecString } from "./openapi-spec";
 import { z } from "zod";
 
 import {
@@ -781,6 +783,9 @@ app.use("/api/*", async (c, next) => {
   c.set("workspaceSlug", workspace.slug);
   await next();
 });
+
+app.get("/api/openapi.yaml", (c) => c.text(openapiSpecString, 200, { "Content-Type": "text/yaml" }));
+app.get("/api/docs", swaggerUI({ url: "/api/openapi.yaml" }));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 

@@ -15,6 +15,7 @@
     "whoami": "wrangler whoami"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.6.1",
     "@resvg/resvg-wasm": "2.6.2",
     "drizzle-orm": "^0.44.5",
     "hono": "^4.10.5",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260413.1",
+    "@types/js-yaml": "^4.0.9",
     "drizzle-kit": "^0.31.4",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",
