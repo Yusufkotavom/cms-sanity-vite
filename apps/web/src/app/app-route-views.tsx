@@ -50,6 +50,14 @@ const TYPE_LABELS: Record<string, string> = {
   project: "Project",
 };
 
+const TITLE_COLORS: Record<string, string> = {
+  post: "text-blue-600 dark:text-blue-400",
+  page: "text-purple-600 dark:text-purple-400",
+  product: "text-emerald-600 dark:text-emerald-400",
+  service: "text-orange-600 dark:text-orange-400",
+  project: "text-pink-600 dark:text-pink-400",
+};
+
 function StatCard({
   title,
   value,
@@ -218,7 +226,7 @@ export function NotesTable({
               >
                 <TableCell>
                   <div className="flex flex-col gap-1">
-                    <span className="font-medium text-foreground">{note.title}</span>
+                    <span className={`font-medium ${TITLE_COLORS[st] ?? "text-foreground"}`}>{note.title}</span>
                     <span className="truncate text-xs text-muted-foreground">/{note.slug}</span>
                   </div>
                 </TableCell>
