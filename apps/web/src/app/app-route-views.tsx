@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   CalendarClockIcon,
   CircleAlertIcon,
@@ -29,6 +30,25 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ApiConfig, ApiNote, AuthStatus, SanityPageSummary, SanityPostSummary, SanityProductSummary, SanityServiceSummary, SanityProjectSummary } from "@/lib/api";
 
 type Note = ApiNote;
+
+const TYPE_COLORS: Record<string, string> = {
+  post: "border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300",
+  page: "border-purple-200 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-300",
+  product:
+    "border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+  service:
+    "border-orange-200 bg-orange-100 text-orange-800 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300",
+  project:
+    "border-pink-200 bg-pink-100 text-pink-800 dark:border-pink-800 dark:bg-pink-950 dark:text-pink-300",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  post: "Post",
+  page: "Page",
+  product: "Product",
+  service: "Service",
+  project: "Project",
+};
 
 function StatCard({
   title,
@@ -165,6 +185,7 @@ export function NotesTable({
       <TableHeader>
         <TableRow>
           <TableHead>Title</TableHead>
+          <TableHead>Type</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Updated</TableHead>
           {showRetryAction ? <TableHead className="text-right">Action</TableHead> : null}
@@ -173,24 +194,26 @@ export function NotesTable({
       <TableBody>
         {isLoading ? (
           <TableRow>
-            <TableCell colSpan={showRetryAction ? 4 : 3} className="text-center text-muted-foreground">
+            <TableCell colSpan={showRetryAction ? 5 : 4} className="text-center text-muted-foreground">
               Loading notes...
             </TableCell>
           </TableRow>
         ) : items.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={showRetryAction ? 4 : 3} className="text-center text-muted-foreground">
+            <TableCell colSpan={showRetryAction ? 5 : 4} className="text-center text-muted-foreground">
               {emptyLabel}
             </TableCell>
           </TableRow>
         ) : (
           items.map((note) => {
             const isActive = note.id === selectedId;
+            const st = note.sanityType ?? "";
+            const typeColor = TYPE_COLORS[st] ?? "border-gray-200 bg-gray-100 text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300";
 
             return (
               <TableRow
                 key={note.id}
-                className={isActive ? "bg-muted/60" : undefined}
+                className={`cursor-pointer${isActive ? " bg-muted/60" : ""}`}
                 onClick={() => onOpenNote(note.id)}
               >
                 <TableCell>
@@ -198,6 +221,11 @@ export function NotesTable({
                     <span className="font-medium text-foreground">{note.title}</span>
                     <span className="truncate text-xs text-muted-foreground">/{note.slug}</span>
                   </div>
+                </TableCell>
+                <TableCell>
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${typeColor}`}>
+                    {TYPE_LABELS[st] ?? (st || "—")}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline">{note.status}</Badge>
@@ -295,6 +323,19 @@ export function PostsView({
   isLoadingSanityProjects: boolean;
   openSanityProject: (sanityDocumentId: string) => void;
 }) {
+  const [typeFilter, setTypeFilter] = useState("all");
+  const filteredNotes =
+    typeFilter === "all" ? notes : notes.filter((n) => n.sanityType === typeFilter);
+
+  const filterOptions = [
+    { value: "all", label: "All" },
+    { value: "post", label: "Post" },
+    { value: "page", label: "Page" },
+    { value: "product", label: "Product" },
+    { value: "service", label: "Service" },
+    { value: "project", label: "Project" },
+  ] as const;
+
   return (
     <section className="grid gap-6">
       <Card>
@@ -316,13 +357,29 @@ export function PostsView({
 
           {postsSourceTab === "local" ? (
             <>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button className="w-full md:w-auto" onClick={createNote}>
                   Note Baru
                 </Button>
+                <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by type">
+                  {filterOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setTypeFilter(opt.value)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        typeFilter === opt.value
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <NotesTable
-                items={notes}
+                items={filteredNotes}
                 emptyLabel="Belum ada note."
                 isLoading={isLoading}
                 selectedId={selectedId}
