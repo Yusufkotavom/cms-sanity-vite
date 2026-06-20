@@ -241,6 +241,7 @@ export async function updateNoteSanityMirror(
     seoKeywords: string;
     ogTitle: string;
     ogDescription: string;
+    ogImageAssetId?: string | null;
     sanityRevision: string | null;
     sanityType?: string | null;
     updatedAt: string;
@@ -259,6 +260,7 @@ export async function updateNoteSanityMirror(
       seoKeywords: input.seoKeywords,
       ogTitle: input.ogTitle,
       ogDescription: input.ogDescription,
+      ...(input.ogImageAssetId !== undefined ? { ogImageAssetId: input.ogImageAssetId } : {}),
       sanityRevision: input.sanityRevision,
       ...(input.sanityType !== undefined ? { sanityType: input.sanityType } : {}),
       lastError: null,

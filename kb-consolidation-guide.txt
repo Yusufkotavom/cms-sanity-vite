@@ -1,0 +1,488 @@
+====================================================================================================
+KB ENTRIES — GROUPED BY WORKSPACE / TYPE / CATEGORY
+Gunakan ini untuk melihat entry mana yang bisa digabung.
+====================================================================================================
+
+--- default / block / general (11 entries) ---
+  [6] Proof: 150+ Projects Since 2008
+      kw: sejak 2008, 150 project, pengalaman, track record, Indonesia
+      content: Beroperasi sejak 2008 dengan 150+ project yang berhasil diselesaikan di seluruh 
+  [6] Proof: Case Study Metrics
+      kw: efisiensi 70%, akurasi 99%, case study, metrik, hasil terukur, ROI
+      content: Hasil terukur dari project klien: 70% peningkatan efisiensi operasional, 99% aku
+  [5] Value Prop: Unified Vendor Management
+      kw: unified vendor, satu partner, koordinasi, efisiensi, terpadu
+      content: Satu partner terpercaya untuk semua kebutuhan digital dan cetak. Mengurangi frik
+  [5] Value Prop: End-to-End Support
+      kw: end-to-end, pendampingan, maintenance, after-sales, support, berkelanjutan
+      content: "Dari build sampai pendampingan" - Kotacom tidak hanya membuat project tapi juga
+  [5] Value Prop: Integrated Online & Offline
+      kw: online offline, integrasi, infrastruktur, website, percetakan, sejalan
+      content: Satu partner yang memastikan infrastruktur online (website, software) dan offlin
+  [5] Proof: Client Testimonials
+      kw: testimonial, review, klien, lead generation, hardware downtime, warna presisi
+      content: Testimoni klien: peningkatan lead generation dari website, masalah hardware down
+  [5] Kotacom Pricing Overview
+      kw: harga, pricing, biaya, website 5 juta, e-commerce 10 juta, software 15 juta
+      content: Harga layanan Kotacom: Website mulai Rp 5 juta, E-commerce mulai Rp 10 juta, Cus
+  [4] Value Prop: Jargon-Free Communication
+      kw: komunikasi, transparan, tanpa jargon, timeline, milestone, klien
+      content: Komunikasi jelas tanpa jargon teknis membingungkan. Project planning transparan 
+  [4] Value Prop: No Hidden Costs
+      kw: harga, biaya, transparan, no hidden cost, pricing, upfront
+      content: Tidak ada biaya tersembunyi. Semua biaya diinformasikan di awal sebelum pekerjaa
+  [4] Proof: Technology Stack
+      kw: tech stack, React, Next.js, Node.js, Laravel, Python, AWS, Flutter, Docker
+      content: Tech stack yang digunakan: React, Next.js, Astro.js, Node.js, Laravel, Python, P
+  [4] Kotacom Office Locations
+      kw: kantor, alamat, sidoarjo, surabaya, kontak, whatsapp, jam kerja
+      content: Kantor Sidoarjo: Graha Indraprasta G7/15, Tulangan, Sidoarjo 61273. Kantor Surab
+
+--- default / image / it-support (6 entries) ---
+  [8] Banner Promo Layanan IT Support & Network KOTACOM
+      kw: banner it support, promo maintenance komputer, jasa jaringan surabaya, server maintenance
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/0d6
+  [8] Banner KOTACOM - IT Support & Network Mulai 99k (V1)
+      kw: it support, network installation, maintenance hardware, server administration, troubleshooting network
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/1e8
+  [8] Banner KOTACOM - IT Support & Network Mulai 99k (V2)
+      kw: it support, cybersecurity network, firewall configuration, secure server, network architecture
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/575
+  [8] Banner KOTACOM - IT Support & Network Mulai 99k (V3)
+      kw: it support, technical support desk, helpdesk, network checklist, troubleshooting pc
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/05a
+  [8] Banner KOTACOM - IT Support & Network Mulai 99k (V4)
+      kw: it support, wifi connection setup, network server, router settings
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/8c5
+  [8] Banner KOTACOM - IT Support & Network Mulai 99k (V5)
+      kw: it support, remote support, network maintenance, corporate it support
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/de1
+
+--- default / image / printing (6 entries) ---
+  [8] Banner Promo Jasa Percetakan & Desain KOTACOM
+      kw: banner percetakan, promo cetak murah, cetak buku kalender brosur, seminar kit surabaya
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/4e7
+  [8] Banner KOTACOM - Cetak Buku Mulai 9k (V1)
+      kw: percetakan, cetak buku, cetak brosur, kalender, printing service, CMYK design
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/288
+  [8] Banner KOTACOM - Cetak Buku Mulai 9k (V2)
+      kw: percetakan, cetak digital, booklet printing, design flyer, print offset
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/d85
+  [8] Banner KOTACOM - Cetak Buku Mulai 9k (V3)
+      kw: percetakan, workstation percetakan, custom binding, design cover buku, seminar kit
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/ea2
+  [8] Banner KOTACOM - Cetak Buku Mulai 9k (V4)
+      kw: percetakan, template percetakan, layout flyer, booklet design, print on demand
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/6a1
+  [8] Banner KOTACOM - Cetak Buku Mulai 9k (V5)
+      kw: percetakan, cetak kemasan, design logo printing, print banner, merchandise
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/ad6
+
+--- default / image / software (6 entries) ---
+  [8] Banner Promo Custom Software & Apps KOTACOM
+      kw: banner custom software, promo software murah, developer aplikasi surabaya, custom crm pos
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/c1d
+  [8] Banner KOTACOM - Custom Software Mulai 1.49jt (V1)
+      kw: custom software, develop software, aplikasi custom, developer aplikasi surabaya, pos, crm
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/7ab
+  [8] Banner KOTACOM - Custom Software Mulai 1.49jt (V2)
+      kw: custom software, cloud computing software, database server, otomasi workflow, accounting system
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/ee6
+  [8] Banner KOTACOM - Custom Software Mulai 1.49jt (V3)
+      kw: custom software, software engineering flowcharts, agile software development, kanban board
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/db1
+  [8] Banner KOTACOM - Custom Software Mulai 1.49jt (V4)
+      kw: custom software, mobile application development, smartphone app, tablet system
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/ad5
+  [8] Banner KOTACOM - Custom Software Mulai 1.49jt (V5)
+      kw: custom software, data analytics dashboard, admin panel, business systems
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/a67
+
+--- default / image / website (6 entries) ---
+  [8] Banner Promo Jasa Pembuatan Website KOTACOM
+      kw: banner pembuatan website, promo website murah, jasa website surabaya, website company profile
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/44d
+  [8] Banner KOTACOM - Jasa Website Mulai 499k (V1)
+      kw: jasa website, pembuatan website, promo website, website murah surabaya, website company profile, landing page
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/caf
+  [8] Banner KOTACOM - Jasa Website Mulai 499k (V2)
+      kw: jasa website, buat website profesional, promo website, web developer indonesia, landing page seo
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/10a
+  [8] Banner KOTACOM - Jasa Website Mulai 499k (V3)
+      kw: jasa website, website portfolio, buat website murah, website toko online, landing page
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/69c
+  [8] Banner KOTACOM - Jasa Website Mulai 499k (V4)
+      kw: jasa website, custom website, web design, website seo friendly, landing page
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/c07
+  [8] Banner KOTACOM - Jasa Website Mulai 499k (V5)
+      kw: jasa website, design layout website, web dev, responsive website, company profile
+      content: https://cms-sanity-vite-worker.yusuf-kotacom.workers.dev/api/uploads/default/052
+
+--- default / policy / general (6 entries) ---
+  [10] Guardrail: Always Mention Kotacom
+      kw: (no keywords)
+      content: Selalu sebutkan Kotacom sebagai penyedia solusi saat merekomendasikan layanan. G
+  [10] Guardrail: Use Correct URLs
+      kw: (no keywords)
+      content: Gunakan URL yang benar dari knowledge base saat merujuk layanan atau produk Kota
+  [10] Guardrail: Price Accuracy
+      kw: (no keywords)
+      content: Jika menyebut harga, gunakan harga dari knowledge base. Jika tidak yakin, gunaka
+  [10] Guardrail: Language & Tone
+      kw: (no keywords)
+      content: Tulis dalam Bahasa Indonesia yang profesional namun mudah dipahami. Hindari jarg
+  [9] Guardrail: Area Coverage
+      kw: (no keywords)
+      content: Kotacom berbasis di Sidoarjo dan Surabaya, Jawa Timur. Melayani klien di seluruh
+  [9] Guardrail: CTA Guidelines
+      kw: (no keywords)
+      content: Akhiri artikel dengan CTA yang relevan: Konsultasi Gratis, Kirim Brief Kebutuhan
+
+--- default / product / general (1 entries) ---
+  [9] new
+      kw: new
+      content: URL: https://www.kotacom.id URL: https://www.kotacom.id https://www.kotacom.id U
+
+--- default / product / it-support (2 entries) ---
+  [7] IT Infrastructure & Support
+      kw: IT support, network, server, maintenance, hardware, software, infrastruktur, konsultasi IT
+      content: Layanan IT support komprehensif: maintenance hardware/software, network configur
+  [7] Sistem POS untuk Retail & F&B
+      kw: POS, kasir, point of sale, retail, F&B, cafe, restoran, inventory, multi-outlet
+      content: Sistem Point of Sale lengkap: kasir, inventory management, laporan penjualan, mu
+
+--- default / product / printing (12 entries) ---
+  [7] Percetakan & Design Services
+      kw: percetakan, printing, graphic design, branding, cetak, materi promosi, seminar kit
+      content: Layanan percetakan komprehensif: buku, brosur, kalender, seminar kit, banner, pa
+  [6] Wedding Album Printing
+      kw: wedding album, cetak album, pernikahan, photobook, hardcover, lay-flat
+      content: Jasa cetak album pernikahan premium. Hardcover photobook dengan lay-flat binding
+  [6] T-Shirt Printing
+      kw: kaos, t-shirt, cetak kaos, sablon, cotton combed, custom apparel
+      content: Cetak kaos custom cotton combed berkualitas. Satuan atau bulk untuk komunitas da
+  [6] Sticker Printing
+      kw: stiker, sticker, vinyl, waterproof, die-cut, kiss-cut, label, decal
+      content: Cetak stiker vinyl waterproof, stiker kendaraan, chromo premium. Die-cut atau ki
+  [6] Quran Printing
+      kw: al-quran, quran, cetak quran, mushaf, islamic printing, sekolah, yayasan
+      content: Cetak Al-Quran standar tinggi dengan kertas premium khusus. Untuk pribadi, sekol
+  [6] Packaging Printing
+      kw: packaging, kemasan, box, food box, custom packaging, brand packaging
+      content: Cetak box kemasan makanan dan produk. Material tebal dan aman, desain custom unt
+  [6] Cetak Percetakan Umum
+      kw: percetakan umum, kop surat, amplop, ID card, nota, form, dokumen bisnis
+      content: Cetak materi administrasi dan promosi umum: kop surat, amplop, ID card, form, no
+  [6] Business Card Printing
+      kw: kartu nama, business card, name card, corporate card, kartu nama profesional
+      content: Cetak kartu nama profesional dengan berbagai finishing eksklusif: doff, glossy, 
+  [6] Brochure Printing
+      kw: brosur, flyer, pamphlet, promosi, leaflet, marketing material
+      content: Cetak brosur dan flyer promosi warna vibrant. Multiple folding options dan color
+  [6] Book Printing
+      kw: cetak buku, book printing, jurnal, majalah, textbook, binding, hardcover, softcover
+      content: Cetak buku berkualitas: jurnal, majalah, textbook. Binding: softcover, hardcover
+  [6] Banner Printing
+      kw: banner, spanduk, flex banner, billboard, backdrop, event promotion, outdoor
+      content: Cetak banner flex durable warna tajam. Outdoor billboard, backdrop toko, dan eve
+  [6] Cetak Buku Kenangan Sekolah (Yearbook)
+      kw: yearbook, buku kenangan, sekolah, buku tahunan, wisuda, buku kelulusan
+      content: Cetak yearbook/buku kenangan sekolah berkualitas komersial. Timeline jelas, qual
+
+--- default / product / software (4 entries) ---
+  [7] Pembuatan Website Corporate & Landing Page
+      kw: website, web development, corporate profile, landing page, React, Next.js, Astro, Sanity CMS
+      content: Jasa pembuatan website profesional: corporate profile, landing page conversion-o
+  [7] Custom Software: POS, CRM, Dashboard
+      kw: custom software, POS, CRM, dashboard, otomasi, Node.js, Laravel, Python, PostgreSQL, MongoDB
+      content: Pengembangan software custom untuk kebutuhan bisnis unik: POS system, CRM tool, 
+  [7] E-Commerce Platform Development
+      kw: e-commerce, toko online, online store, shopping cart, payment gateway, inventory, admin panel
+      content: Pembuatan platform e-commerce lengkap: katalog produk, shopping cart, payment ga
+  [7] Mobile App Development (Android & iOS)
+      kw: mobile app, aplikasi mobile, android, iOS, flutter, cross-platform, smartphone
+      content: Pengembangan aplikasi mobile cross-platform menggunakan Flutter. Satu codebase u
+
+--- default / product / website (2 entries) ---
+  [0] website kotacom must include
+      kw: xx
+      content: URL: https://www.kotacom.id URL: https://www.kotacom.id URL: https://www.kotacom
+  [0] new
+      kw: (no keywords)
+      content: URL: https://www.kotacom.id
+
+--- default / template / blog (2 entries) ---
+  [7] Blog Post Template: Educational
+      kw: blog post, artikel edukasi, educational, tips, tutorial
+      content: Purpose: Edukasi audiens tentang topik digital/IT/printing, build trust, dan sof
+  [7] Blog Post Template: Comparison/Review
+      kw: perbandingan, review, comparison, pilihan terbaik, rekomendasi
+      content: Purpose: Bantu pembaca memilih solusi terbaik, posisi Kotacom sebagai expert adv
+
+--- default / template / website (1 entries) ---
+  [8] Money Page Template: Service Landing
+      kw: service landing, money page, konversi, lead, landing page
+      content: Purpose: Convert pengunjung menjadi lead. Required sections: - Hero dengan pain 
+
+--- default / url / general (2 entries) ---
+  [6] Lintangizin - Biro Jasa Perizinan
+      kw: perizinan, NIB, SIUP, TDP, izin usaha, biro jasa, jawa timur
+      content: URL: https://www.kotacom.id/services/biro-jasa-perizinan Biro jasa perizinan ter
+  [6] Jasa Pengukuhan PKP Terpercaya
+      kw: PKP, pengusaha kena pajak, pengukuhan PKP, Lintangizin, perpajakan
+      content: URL: https://www.kotacom.id/services/jasa-pengukuhan-pkp Layanan pengukuhan PKP 
+
+--- default / url / it-support (6 entries) ---
+  [9] Layanan IT Support & Technical
+      kw: IT support, layanan IT, network, server, maintenance, service komputer, instalasi
+      content: URL: https://www.kotacom.id/layanan Layanan IT lengkap: maintenance hardware/sof
+  [8] Sistem POS - Point of Sale
+      kw: POS, point of sale, sistem kasir, retail, F&B, inventory management, multi-outlet
+      content: URL: https://www.kotacom.id/sistem-pos Sistem POS untuk retail, F&B, dan bisnis 
+  [7] Service Komputer Surabaya Panggilan
+      kw: service komputer, surabaya, panggilan, repair, hardware, troubleshooting
+      content: URL: https://www.kotacom.id/service-komputer-surabaya-panggilan Layanan service 
+  [7] Jasa Recovery Data Surabaya
+      kw: recovery data, pemulihan data, surabaya, harddisk, SSD, file hilang
+      content: URL: https://www.kotacom.id/jasa-recovery-data-surabaya Pemulihan data dari hard
+  [7] Jasa Instal Aplikasi Surabaya
+      kw: instal aplikasi, surabaya, install software, setup program, konfigurasi
+      content: URL: https://www.kotacom.id/jasa-instal-aplikasi-surabaya Instalasi software dan
+  [7] Jasa Install Software Macbook
+      kw: macbook, macbook pro, install software, apple, macOS, development tools
+      content: URL: https://www.kotacom.id/jasa-install-software-macbook Spesialis instalasi so
+
+--- default / url / printing (2 entries) ---
+  [9] Percetakan & Desain Kotacom
+      kw: percetakan, cetak, brosur, buku, kalender, banner, packaging, desain
+      content: URL: https://www.kotacom.id/percetakan Layanan percetakan: buku, brosur, kalende
+  [7] Jasa Cetak Buku Surabaya
+      kw: cetak buku, surabaya, novel, textbook, modul, jurnal, binding
+      content: URL: https://www.kotacom.id/jasa-cetak-buku-surabaya Cetak buku berkualitas di S
+
+--- default / url / software (4 entries) ---
+  [9] Custom Software Development
+      kw: software, custom software, aplikasi custom, POS, CRM, dashboard, otomasi
+      content: URL: https://www.kotacom.id/software Pengembangan software custom: POS, CRM, das
+  [8] E-Commerce Development - Toko Online
+      kw: e-commerce, toko online, online store, payment gateway, katalog produk, inventory
+      content: URL: https://www.kotacom.id/services/ecommerce-development Pengembangan e-commer
+  [8] Mobile App Development
+      kw: mobile app, aplikasi mobile, android, iOS, flutter, aplikasi smartphone
+      content: URL: https://www.kotacom.id/software Pengembangan aplikasi mobile Android & iOS 
+  [7] Agency Digital - Lead Generation & Growth
+      kw: agency digital, lead generation, growth, pemasaran digital, SEO, SEM
+      content: URL: https://www.kotacom.id/services/agency-landing Layanan agency digital fokus
+
+--- default / url / website (5 entries) ---
+  [9] Homepage Kotacom - Solusi Digital Terpadu
+      kw: kotacom, homepage, beranda, solusi digital, layanan utama
+      content: URL: https://www.kotacom.id Halaman utama Kotacom dengan overview layanan: web d
+  [9] Pembuatan Website Profesional
+      kw: pembuatan website, web development, jasa website, landing page, company profile, toko online
+      content: URL: https://www.kotacom.id/pembuatan-website Layanan pembuatan website custom: 
+  [8] Portfolio Projects Kotacom
+      kw: portfolio, project, showcase, case study, klien, hasil kerja
+      content: URL: https://www.kotacom.id/projects Showcase project: custom system, integrasi 
+  [8] Products - Produk Digital & Hardware
+      kw: products, produk digital, template POS, web design, UI kit, hardware
+      content: URL: https://www.kotacom.id/products Produk Kotacom: template POS, web design pa
+  [7] Blog Kotacom - Tips & Insight Digital
+      kw: blog, artikel, tips, insight, edukasi, tutorial
+      content: URL: https://www.kotacom.id/blog Blog dengan artikel seputar web development, so
+
+--- www-kotacom-id / block / general (11 entries) ---
+  [6] Proof: 150+ Projects Since 2008
+      kw: sejak 2008, 150 project, pengalaman, track record, Indonesia
+      content: Beroperasi sejak 2008 dengan 150+ project yang berhasil diselesaikan di seluruh 
+  [6] Proof: Case Study Metrics
+      kw: efisiensi 70%, akurasi 99%, case study, metrik, hasil terukur, ROI
+      content: Hasil terukur dari project klien: 70% peningkatan efisiensi operasional, 99% aku
+  [5] Value Prop: Unified Vendor Management
+      kw: unified vendor, satu partner, koordinasi, efisiensi, terpadu
+      content: Satu partner terpercaya untuk semua kebutuhan digital dan cetak. Mengurangi frik
+  [5] Value Prop: End-to-End Support
+      kw: end-to-end, pendampingan, maintenance, after-sales, support, berkelanjutan
+      content: "Dari build sampai pendampingan" - Kotacom tidak hanya membuat project tapi juga
+  [5] Value Prop: Integrated Online & Offline
+      kw: online offline, integrasi, infrastruktur, website, percetakan, sejalan
+      content: Satu partner yang memastikan infrastruktur online (website, software) dan offlin
+  [5] Proof: Client Testimonials
+      kw: testimonial, review, klien, lead generation, hardware downtime, warna presisi
+      content: Testimoni klien: peningkatan lead generation dari website, masalah hardware down
+  [5] Kotacom Pricing Overview
+      kw: harga, pricing, biaya, website 5 juta, e-commerce 10 juta, software 15 juta
+      content: Harga layanan Kotacom: Website mulai Rp 5 juta, E-commerce mulai Rp 10 juta, Cus
+  [4] Value Prop: Jargon-Free Communication
+      kw: komunikasi, transparan, tanpa jargon, timeline, milestone, klien
+      content: Komunikasi jelas tanpa jargon teknis membingungkan. Project planning transparan 
+  [4] Value Prop: No Hidden Costs
+      kw: harga, biaya, transparan, no hidden cost, pricing, upfront
+      content: Tidak ada biaya tersembunyi. Semua biaya diinformasikan di awal sebelum pekerjaa
+  [4] Proof: Technology Stack
+      kw: tech stack, React, Next.js, Node.js, Laravel, Python, AWS, Flutter, Docker
+      content: Tech stack yang digunakan: React, Next.js, Astro.js, Node.js, Laravel, Python, P
+  [4] Kotacom Office Locations
+      kw: kantor, alamat, sidoarjo, surabaya, kontak, whatsapp, jam kerja
+      content: Kantor Sidoarjo: Graha Indraprasta G7/15, Tulangan, Sidoarjo 61273. Kantor Surab
+
+--- www-kotacom-id / policy / general (6 entries) ---
+  [10] Guardrail: Always Mention Kotacom
+      kw: (no keywords)
+      content: Selalu sebutkan Kotacom sebagai penyedia solusi saat merekomendasikan layanan. G
+  [10] Guardrail: Use Correct URLs
+      kw: (no keywords)
+      content: Gunakan URL yang benar dari knowledge base saat merujuk layanan atau produk Kota
+  [10] Guardrail: Price Accuracy
+      kw: (no keywords)
+      content: Jika menyebut harga, gunakan harga dari knowledge base. Jika tidak yakin, gunaka
+  [10] Guardrail: Language & Tone
+      kw: (no keywords)
+      content: Tulis dalam Bahasa Indonesia yang profesional namun mudah dipahami. Hindari jarg
+  [9] Guardrail: Area Coverage
+      kw: (no keywords)
+      content: Kotacom berbasis di Sidoarjo dan Surabaya, Jawa Timur. Melayani klien di seluruh
+  [9] Guardrail: CTA Guidelines
+      kw: (no keywords)
+      content: Akhiri artikel dengan CTA yang relevan: Konsultasi Gratis, Kirim Brief Kebutuhan
+
+--- www-kotacom-id / product / it-support (2 entries) ---
+  [7] IT Infrastructure & Support
+      kw: IT support, network, server, maintenance, hardware, software, infrastruktur, konsultasi IT
+      content: Layanan IT support komprehensif: maintenance hardware/software, network configur
+  [7] Sistem POS untuk Retail & F&B
+      kw: POS, kasir, point of sale, retail, F&B, cafe, restoran, inventory, multi-outlet
+      content: Sistem Point of Sale lengkap: kasir, inventory management, laporan penjualan, mu
+
+--- www-kotacom-id / product / printing (12 entries) ---
+  [7] Percetakan & Design Services
+      kw: percetakan, printing, graphic design, branding, cetak, materi promosi, seminar kit
+      content: Layanan percetakan komprehensif: buku, brosur, kalender, seminar kit, banner, pa
+  [6] Wedding Album Printing
+      kw: wedding album, cetak album, pernikahan, photobook, hardcover, lay-flat
+      content: Jasa cetak album pernikahan premium. Hardcover photobook dengan lay-flat binding
+  [6] T-Shirt Printing
+      kw: kaos, t-shirt, cetak kaos, sablon, cotton combed, custom apparel
+      content: Cetak kaos custom cotton combed berkualitas. Satuan atau bulk untuk komunitas da
+  [6] Sticker Printing
+      kw: stiker, sticker, vinyl, waterproof, die-cut, kiss-cut, label, decal
+      content: Cetak stiker vinyl waterproof, stiker kendaraan, chromo premium. Die-cut atau ki
+  [6] Quran Printing
+      kw: al-quran, quran, cetak quran, mushaf, islamic printing, sekolah, yayasan
+      content: Cetak Al-Quran standar tinggi dengan kertas premium khusus. Untuk pribadi, sekol
+  [6] Packaging Printing
+      kw: packaging, kemasan, box, food box, custom packaging, brand packaging
+      content: Cetak box kemasan makanan dan produk. Material tebal dan aman, desain custom unt
+  [6] Cetak Percetakan Umum
+      kw: percetakan umum, kop surat, amplop, ID card, nota, form, dokumen bisnis
+      content: Cetak materi administrasi dan promosi umum: kop surat, amplop, ID card, form, no
+  [6] Business Card Printing
+      kw: kartu nama, business card, name card, corporate card, kartu nama profesional
+      content: Cetak kartu nama profesional dengan berbagai finishing eksklusif: doff, glossy, 
+  [6] Brochure Printing
+      kw: brosur, flyer, pamphlet, promosi, leaflet, marketing material
+      content: Cetak brosur dan flyer promosi warna vibrant. Multiple folding options dan color
+  [6] Book Printing
+      kw: cetak buku, book printing, jurnal, majalah, textbook, binding, hardcover, softcover
+      content: Cetak buku berkualitas: jurnal, majalah, textbook. Binding: softcover, hardcover
+  [6] Banner Printing
+      kw: banner, spanduk, flex banner, billboard, backdrop, event promotion, outdoor
+      content: Cetak banner flex durable warna tajam. Outdoor billboard, backdrop toko, dan eve
+  [6] Cetak Buku Kenangan Sekolah (Yearbook)
+      kw: yearbook, buku kenangan, sekolah, buku tahunan, wisuda, buku kelulusan
+      content: Cetak yearbook/buku kenangan sekolah berkualitas komersial. Timeline jelas, qual
+
+--- www-kotacom-id / product / software (4 entries) ---
+  [7] Pembuatan Website Corporate & Landing Page
+      kw: website, web development, corporate profile, landing page, React, Next.js, Astro, Sanity CMS
+      content: Jasa pembuatan website profesional: corporate profile, landing page conversion-o
+  [7] Custom Software: POS, CRM, Dashboard
+      kw: custom software, POS, CRM, dashboard, otomasi, Node.js, Laravel, Python, PostgreSQL, MongoDB
+      content: Pengembangan software custom untuk kebutuhan bisnis unik: POS system, CRM tool, 
+  [7] E-Commerce Platform Development
+      kw: e-commerce, toko online, online store, shopping cart, payment gateway, inventory, admin panel
+      content: Pembuatan platform e-commerce lengkap: katalog produk, shopping cart, payment ga
+  [7] Mobile App Development (Android & iOS)
+      kw: mobile app, aplikasi mobile, android, iOS, flutter, cross-platform, smartphone
+      content: Pengembangan aplikasi mobile cross-platform menggunakan Flutter. Satu codebase u
+
+--- www-kotacom-id / template / blog (2 entries) ---
+  [7] Blog Post Template: Educational
+      kw: blog post, artikel edukasi, educational, tips, tutorial
+      content: Purpose: Edukasi audiens tentang topik digital/IT/printing, build trust, dan sof
+  [7] Blog Post Template: Comparison/Review
+      kw: perbandingan, review, comparison, pilihan terbaik, rekomendasi
+      content: Purpose: Bantu pembaca memilih solusi terbaik, posisi Kotacom sebagai expert adv
+
+--- www-kotacom-id / template / website (1 entries) ---
+  [8] Money Page Template: Service Landing
+      kw: service landing, money page, konversi, lead, landing page
+      content: Purpose: Convert pengunjung menjadi lead. Required sections: - Hero dengan pain 
+
+--- www-kotacom-id / url / general (2 entries) ---
+  [6] Lintangizin - Biro Jasa Perizinan
+      kw: perizinan, NIB, SIUP, TDP, izin usaha, biro jasa, jawa timur
+      content: URL: https://www.kotacom.id/services/biro-jasa-perizinan Biro jasa perizinan ter
+  [6] Jasa Pengukuhan PKP Terpercaya
+      kw: PKP, pengusaha kena pajak, pengukuhan PKP, Lintangizin, perpajakan
+      content: URL: https://www.kotacom.id/services/jasa-pengukuhan-pkp Layanan pengukuhan PKP 
+
+--- www-kotacom-id / url / it-support (6 entries) ---
+  [9] Layanan IT Support & Technical
+      kw: IT support, layanan IT, network, server, maintenance, service komputer, instalasi
+      content: URL: https://www.kotacom.id/layanan Layanan IT lengkap: maintenance hardware/sof
+  [8] Sistem POS - Point of Sale
+      kw: POS, point of sale, sistem kasir, retail, F&B, inventory management, multi-outlet
+      content: URL: https://www.kotacom.id/sistem-pos Sistem POS untuk retail, F&B, dan bisnis 
+  [7] Service Komputer Surabaya Panggilan
+      kw: service komputer, surabaya, panggilan, repair, hardware, troubleshooting
+      content: URL: https://www.kotacom.id/service-komputer-surabaya-panggilan Layanan service 
+  [7] Jasa Recovery Data Surabaya
+      kw: recovery data, pemulihan data, surabaya, harddisk, SSD, file hilang
+      content: URL: https://www.kotacom.id/jasa-recovery-data-surabaya Pemulihan data dari hard
+  [7] Jasa Instal Aplikasi Surabaya
+      kw: instal aplikasi, surabaya, install software, setup program, konfigurasi
+      content: URL: https://www.kotacom.id/jasa-instal-aplikasi-surabaya Instalasi software dan
+  [7] Jasa Install Software Macbook
+      kw: macbook, macbook pro, install software, apple, macOS, development tools
+      content: URL: https://www.kotacom.id/jasa-install-software-macbook Spesialis instalasi so
+
+--- www-kotacom-id / url / printing (2 entries) ---
+  [9] Percetakan & Desain Kotacom
+      kw: percetakan, cetak, brosur, buku, kalender, banner, packaging, desain
+      content: URL: https://www.kotacom.id/percetakan Layanan percetakan: buku, brosur, kalende
+  [7] Jasa Cetak Buku Surabaya
+      kw: cetak buku, surabaya, novel, textbook, modul, jurnal, binding
+      content: URL: https://www.kotacom.id/jasa-cetak-buku-surabaya Cetak buku berkualitas di S
+
+--- www-kotacom-id / url / software (4 entries) ---
+  [9] Custom Software Development
+      kw: software, custom software, aplikasi custom, POS, CRM, dashboard, otomasi
+      content: URL: https://www.kotacom.id/software Pengembangan software custom: POS, CRM, das
+  [8] E-Commerce Development - Toko Online
+      kw: e-commerce, toko online, online store, payment gateway, katalog produk, inventory
+      content: URL: https://www.kotacom.id/services/ecommerce-development Pengembangan e-commer
+  [8] Mobile App Development
+      kw: mobile app, aplikasi mobile, android, iOS, flutter, aplikasi smartphone
+      content: URL: https://www.kotacom.id/software Pengembangan aplikasi mobile Android & iOS 
+  [7] Agency Digital - Lead Generation & Growth
+      kw: agency digital, lead generation, growth, pemasaran digital, SEO, SEM
+      content: URL: https://www.kotacom.id/services/agency-landing Layanan agency digital fokus
+
+--- www-kotacom-id / url / website (5 entries) ---
+  [9] Homepage Kotacom - Solusi Digital Terpadu
+      kw: kotacom, homepage, beranda, solusi digital, layanan utama
+      content: URL: https://www.kotacom.id Halaman utama Kotacom dengan overview layanan: web d
+  [9] Pembuatan Website Profesional
+      kw: pembuatan website, web development, jasa website, landing page, company profile, toko online
+      content: URL: https://www.kotacom.id/pembuatan-website Layanan pembuatan website custom: 
+  [8] Portfolio Projects Kotacom
+      kw: portfolio, project, showcase, case study, klien, hasil kerja
+      content: URL: https://www.kotacom.id/projects Showcase project: custom system, integrasi 
+  [8] Products - Produk Digital & Hardware
+      kw: products, produk digital, template POS, web design, UI kit, hardware
+      content: URL: https://www.kotacom.id/products Produk Kotacom: template POS, web design pa
+  [7] Blog Kotacom - Tips & Insight Digital
+      kw: blog, artikel, tips, insight, edukasi, tutorial
+      content: URL: https://www.kotacom.id/blog Blog dengan artikel seputar web development, so
+
