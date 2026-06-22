@@ -76,9 +76,14 @@ export type SanityImage = {
 };
 
 export type SanitySectionPadding = {
-  _type: "sectionPadding";
+  _type: "section-padding";
   top: boolean;
   bottom: boolean;
+};
+
+export type SanityUiIcon = {
+  provider: string;
+  name: string;
 };
 
 // Hero blocks
@@ -86,7 +91,7 @@ export type Hero1Block = {
   _type: "hero-1";
   _key: string;
   tagLine?: string;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title?: string;
   body?: PortableTextNode[];
   image?: SanityImage;
@@ -97,7 +102,7 @@ export type Hero2Block = {
   _type: "hero-2";
   _key: string;
   tagLine?: string;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title?: string;
   body?: PortableTextNode[];
   image?: SanityImage;
@@ -105,9 +110,9 @@ export type Hero2Block = {
 };
 
 export type HeroFeatureCard = {
-  _type: "heroFeatureCard";
+  _type: "hero-feature-card";
   _key: string;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title: string;
   description?: string;
 };
@@ -151,10 +156,10 @@ export type SplitContentBlock = {
 };
 
 export type SplitCard = {
-  _type: "splitCard";
+  _type: "split-card";
   _key: string;
   tagLine?: string;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title?: string;
   body?: PortableTextNode[];
 };
@@ -172,10 +177,10 @@ export type SplitImageBlock = {
 };
 
 export type SplitInfo = {
-  _type: "splitInfo";
+  _type: "split-info";
   _key: string;
   image?: SanityImage;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title?: string;
   body?: PortableTextNode[];
   tags?: string[];
@@ -198,9 +203,9 @@ export type SplitRowBlock = {
 
 // Grid blocks
 export type GridCard = {
-  _type: "gridCard";
+  _type: "grid-card";
   _key: string;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title?: string;
   excerpt?: string;
   image?: SanityImage;
@@ -208,9 +213,9 @@ export type GridCard = {
 };
 
 export type PricingCard = {
-  _type: "pricingCard";
+  _type: "pricing-card";
   _key: string;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title?: string;
   tagLine?: string;
   price?: { value?: number; period?: string };
@@ -220,7 +225,7 @@ export type PricingCard = {
 };
 
 export type GridPost = {
-  _type: "gridPost";
+  _type: "grid-post";
   _key: string;
   post?: { _type: "reference"; _ref: string };
 };
@@ -282,7 +287,7 @@ export type Cta1Block = {
   sectionWidth?: string;
   stackAlign?: string;
   tagLine?: string;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title?: string;
   body?: PortableTextNode[];
   links?: SanityLink[];
@@ -296,7 +301,7 @@ export type WhatsappCtaBlock = {
   sectionWidth?: string;
   stackAlign?: string;
   tagLine?: string;
-  uiIcon?: string;
+  uiIcon?: SanityUiIcon;
   title?: string;
   body?: PortableTextNode[];
   secondaryLink?: SanityLink;
@@ -470,7 +475,7 @@ export type ValuePropsBlock = {
 };
 
 export type EeatPoint = {
-  _type: "eeatPoint";
+  _type: "object";
   _key: string;
   title: string;
   description?: string;
@@ -488,7 +493,7 @@ export type EeatBlock = {
 };
 
 export type MetricItem = {
-  _type: "metricItem";
+  _type: "object";
   _key: string;
   value: string;
   label: string;
@@ -550,7 +555,7 @@ export type QuoteSpotlightBlock = {
 };
 
 export type MicroBadge = {
-  _type: "microBadge";
+  _type: "object";
   _key: string;
   label: string;
   description?: string;
@@ -565,7 +570,7 @@ export type MicroBadgesBlock = {
 };
 
 export type RelatedLink = {
-  _type: "relatedLink";
+  _type: "object";
   _key: string;
   title: string;
   href: string;
@@ -588,7 +593,7 @@ export type ProcessFaqBlock = {
   processTitle?: string;
   processSteps?: string[];
   faqTitle?: string;
-  faqs?: { question: string; answer: string }[];
+  faqs?: { _type: "object"; question: string; answer: string }[];
 };
 
 // Legacy block
@@ -985,7 +990,12 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     const top = parseBoolean(attrs.paddingTop);
     const bottom = parseBoolean(attrs.paddingBottom);
     if (top === undefined && bottom === undefined) return undefined;
-    return { _type: "sectionPadding", top: top ?? true, bottom: bottom ?? true };
+    return { _type: "section-padding", top: top ?? true, bottom: bottom ?? true };
+  };
+
+  const makeUiIcon = (iconName?: string): SanityUiIcon | undefined => {
+    if (!iconName) return undefined;
+    return { provider: "lu", name: iconName };
   };
 
   const prefixedKey = (prefix: string | undefined, name: string) =>
@@ -996,7 +1006,13 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     const href = attrs[prefixedKey(prefix, "href")] || (!prefix ? attrs.href : undefined);
     const variant = attrs[prefixedKey(prefix, "variant")];
     const target = parseBoolean(attrs[prefixedKey(prefix, "target")], href ? isExternalHref(href) : false) ?? false;
-    const isExternal = parseBoolean(attrs[prefixedKey(prefix, "isExternal")], href ? isExternalHref(href) : false) ?? false;
+    let isExternal = parseBoolean(attrs[prefixedKey(prefix, "isExternal")], href ? isExternalHref(href) : false) ?? false;
+    
+    // Fallback: If href is present we must treat it as external since we can't build Sanity references from shortcodes
+    if (href && !isExternal) {
+      isExternal = true;
+    }
+
     if (!title && !href) return undefined;
     return {
       _type: "link",
@@ -1052,7 +1068,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
         return {
           _type: "split-cards-list" as const,
           _key: createKey(),
-          list: [title, extra || description].filter(Boolean).map((item) => ({ _type: "splitCard" as const, _key: createKey(), title: item })),
+          list: [title, extra || description].filter(Boolean).map((item) => ({ _type: "split-card" as const, _key: createKey(), title: item })),
         };
       }
       if (kind === "info") {
@@ -1061,7 +1077,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
           _key: createKey(),
           list: [
             {
-              _type: "splitInfo" as const,
+              _type: "split-info" as const,
               _key: createKey(),
               title: title || undefined,
               body: makeBody(description),
@@ -1075,9 +1091,9 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
 
   const parseGridCards = (val?: string) =>
     parseStructured(val)?.map(([uiIcon, title, excerpt, href]) => ({
-      _type: "gridCard" as const,
+      _type: "grid-card" as const,
       _key: createKey(),
-      uiIcon: uiIcon || undefined,
+      uiIcon: makeUiIcon(uiIcon),
       title: title || undefined,
       excerpt: excerpt || undefined,
       link: href ? { _type: "link" as const, _key: createKey(), isExternal: isExternalHref(href), title: title || href, href } : undefined,
@@ -1096,9 +1112,8 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "hero-1",
       _key: blockKey,
-      padding: makePadding(),
       tagLine: attrs.tagline || attrs.tagLine || undefined,
-      uiIcon: attrs.uiIcon || undefined,
+      uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
       links: makeLinks(),
@@ -1109,9 +1124,8 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "hero-2",
       _key: blockKey,
-      padding: makePadding(),
       tagLine: attrs.tagline || attrs.tagLine || undefined,
-      uiIcon: attrs.uiIcon || undefined,
+      uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
       links: makeLinks(),
@@ -1127,6 +1141,13 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       description: attrs.description || undefined,
       ctaPrimary: makeLink("ctaPrimary") || makeLink() || { _type: "link", _key: createKey(), isExternal: false, title: "Learn More" },
       ctaSecondary: makeLink("ctaSecondary"),
+      cards: parseFeatures(attrs.cards)?.map(f => ({
+        _type: "hero-feature-card" as const,
+        _key: f._key,
+        uiIcon: makeUiIcon(f.icon),
+        title: f.title,
+        description: f.description,
+      })),
     };
   }
 
@@ -1135,6 +1156,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "section-header",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       sectionWidth: attrs.sectionWidth || undefined,
       stackAlign: attrs.stackAlign || undefined,
@@ -1160,10 +1182,10 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
 
   if (type === "split-card") {
     return {
-      _type: "splitCard",
+      _type: "split-card",
       _key: blockKey,
       tagLine: attrs.tagline || undefined,
-      uiIcon: attrs.uiIcon || undefined,
+      uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
     };
@@ -1174,7 +1196,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       _type: "split-cards-list",
       _key: blockKey,
       list: attrs.items ? parseArray(attrs.items)?.map((item) => ({
-        _type: "splitCard" as const,
+        _type: "split-card" as const,
         _key: createKey(),
         title: item,
       })) : undefined,
@@ -1191,9 +1213,9 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
 
   if (type === "split-info") {
     return {
-      _type: "splitInfo",
+      _type: "split-info",
       _key: blockKey,
-      uiIcon: attrs.uiIcon || undefined,
+      uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
       tags: parseArray(attrs.tags),
@@ -1205,7 +1227,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       _type: "split-info-list",
       _key: blockKey,
       list: attrs.items ? parseArray(attrs.items)?.map((item) => ({
-        _type: "splitInfo" as const,
+        _type: "split-info" as const,
         _key: createKey(),
         title: item,
       })) : undefined,
@@ -1226,9 +1248,9 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
   // Grid blocks
   if (type === "grid-card") {
     return {
-      _type: "gridCard",
+      _type: "grid-card",
       _key: blockKey,
-      uiIcon: attrs.uiIcon || undefined,
+      uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       excerpt: attrs.excerpt || undefined,
       link: makeLink(),
@@ -1237,9 +1259,9 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
 
   if (type === "pricing-card") {
     return {
-      _type: "pricingCard",
+      _type: "pricing-card",
       _key: blockKey,
-      uiIcon: attrs.uiIcon || undefined,
+      uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       tagLine: attrs.tagline || undefined,
       price: attrs.price ? { value: Number(attrs.price) || undefined, period: attrs.period } : undefined,
@@ -1258,7 +1280,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       textAlign: attrs.textAlign || undefined,
       cardStyle: attrs.cardStyle || undefined,
       gridColumns: attrs.gridColumns || undefined,
-      cards: parseGridCards(attrs.cards),
+      columns: parseGridCards(attrs.cards),
     };
   }
 
@@ -1267,6 +1289,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "carousel-1",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       size: attrs.size || undefined,
       indicators: attrs.indicators || undefined,
@@ -1278,6 +1301,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "carousel-2",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
     };
   }
@@ -1313,7 +1337,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       sectionWidth: attrs.sectionWidth || undefined,
       stackAlign: attrs.stackAlign || undefined,
       tagLine: attrs.tagline || attrs.tagLine || undefined,
-      uiIcon: attrs.uiIcon || undefined,
+      uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
       links: makeLinks(),
@@ -1329,7 +1353,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       sectionWidth: attrs.sectionWidth || "default",
       stackAlign: attrs.stackAlign || "left",
       tagLine: attrs.tagline || attrs.tagLine || "WhatsApp CTA",
-      uiIcon: attrs.uiIcon || undefined,
+      uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || "Butuh jawaban cepat? Chat tim kami via WhatsApp",
       body: makeBody(attrs.text),
       secondaryLink: makeLink("secondary"),
@@ -1341,6 +1365,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "logo-cloud-1",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
     };
@@ -1479,7 +1504,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       description: attrs.description || undefined,
-      services: parseStructured(attrs.services)?.map(([title, description, features, timeline, badge]) => ({
+      services: parseStructured(attrs.services)?.map(([title, description, features, timeline, badge, price, link]) => ({
         _type: "serviceType" as const,
         _key: createKey(),
         title: title || "Service",
@@ -1487,6 +1512,8 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
         features: parseArray(features),
         timeline: timeline || undefined,
         badge: badge || undefined,
+        price: price || undefined,
+        link: link ? { _type: "link" as const, _key: createKey(), isExternal: isExternalHref(link), title: title || link, href: link } : undefined,
       })),
     };
   }
@@ -1531,7 +1558,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       title: attrs.title || undefined,
       description: attrs.description || undefined,
       points: attrs.points ? parseArray(attrs.points)?.map((item) => ({
-        _type: "eeatPoint" as const,
+        _type: "object" as const,
         _key: createKey(),
         title: item,
       })) : undefined,
@@ -1546,7 +1573,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       items: attrs.items ? parseArray(attrs.items)?.map((item) => {
         const [value, label] = item.split(":");
         return {
-          _type: "metricItem" as const,
+          _type: "object" as const,
           _key: createKey(),
           value: value?.trim() || item,
           label: label?.trim() || "",
@@ -1559,6 +1586,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "highlights-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       eyebrow: attrs.eyebrow || undefined,
       title: attrs.title || undefined,
@@ -1571,8 +1599,20 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "reviews-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
+      reviews: parseStructured(attrs.reviews)?.map(([reviewerName, reviewerRole, rating, reviewBody, datePublished, source, sourceUrl]) => ({
+        _type: "reviewItem" as const,
+        _key: createKey(),
+        reviewerName: reviewerName || "Reviewer",
+        reviewerRole: reviewerRole || undefined,
+        rating: Number(rating) || 5,
+        reviewBody: reviewBody || undefined,
+        datePublished: datePublished || undefined,
+        source: source || undefined,
+        sourceUrl: sourceUrl || undefined,
+      })),
     };
   }
 
@@ -1580,6 +1620,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "quote-spotlight-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       eyebrow: attrs.eyebrow || undefined,
       quote: attrs.quote || "",
@@ -1593,11 +1634,12 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "micro-badges-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       badges: attrs.badges ? parseArray(attrs.badges)?.map((item) => {
         const [label, description] = item.split(":");
         return {
-          _type: "microBadge" as const,
+          _type: "object" as const,
           _key: createKey(),
           label: label?.trim() || item,
           description: description?.trim() || undefined,
@@ -1610,12 +1652,13 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "related-links-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
       links: attrs.links ? parseArray(attrs.links)?.map((item) => {
         const [title, href] = item.split(":");
         return {
-          _type: "relatedLink" as const,
+          _type: "object" as const,
           _key: createKey(),
           title: title?.trim() || item,
           href: href?.trim() || "#",
@@ -1628,6 +1671,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "process-faq-block",
       _key: blockKey,
+      padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       processTitle: attrs.processTitle || undefined,
       processSteps: parseArray(attrs.processSteps),
@@ -1635,6 +1679,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       faqs: attrs.faqs ? parseArray(attrs.faqs)?.map((item) => {
         const [question, answer] = item.split(":");
         return {
+          _type: "object" as const,
           question: question?.trim() || item,
           answer: answer?.trim() || "",
         };

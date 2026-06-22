@@ -2622,7 +2622,6 @@ app.post("/api/notes/:id/ai-rewrite-preview", async (c) => {
           seoKeywords: snapshot.seoKeywords,
           ogTitle: snapshot.ogTitle,
           ogDescription: snapshot.ogDescription,
-          ogImageAssetId: snapshot.ogImageAssetId || undefined,
           outlineMd: note.outline_md || "",
           contentMd: snapshot.contentMd,
         },

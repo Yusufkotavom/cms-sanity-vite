@@ -47,6 +47,7 @@ export type SanityPostSnapshot = {
   ogTitle: string;
   ogDescription: string;
   categoryIds: string[];
+  ogImageAssetId?: string | null;
 };
 
 export type SanityPostSummary = {
@@ -70,6 +71,7 @@ export type SanityPageSnapshot = {
   seoKeywords: string;
   ogTitle: string;
   ogDescription: string;
+  ogImageAssetId?: string | null;
 };
 
 export type SanityPageSummary = {
@@ -301,6 +303,7 @@ export async function fetchSanityPostSnapshot({
     ogTitle: result.meta?.openGraph?.title ?? "",
     ogDescription: result.meta?.openGraph?.description ?? "",
     categoryIds: (result.categories ?? []).map((item) => item.id).filter((item): item is string => Boolean(item)),
+    ogImageAssetId: undefined,
   } satisfies SanityPostSnapshot;
 }
 
@@ -414,6 +417,7 @@ export async function fetchSanityPageSnapshot({
     seoKeywords: result.meta?.keywords ?? "",
     ogTitle: result.meta?.openGraph?.title ?? "",
     ogDescription: result.meta?.openGraph?.description ?? "",
+    ogImageAssetId: undefined,
   } satisfies SanityPageSnapshot;
 }
 
@@ -939,6 +943,7 @@ export type SanityProductSnapshot = {
   ogTitle: string;
   ogDescription: string;
   categoryIds: string[];
+  ogImageAssetId?: string | null;
 };
 
 export type SanityProductSummary = {
@@ -1014,6 +1019,7 @@ export async function fetchSanityProductSnapshot({
     ogTitle: result.meta?.openGraph?.title ?? "",
     ogDescription: result.meta?.openGraph?.description ?? "",
     categoryIds: (result.categories ?? []).map((item) => item.id).filter((item): item is string => Boolean(item)),
+    ogImageAssetId: undefined,
   } satisfies SanityProductSnapshot;
 }
 
@@ -1238,6 +1244,7 @@ export type SanityServiceSnapshot = {
   ogTitle: string;
   ogDescription: string;
   categoryIds: string[];
+  ogImageAssetId?: string | null;
 };
 
 export type SanityServiceSummary = {
@@ -1313,6 +1320,7 @@ export async function fetchSanityServiceSnapshot({
     ogTitle: result.meta?.openGraph?.title ?? "",
     ogDescription: result.meta?.openGraph?.description ?? "",
     categoryIds: (result.categories ?? []).map((item) => item.id).filter((item): item is string => Boolean(item)),
+    ogImageAssetId: undefined,
   } satisfies SanityServiceSnapshot;
 }
 
@@ -1537,6 +1545,7 @@ export type SanityProjectSnapshot = {
   ogTitle: string;
   ogDescription: string;
   categoryIds: string[];
+  ogImageAssetId?: string | null;
 };
 
 export type SanityProjectSummary = {
@@ -1612,6 +1621,7 @@ export async function fetchSanityProjectSnapshot({
     ogTitle: result.meta?.openGraph?.title ?? "",
     ogDescription: result.meta?.openGraph?.description ?? "",
     categoryIds: (result.categories ?? []).map((item) => item.id).filter((item): item is string => Boolean(item)),
+    ogImageAssetId: undefined,
   } satisfies SanityProjectSnapshot;
 }
 
