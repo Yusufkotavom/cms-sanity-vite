@@ -45,6 +45,7 @@ export const notes = sqliteTable("notes", {
   sanityRevision: text("sanity_revision"),
   sanityType: text("sanity_type"),
   lastError: text("last_error"),
+  pageBlocks: text("page_blocks"),
   aiRewriteContentMd: text("ai_rewrite_content_md"),
   aiRewriteExcerpt: text("ai_rewrite_excerpt"),
   aiRewriteSeoTitle: text("ai_rewrite_seo_title"),

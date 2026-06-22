@@ -3,6 +3,31 @@ import { portableTextToMarkdown } from "../portable-text-to-markdown";
 import type { NoteRecord } from "../db/repositories/notes";
 
 
+type PageBlock = {
+  type: string;
+  text?: string;
+  features?: string;
+  items?: string;
+  [key: string]: unknown;
+};
+
+function pageBlocksToSanityBody(blocksJson: string | null) {
+  if (!blocksJson) return [];
+  const blocks: PageBlock[] = JSON.parse(blocksJson);
+  return blocks.map((block) => {
+    const { type, text, features, items, ...rest } = block;
+    const body = text
+      ? [{ _type: "block", _key: crypto.randomUUID().slice(0, 12), style: "normal", markDefs: [], children: [{ _type: "span", _key: crypto.randomUUID().slice(0, 12), marks: [] as string[], text: String(text) }] }]
+      : undefined;
+    const parsedFeatures = features ? features.split("|").map(s => s.trim()).filter(Boolean).map(item => { const p = item.split("::").map(x => x.trim()); return { _type: "feature", _key: crypto.randomUUID().slice(0, 12), icon: p[0] || undefined, title: p[1] || item, description: p[2] || undefined, badge: p[3] || undefined }; }) : undefined;
+    const parsedItems = items ? items.split("|").map(s => s.trim()).filter(Boolean) : undefined;
+    return { _type: type, _key: crypto.randomUUID().slice(0, 12), ...rest, ...(body ? { body } : {}), ...(parsedFeatures ? { features: parsedFeatures } : {}), ...(parsedItems ? { items: parsedItems } : {}) };
+  });
+}
+
+
+
+
 export type SanityCategory = {
   id: string;
   title: string;
@@ -463,18 +488,25 @@ export async function patchNoteToSanity({
     throw new Error("Sanity document ID is required for patch updates");
   }
 
-  const body = await markdownToPortableText(note.content_md, {
-    uploadImage: ({ url: imageUrl, alt }) =>
-      uploadImageToSanity({
-        projectId,
-        dataset,
-        apiVersion,
-        token,
-        imageUrl,
-        alt,
-        fetchImpl,
-      }),
-  });
+  const isPage = sanityType === "page";
+  const usePageBlocks = isPage && note.page_blocks;
+
+  const body = usePageBlocks
+    ? []  // page-block pages don't have markdown content
+    : await markdownToPortableText(note.content_md, {
+        uploadImage: ({ url: imageUrl, alt }) =>
+          uploadImageToSanity({
+            projectId,
+            dataset,
+            apiVersion,
+            token,
+            imageUrl,
+            alt,
+            fetchImpl,
+          }),
+      });
+
+  const blocks = usePageBlocks ? pageBlocksToSanityBody(note.page_blocks) : undefined;
 
   const metaImage =
     ogImageAssetId
@@ -495,8 +527,6 @@ export async function patchNoteToSanity({
           fetchImpl,
         }).catch(() => null);
 
-  const isPage = sanityType === "page";
-
   const setFields: Record<string, unknown> = {
     title: note.title,
     slug: {
@@ -505,6 +535,7 @@ export async function patchNoteToSanity({
     },
     excerpt: note.excerpt || undefined,
     body,
+    ...(blocks ? { blocks } : {}),
     meta: {
       title: note.seo_title || note.title,
       description: note.seo_description || note.excerpt || undefined,
@@ -689,18 +720,25 @@ export async function publishNoteToSanity({
 }) {
   const sanityDocumentId = note.sanity_document_id || createSanityDocumentId(note.id, sanityType);
 
-  const body = await markdownToPortableText(note.content_md, {
-    uploadImage: ({ url: imageUrl, alt }) =>
-      uploadImageToSanity({
-        projectId,
-        dataset,
-        apiVersion,
-        token,
-        imageUrl,
-        alt,
-        fetchImpl,
-      }),
-  });
+  const isPage = sanityType === "page";
+  const usePageBlocks = isPage && note.page_blocks;
+
+  const body = usePageBlocks
+    ? []  // page-block pages don't have markdown content
+    : await markdownToPortableText(note.content_md, {
+        uploadImage: ({ url: imageUrl, alt }) =>
+          uploadImageToSanity({
+            projectId,
+            dataset,
+            apiVersion,
+            token,
+            imageUrl,
+            alt,
+            fetchImpl,
+          }),
+      });
+
+  const blocks = usePageBlocks ? pageBlocksToSanityBody(note.page_blocks) : undefined;
 
   const metaImage =
     ogImageAssetId
@@ -721,8 +759,6 @@ export async function publishNoteToSanity({
           fetchImpl,
         }).catch(() => null);
 
-  const isPage = sanityType === "page";
-
   const doc: Record<string, unknown> = {
     _id: sanityDocumentId,
     _type: sanityType,
@@ -733,6 +769,7 @@ export async function publishNoteToSanity({
     },
     excerpt: note.excerpt || undefined,
     body,
+    ...(blocks ? { blocks } : {}),
     meta: {
       title: note.seo_title || note.title,
       description: note.seo_description || note.excerpt || undefined,

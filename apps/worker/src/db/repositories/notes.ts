@@ -24,6 +24,7 @@ export type NoteRecord = {
   sanity_revision: string | null;
   sanity_type: string | null;
   last_error: string | null;
+  page_blocks: string | null;
   ai_rewrite_content_md: string | null;
   ai_rewrite_excerpt: string | null;
   ai_rewrite_seo_title: string | null;
@@ -43,6 +44,7 @@ function toNoteRecord(note: typeof notes.$inferSelect): NoteRecord {
     title: note.title,
     slug: note.slug,
     content_md: note.contentMd,
+    page_blocks: note.pageBlocks ?? null,
     outline_md: note.outlineMd,
     excerpt: note.excerpt,
     seo_title: note.seoTitle,
@@ -133,6 +135,7 @@ export async function createNote(
     ogTitle: string;
     ogDescription: string;
     ogImageAssetId?: string;
+    pageBlocks?: string | null;
     sanityDocumentId?: string | null;
     sanityRevision?: string | null;
     sanityType?: string | null;
@@ -146,6 +149,7 @@ export async function createNote(
     title: input.title,
     slug: input.slug,
     contentMd: input.contentMd,
+    pageBlocks: input.pageBlocks ?? null,
     outlineMd: input.outlineMd,
     excerpt: input.excerpt,
     seoTitle: input.seoTitle,
@@ -170,6 +174,7 @@ export async function updateNoteDraft(
     id: string;
     title: string;
     slug: string;
+    pageBlocks?: string | null;
     contentMd: string;
     outlineMd: string;
     excerpt: string;
@@ -191,6 +196,7 @@ export async function updateNoteDraft(
       title: input.title,
       slug: input.slug,
       contentMd: input.contentMd,
+      ...(input.pageBlocks !== undefined ? { pageBlocks: input.pageBlocks } : {}),
       outlineMd: input.outlineMd,
       excerpt: input.excerpt,
       seoTitle: input.seoTitle,
@@ -234,6 +240,7 @@ export async function updateNoteSanityMirror(
     id: string;
     title: string;
     slug: string;
+    pageBlocks?: string | null;
     contentMd: string;
     excerpt: string;
     seoTitle: string;
@@ -254,6 +261,7 @@ export async function updateNoteSanityMirror(
       title: input.title,
       slug: input.slug,
       contentMd: input.contentMd,
+      ...(input.pageBlocks !== undefined ? { pageBlocks: input.pageBlocks } : {}),
       excerpt: input.excerpt,
       seoTitle: input.seoTitle,
       seoDescription: input.seoDescription,

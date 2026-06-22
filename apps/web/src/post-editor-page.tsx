@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import { PageEditor } from "./page-editor";
 import {
   CalendarClockIcon,
   Clock3Icon,
@@ -229,13 +230,23 @@ export function PostEditorPage({
     window.open(sanityStudioUrl, "_blank", "noopener,noreferrer");
   }
 
+  const typeLabel = draft.sanityType && { post: "Post", page: "Page", product: "Product", service: "Service", project: "Project" }[draft.sanityType];
+  const typeColor = draft.sanityType && { post: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", page: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300", product: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", service: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", project: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" }[draft.sanityType];
+
   return (
     <section className="grid gap-6">
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-col gap-1">
-              <CardTitle>Post Editor</CardTitle>
+              <CardTitle className="flex items-center gap-3">
+                Post Editor
+                {typeLabel && (
+                  <span className={"inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold " + typeColor}>
+                    {typeLabel}
+                  </span>
+                )}
+              </CardTitle>
               <CardDescription>Tulis, rapikan, dan siapkan post Anda di satu tempat.</CardDescription>
             </div>
             <div className="flex gap-2">
@@ -825,13 +836,20 @@ export function PostEditorPage({
                     <TabsTrigger className="shrink-0" value="editor">
                       Editor
                     </TabsTrigger>
-                    <TabsTrigger className="shrink-0" value="preview">
-                      Preview
-                    </TabsTrigger>
+                    {draft.sanityType !== "page" && (
+                      <TabsTrigger className="shrink-0" value="preview">
+                        Preview
+                      </TabsTrigger>
+                    )}
                   </TabsList>
                 </div>
                 <TabsContent value="editor">
-                  {draft.aiRewriteContentMd ? (
+                  {draft.sanityType === "page" ? (
+                    <PageEditor
+                      value={draft.pageBlocks}
+                      onChange={(json) => updateDraft({ pageBlocks: json })}
+                    />
+                  ) : draft.aiRewriteContentMd ? (
                     <div className="grid gap-4 xl:grid-cols-2">
                       <div className="grid gap-2">
                         <label className="text-sm font-medium">Current Draft Content</label>
@@ -859,9 +877,13 @@ export function PostEditorPage({
                   )}
                 </TabsContent>
                 <TabsContent value="preview">
-                  <Suspense fallback={<EditorFallback label="Loading preview..." />}>
-                    <MarkdownPreview source={draft.contentMd} />
-                  </Suspense>
+                  {draft.sanityType === "page" ? (
+                    <EditorFallback label="Preview tidak tersedia untuk page blocks." />
+                  ) : (
+                    <Suspense fallback={<EditorFallback label="Loading preview..." />}>
+                      <MarkdownPreview source={draft.contentMd} />
+                    </Suspense>
+                  )}
                 </TabsContent>
               </Tabs>
             </TabsContent>

@@ -21,6 +21,7 @@ export type ApiNote = {
   title: string;
   slug: string;
   contentMd: string;
+  pageBlocks: string | null;
   outlineMd: string;
   excerpt: string;
   seoTitle: string;

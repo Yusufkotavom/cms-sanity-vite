@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createSanityPostDocumentId, deriveFilename, fetchSanityCategories, fetchSanityMetaImage, fetchSanityPosts } from "./publish";
+import { createSanityPostDocumentId, deriveFilename, fetchSanityCategories, fetchSanityMetaImage, fetchSanityPosts, patchNoteToSanity, publishNoteToSanity } from "./publish";
 
 describe("publish service", () => {
   it("creates public-safe Sanity post document IDs", () => {
@@ -74,6 +74,272 @@ describe("publish service", () => {
       },
       alt: "Existing image",
     });
+  });
+
+  it("publishes a page note with pageBlocks to Sanity", async () => {
+    const mockFetch = vi.fn();
+
+    // First call: fetchSanityMetaImage (fail, caught by .catch)
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({}),
+    });
+    // Second call: Sanity mutation
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{ document: { _rev: "rev-1" } }],
+      }),
+    });
+
+    const result = await publishNoteToSanity({
+      note: {
+        id: "note-page-1",
+        workspace_id: "ws-1",
+        title: "Test Page",
+        slug: "test-page",
+        content_md: "",
+        outline_md: "",
+        excerpt: "Page excerpt",
+        seo_title: "SEO Title",
+        seo_description: "SEO Desc",
+        seo_keywords: "kw1, kw2",
+        og_title: "OG Title",
+        og_description: "OG Desc",
+        og_image_asset_id: null,
+        og_image_generated_at: null,
+        status: "draft",
+        publish_at: null,
+        sanity_document_id: null,
+        sanity_revision: null,
+        sanity_type: "page",
+        last_error: null,
+        page_blocks: JSON.stringify([
+          { type: "hero-2", title: "Welcome", tagline: "Hello", text: "Description text" },
+          { type: "features-package-block", title: "Features", features: "icon1::Feature 1::Desc 1|icon2::Feature 2" },
+          { type: "cta-1", title: "CTA", buttonText: "Click", colorVariant: "primary" },
+        ]),
+        ai_rewrite_content_md: null,
+        ai_rewrite_excerpt: null,
+        ai_rewrite_seo_title: null,
+        ai_rewrite_seo_description: null,
+        ai_rewrite_seo_keywords: null,
+        ai_rewrite_og_title: null,
+        ai_rewrite_og_description: null,
+        ai_rewrite_updated_at: null,
+        created_at: "2026-06-22T00:00:00.000Z",
+        updated_at: "2026-06-22T00:00:00.000Z",
+      },
+      categoryIds: [],
+      projectId: "test-project",
+      dataset: "test-dataset",
+      apiVersion: "2026-03-29",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+      sanityType: "page",
+    });
+
+    expect(result.sanityRevision).toBe("rev-1");
+    expect(result.sanityDocumentId).toMatch(/^page-note-page-1/);
+
+    // Verify the mutation payload sent to Sanity
+    // calls[0] = meta image fetch (GET, no body), calls[1] = mutation
+    const callUrl = mockFetch.mock.calls[1][0] as string;
+    const callBody = JSON.parse(mockFetch.mock.calls[1][1].body as string);
+
+    expect(callUrl).toContain("test-project.api.sanity.io");
+    expect(callBody.mutations[0].createOrReplace._type).toBe("page");
+    expect(callBody.mutations[0].createOrReplace.title).toBe("Test Page");
+    expect(callBody.mutations[0].createOrReplace.slug.current).toBe("test-page");
+
+    // body should be empty Portable Text for page-block pages
+    expect(callBody.mutations[0].createOrReplace.body).toEqual([]);
+
+    // blocks should contain the page blocks array
+    const blocks = callBody.mutations[0].createOrReplace.blocks;
+    expect(blocks).toHaveLength(3);
+
+    // hero-2 block with text → should have body with Portable Text
+    expect(blocks[0]._type).toBe("hero-2");
+    expect(blocks[0].title).toBe("Welcome");
+    expect(blocks[0].tagline).toBe("Hello");
+    expect(blocks[0].body).toBeDefined();
+    expect(blocks[0].body[0]._type).toBe("block");
+    expect(blocks[0].body[0].children[0].text).toBe("Description text");
+
+    // features-package-block with features pipe syntax
+    expect(blocks[1]._type).toBe("features-package-block");
+    expect(blocks[1].title).toBe("Features");
+    expect(blocks[1].features).toHaveLength(2);
+    expect(blocks[1].features[0].icon).toBe("icon1");
+    expect(blocks[1].features[0].title).toBe("Feature 1");
+    expect(blocks[1].features[0].description).toBe("Desc 1");
+    expect(blocks[1].features[1].icon).toBe("icon2");
+    expect(blocks[1].features[1].title).toBe("Feature 2");
+
+    // cta-1 block with no text → no body field
+    expect(blocks[2]._type).toBe("cta-1");
+    expect(blocks[2].title).toBe("CTA");
+    expect(blocks[2].buttonText).toBe("Click");
+    expect(blocks[2].colorVariant).toBe("primary");
+    expect(blocks[2].body).toBeUndefined();
+
+    // Page body should NOT have categories
+    expect(callBody.mutations[0].createOrReplace.categories).toBeUndefined();
+
+    // Page should NOT have image field (uses thumbnail)
+    expect(callBody.mutations[0].createOrReplace.image).toBeUndefined();
+  });
+
+  it("patches a page note with pageBlocks to Sanity", async () => {
+    const mockFetch = vi.fn();
+
+    // First call: fetchSanityMetaImage (fail, caught by .catch)
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({}),
+    });
+    // Second call: Sanity mutation
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{ document: { _rev: "rev-2" } }],
+      }),
+    });
+
+    const result = await patchNoteToSanity({
+      note: {
+        id: "note-page-2",
+        workspace_id: "ws-1",
+        title: "Patched Page",
+        slug: "patched-page",
+        content_md: "",
+        outline_md: "",
+        excerpt: "Patched excerpt",
+        seo_title: "SEO",
+        seo_description: "",
+        seo_keywords: "",
+        og_title: "",
+        og_description: "",
+        og_image_asset_id: null,
+        og_image_generated_at: null,
+        status: "draft",
+        publish_at: null,
+        sanity_document_id: "page.existing-1",
+        sanity_revision: "rev-old",
+        sanity_type: "page",
+        last_error: null,
+        page_blocks: JSON.stringify([
+          { type: "hero-1", title: "Hero", text: "Hero text" },
+          { type: "section-header", title: "Section", subtitle: "Sub", colorVariant: "dark" },
+        ]),
+        ai_rewrite_content_md: null,
+        ai_rewrite_excerpt: null,
+        ai_rewrite_seo_title: null,
+        ai_rewrite_seo_description: null,
+        ai_rewrite_seo_keywords: null,
+        ai_rewrite_og_title: null,
+        ai_rewrite_og_description: null,
+        ai_rewrite_updated_at: null,
+        created_at: "2026-06-22T00:00:00.000Z",
+        updated_at: "2026-06-22T00:00:00.000Z",
+      },
+      categoryIds: [],
+      projectId: "test-project",
+      dataset: "test-dataset",
+      apiVersion: "2026-03-29",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+      sanityType: "page",
+    });
+
+    expect(result.sanityRevision).toBe("rev-2");
+    expect(result.sanityDocumentId).toBe("page.existing-1");
+
+    // calls[0] = meta image fetch, calls[1] = mutation
+    const callBody = JSON.parse(mockFetch.mock.calls[1][1].body as string);
+    expect(callBody.mutations[0].patch.id).toBe("page.existing-1");
+    expect(callBody.mutations[0].patch.ifRevisionID).toBe("rev-old");
+
+    // body should be empty Portable Text for page-block pages
+    expect(callBody.mutations[0].patch.set.body).toEqual([]);
+
+    const blocks = callBody.mutations[0].patch.set.blocks;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]._type).toBe("hero-1");
+    expect(blocks[1]._type).toBe("section-header");
+    expect(blocks[1].subtitle).toBe("Sub");
+    expect(blocks[1].colorVariant).toBe("dark");
+  });
+
+  it("uses markdown body for page notes without pageBlocks", async () => {
+    const mockFetch = vi.fn();
+
+    // First call for meta image fetch (which may fail and be swallowed)
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({}),
+    });
+
+    // Second call for Sanity mutation
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{ document: { _rev: "rev-3" } }],
+      }),
+    });
+
+    await publishNoteToSanity({
+      note: {
+        id: "note-page-3",
+        workspace_id: "ws-1",
+        title: "Markdown Page",
+        slug: "markdown-page",
+        content_md: "# Hello\n\nThis is markdown content.",
+        outline_md: "",
+        excerpt: "MD excerpt",
+        seo_title: "",
+        seo_description: "",
+        seo_keywords: "",
+        og_title: "",
+        og_description: "",
+        og_image_asset_id: null,
+        og_image_generated_at: null,
+        status: "draft",
+        publish_at: null,
+        sanity_document_id: null,
+        sanity_revision: null,
+        sanity_type: "page",
+        last_error: null,
+        page_blocks: null,
+        ai_rewrite_content_md: null,
+        ai_rewrite_excerpt: null,
+        ai_rewrite_seo_title: null,
+        ai_rewrite_seo_description: null,
+        ai_rewrite_seo_keywords: null,
+        ai_rewrite_og_title: null,
+        ai_rewrite_og_description: null,
+        ai_rewrite_updated_at: null,
+        created_at: "2026-06-22T00:00:00.000Z",
+        updated_at: "2026-06-22T00:00:00.000Z",
+      },
+      categoryIds: [],
+      projectId: "test-project",
+      dataset: "test-dataset",
+      apiVersion: "2026-03-29",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+      sanityType: "page",
+    });
+
+    const callBody = JSON.parse(mockFetch.mock.calls[1][1].body as string);
+    const body = callBody.mutations[0].createOrReplace.body;
+
+    // Should be markdown-converted Portable Text (block children)
+    expect(body).toHaveLength(2); // heading + paragraph
+    expect(body[0]._type).toBe("block");
+    expect(body[0].children[0].text).toBe("Hello");
+    expect(body[1]._type).toBe("block");
   });
 
   it("lists sanity posts for browser table", async () => {

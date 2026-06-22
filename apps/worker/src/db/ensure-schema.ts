@@ -29,6 +29,7 @@ const STATEMENTS = [
   "alter table notes add column og_image_generated_at text",
   "alter table notes add column sanity_revision text",
   "alter table notes add column sanity_type text",
+  "alter table notes add column page_blocks text",
   "alter table notes add column ai_rewrite_content_md text",
   "alter table notes add column ai_rewrite_excerpt text",
   "alter table notes add column ai_rewrite_seo_title text",

@@ -7,6 +7,7 @@ export const noteSchema = z.object({
   title: z.string().min(1, "Title is required"),
   slug: z.string().min(1, "Slug is required"),
   contentMd: z.string().default(""),
+  pageBlocks: z.string().optional(),
   outlineMd: z.string().default(""),
   excerpt: z.string().optional(),
   seoTitle: z.string().optional(),
