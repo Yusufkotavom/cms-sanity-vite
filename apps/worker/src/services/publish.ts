@@ -8,20 +8,60 @@ type PageBlock = {
   text?: string;
   features?: string;
   items?: string;
+  tagline?: string;
   [key: string]: unknown;
 };
+
+// Blocks that expect a plain-text `description` field instead of Portable Text `body`
+const DESCRIPTION_BLOCKS = new Set([
+  "hero-vercel",
+  "stats-hero-block",
+  "section-header",
+  "eeat-block",
+  "highlights-block",
+]);
 
 function pageBlocksToSanityBody(blocksJson: string | null) {
   if (!blocksJson) return [];
   const blocks: PageBlock[] = JSON.parse(blocksJson);
   return blocks.map((block) => {
-    const { type, text, features, items, ...rest } = block;
-    const body = text
-      ? [{ _type: "block", _key: crypto.randomUUID().slice(0, 12), style: "normal", markDefs: [], children: [{ _type: "span", _key: crypto.randomUUID().slice(0, 12), marks: [] as string[], text: String(text) }] }]
+    const { type, text, features, items, tagline, ...rest } = block;
+
+    const parsedFeatures = features
+      ? features.split("|").map((s) => s.trim()).filter(Boolean).map((item) => {
+          const p = item.split("::").map((x) => x.trim());
+          return { _type: "feature", _key: crypto.randomUUID().slice(0, 12), icon: p[0] || undefined, title: p[1] || item, description: p[2] || undefined, badge: p[3] || undefined };
+        })
       : undefined;
-    const parsedFeatures = features ? features.split("|").map(s => s.trim()).filter(Boolean).map(item => { const p = item.split("::").map(x => x.trim()); return { _type: "feature", _key: crypto.randomUUID().slice(0, 12), icon: p[0] || undefined, title: p[1] || item, description: p[2] || undefined, badge: p[3] || undefined }; }) : undefined;
-    const parsedItems = items ? items.split("|").map(s => s.trim()).filter(Boolean) : undefined;
-    return { _type: type, _key: crypto.randomUUID().slice(0, 12), ...rest, ...(body ? { body } : {}), ...(parsedFeatures ? { features: parsedFeatures } : {}), ...(parsedItems ? { items: parsedItems } : {}) };
+
+    const parsedItems = items
+      ? items.split("|").map((s) => s.trim()).filter(Boolean).map((item) => {
+          if (type === "metrics-rail-block") {
+            const p = item.split("::").map((x) => x.trim());
+            return { _key: crypto.randomUUID().slice(0, 12), value: p[0] || "", label: p[1] || "", brand: p[2] || undefined };
+          }
+          return item;
+        })
+      : undefined;
+
+    const isDescriptionBlock = DESCRIPTION_BLOCKS.has(type);
+    const bodyField = !isDescriptionBlock && text
+      ? { body: [{ _type: "block", _key: crypto.randomUUID().slice(0, 12), style: "normal", markDefs: [], children: [{ _type: "span", _key: crypto.randomUUID().slice(0, 12), marks: [] as string[], text: String(text) }] }] }
+      : {};
+    const descriptionField = isDescriptionBlock && text
+      ? { description: String(text) }
+      : {};
+
+    return {
+      _type: type,
+      _key: crypto.randomUUID().slice(0, 12),
+      ...rest,
+      ...(tagline !== undefined ? { tagLine: tagline } : {}),
+      ...bodyField,
+      ...descriptionField,
+      ...(parsedFeatures ? { features: parsedFeatures } : {}),
+      ...(parsedItems ? { items: parsedItems } : {}),
+    };
   });
 }
 

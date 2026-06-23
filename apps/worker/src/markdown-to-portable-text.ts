@@ -39,10 +39,11 @@ export type PortableTextImageBlock = {
   _type: "image";
   _key: string;
   alt?: string;
-  asset: {
+  asset?: {
     _type: "reference";
     _ref: string;
   };
+  _url?: string;
 };
 
 export type PortableTextTableRow = {
@@ -73,6 +74,7 @@ export type SanityImage = {
   _type: "image";
   asset?: { _type: "reference"; _ref: string };
   alt?: string;
+  _url?: string;
 };
 
 export type SanitySectionPadding = {
@@ -174,6 +176,7 @@ export type SplitImageBlock = {
   _type: "split-image";
   _key: string;
   image?: SanityImage;
+  _url?: string;
 };
 
 export type SplitInfo = {
@@ -831,24 +834,16 @@ async function convertImageNode(
   options: MarkdownToPortableTextOptions
 ): Promise<PortableTextNode[]> {
   const url = node.url?.trim();
-  if (!url || !options.uploadImage) {
-    return [createTextBlock([createSpan(node.alt?.trim() || url || "Image", [])], [])];
-  }
-
-  const uploaded = await options.uploadImage({ url, alt: node.alt?.trim() });
-  if (!uploaded) {
-    return [createTextBlock([createSpan(node.alt?.trim() || url, [])], [])];
+  if (!url) {
+    return [createTextBlock([createSpan(node.alt?.trim() || "Image", [])], [])];
   }
 
   return [
     {
       _type: "image",
       _key: createKey(),
-      ...(uploaded.alt ? { alt: uploaded.alt } : {}),
-      asset: {
-        _type: "reference",
-        _ref: uploaded.assetId,
-      },
+      alt: node.alt?.trim() || "Image",
+      _url: url,
     },
   ];
 }
@@ -1116,6 +1111,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
+      image: attrs.image ? { _type: "image", _url: attrs.image, alt: attrs.alt || "Image" } : undefined,
       links: makeLinks(),
     };
   }
@@ -1128,6 +1124,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       uiIcon: makeUiIcon(attrs.uiIcon),
       title: attrs.title || undefined,
       body: makeBody(attrs.text),
+      image: attrs.image ? { _type: "image", _url: attrs.image, alt: attrs.alt || "Image" } : undefined,
       links: makeLinks(),
     };
   }
@@ -1207,7 +1204,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
     return {
       _type: "split-image",
       _key: blockKey,
-      image: attrs.image ? { _type: "image", alt: attrs.alt } : undefined,
+      image: attrs.image ? { _type: "image", _url: attrs.image, alt: attrs.alt || "Image" } : undefined,
     };
   }
 
@@ -1758,6 +1755,69 @@ async function convertBlockNode(
   }
 }
 
+async function resolveImages(blocks: PortableTextNode[], options: MarkdownToPortableTextOptions): Promise<void> {
+  if (!options.uploadImage) return;
+
+  const imageNodes: any[] = [];
+  
+  function walk(node: any) {
+    if (!node || typeof node !== "object") return;
+    
+    if (node._type === "image" && node._url) {
+      imageNodes.push(node);
+    }
+    
+    for (const key in node) {
+      if (Array.isArray(node[key])) {
+        for (const item of node[key]) {
+          walk(item);
+        }
+      } else if (typeof node[key] === "object") {
+        walk(node[key]);
+      }
+    }
+  }
+
+  for (const block of blocks) {
+    walk(block);
+  }
+
+  if (imageNodes.length === 0) return;
+
+  const uniqueUrls = new Map<string, { assetId: string; alt?: string } | null>();
+  
+  for (const node of imageNodes) {
+    if (!uniqueUrls.has(node._url)) {
+      uniqueUrls.set(node._url, null);
+    }
+  }
+
+  const uploadPromises = Array.from(uniqueUrls.keys()).map(async (url) => {
+    try {
+      const uploaded = await options.uploadImage!({ url });
+      uniqueUrls.set(url, uploaded);
+    } catch (e) {
+      console.warn("Failed to upload image:", url, e);
+    }
+  });
+
+  await Promise.all(uploadPromises);
+
+  for (const node of imageNodes) {
+    const uploaded = uniqueUrls.get(node._url);
+    if (uploaded?.assetId) {
+      node.asset = {
+        _type: "reference",
+        _ref: uploaded.assetId,
+      };
+      if (uploaded.alt && (!node.alt || node.alt === "Image")) {
+         node.alt = uploaded.alt;
+      }
+    }
+    delete node._url;
+  }
+}
+
 export async function markdownToPortableText(
   markdown: string,
   options: MarkdownToPortableTextOptions = {}
@@ -1768,6 +1828,8 @@ export async function markdownToPortableText(
   for (const node of root.children ?? []) {
     blocks.push(...(await convertBlockNode(node, 1, options)));
   }
+
+  await resolveImages(blocks, options);
 
   return blocks.length > 0 ? blocks : [createTextBlock([createSpan("", [])], [])];
 }

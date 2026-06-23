@@ -162,7 +162,7 @@ describe("publish service", () => {
     // hero-2 block with text → should have body with Portable Text
     expect(blocks[0]._type).toBe("hero-2");
     expect(blocks[0].title).toBe("Welcome");
-    expect(blocks[0].tagline).toBe("Hello");
+    expect(blocks[0].tagLine).toBe("Hello");
     expect(blocks[0].body).toBeDefined();
     expect(blocks[0].body[0]._type).toBe("block");
     expect(blocks[0].body[0].children[0].text).toBe("Description text");
@@ -340,6 +340,155 @@ describe("publish service", () => {
     expect(body[0]._type).toBe("block");
     expect(body[0].children[0].text).toBe("Hello");
     expect(body[1]._type).toBe("block");
+  });
+
+  it("parses metrics-rail-block items into structured objects", async () => {
+    const mockFetch = vi.fn();
+    mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({}) }); // meta image fetch fails
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: [{ document: { _rev: "rev-metrics" } }] }),
+    });
+
+    await publishNoteToSanity({
+      note: {
+        id: "note-metrics",
+        workspace_id: "ws-1",
+        title: "Metrics Page",
+        slug: "metrics-page",
+        content_md: "",
+        outline_md: "",
+        excerpt: "",
+        seo_title: "",
+        seo_description: "",
+        seo_keywords: "",
+        og_title: "",
+        og_description: "",
+        og_image_asset_id: null,
+        og_image_generated_at: null,
+        status: "draft",
+        publish_at: null,
+        sanity_document_id: null,
+        sanity_revision: null,
+        sanity_type: "page",
+        last_error: null,
+        page_blocks: JSON.stringify([
+          {
+            type: "metrics-rail-block",
+            title: "Metrics",
+            items: "99%::Uptime::2024|200+::Clients|50::Team Members",
+          },
+        ]),
+        ai_rewrite_content_md: null,
+        ai_rewrite_excerpt: null,
+        ai_rewrite_seo_title: null,
+        ai_rewrite_seo_description: null,
+        ai_rewrite_seo_keywords: null,
+        ai_rewrite_og_title: null,
+        ai_rewrite_og_description: null,
+        ai_rewrite_updated_at: null,
+        created_at: "2026-06-22T00:00:00.000Z",
+        updated_at: "2026-06-22T00:00:00.000Z",
+      },
+      categoryIds: [],
+      projectId: "test-project",
+      dataset: "test-dataset",
+      apiVersion: "2026-03-29",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+      sanityType: "page",
+    });
+
+    const callBody = JSON.parse(mockFetch.mock.calls[1][1].body as string);
+    const blocks = callBody.mutations[0].createOrReplace.blocks;
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]._type).toBe("metrics-rail-block");
+    expect(blocks[0].items).toHaveLength(3);
+
+    // First item has value, label, brand
+    expect(blocks[0].items[0].value).toBe("99%");
+    expect(blocks[0].items[0].label).toBe("Uptime");
+    expect(blocks[0].items[0].brand).toBe("2024");
+
+    // Second item has value, label, no brand
+    expect(blocks[0].items[1].value).toBe("200+");
+    expect(blocks[0].items[1].label).toBe("Clients");
+    expect(blocks[0].items[1].brand).toBeUndefined();
+
+    // Third item is value + label only
+    expect(blocks[0].items[2].value).toBe("50");
+    expect(blocks[0].items[2].label).toBe("Team Members");
+    expect(blocks[0].items[2].brand).toBeUndefined();
+  });
+
+  it("routes text to description for description-based blocks", async () => {
+    const mockFetch = vi.fn();
+    mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({}) }); // meta image fetch fails
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: [{ document: { _rev: "rev-desc" } }] }),
+    });
+
+    await publishNoteToSanity({
+      note: {
+        id: "note-desc",
+        workspace_id: "ws-1",
+        title: "Desc Block Page",
+        slug: "desc-block-page",
+        content_md: "",
+        outline_md: "",
+        excerpt: "",
+        seo_title: "",
+        seo_description: "",
+        seo_keywords: "",
+        og_title: "",
+        og_description: "",
+        og_image_asset_id: null,
+        og_image_generated_at: null,
+        status: "draft",
+        publish_at: null,
+        sanity_document_id: null,
+        sanity_revision: null,
+        sanity_type: "page",
+        last_error: null,
+        page_blocks: JSON.stringify([
+          { type: "hero-vercel", title: "Vercel Hero", text: "Description text here", tagline: "Eyebrow" },
+          { type: "section-header", title: "Section", text: "Section description" },
+        ]),
+        ai_rewrite_content_md: null,
+        ai_rewrite_excerpt: null,
+        ai_rewrite_seo_title: null,
+        ai_rewrite_seo_description: null,
+        ai_rewrite_seo_keywords: null,
+        ai_rewrite_og_title: null,
+        ai_rewrite_og_description: null,
+        ai_rewrite_updated_at: null,
+        created_at: "2026-06-22T00:00:00.000Z",
+        updated_at: "2026-06-22T00:00:00.000Z",
+      },
+      categoryIds: [],
+      projectId: "test-project",
+      dataset: "test-dataset",
+      apiVersion: "2026-03-29",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+      sanityType: "page",
+    });
+
+    const callBody = JSON.parse(mockFetch.mock.calls[1][1].body as string);
+    const blocks = callBody.mutations[0].createOrReplace.blocks;
+    expect(blocks).toHaveLength(2);
+
+    // hero-vercel: text → description (string), no body, tagline → tagLine
+    expect(blocks[0]._type).toBe("hero-vercel");
+    expect(blocks[0].description).toBe("Description text here");
+    expect(blocks[0].body).toBeUndefined();
+    expect(blocks[0].tagLine).toBe("Eyebrow");
+
+    // section-header: same pattern
+    expect(blocks[1]._type).toBe("section-header");
+    expect(blocks[1].description).toBe("Section description");
+    expect(blocks[1].body).toBeUndefined();
   });
 
   it("lists sanity posts for browser table", async () => {

@@ -23,18 +23,19 @@ type Block = Record<string, string> & { type: string };
 const BLOCK_TYPES = [
   "hero-1", "hero-2", "hero-vercel",
   "section-header",
-  "split-content", "split-row",
-  "grid-row", "grid-card",
+  "split-row",
+  "grid-row",
   "cta-1", "whatsapp-cta",
   "logo-cloud-1", "faqs", "form-newsletter", "all-posts",
   "features-package-block", "service-types-block", "value-props-block",
   "stats-hero-block", "company-info", "testimonials-block",
-  "pricing-block", "faq-block", "benefits-block",
+  "pricing-block", "faq-block",
   "eeat-block", "metrics-rail-block", "highlights-block",
   "reviews-block", "quote-spotlight-block",
   "related-links-block", "process-faq-block",
   "problem-solution-block", "micro-badges-block",
-  "carousel-1", "timeline-row",
+  "carousel-1", "carousel-2", "timeline-row",
+  "legacy-rich-content", "flexible-builder",
 ];
 
 function parseBlocks(json: string | null): Block[] {
