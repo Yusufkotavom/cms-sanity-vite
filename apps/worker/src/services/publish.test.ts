@@ -491,6 +491,95 @@ describe("publish service", () => {
     expect(blocks[1].body).toBeUndefined();
   });
 
+  it("uploads image URL to Sanity and sets image object in page blocks", async () => {
+    const mockFetch = vi.fn();
+
+    // Call 1 (in pageBlocksToSanityBody → uploadImageToSanity): download source image
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => name === "content-type" ? "image/png" : null },
+      arrayBuffer: async () => new ArrayBuffer(8),
+    });
+    // Call 2 (in uploadImageToSanity): upload to Sanity
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ document: { _id: "image-uploaded-123-png" } }),
+    });
+    // Call 3: fetchSanityMetaImage (fail, caught by .catch)
+    mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    // Call 4: Sanity mutation
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ results: [{ document: { _rev: "rev-img" } }] }),
+    });
+
+    await publishNoteToSanity({
+      note: {
+        id: "note-img",
+        workspace_id: "ws-1",
+        title: "Image Block Page",
+        slug: "image-block-page",
+        content_md: "",
+        outline_md: "",
+        excerpt: "",
+        seo_title: "",
+        seo_description: "",
+        seo_keywords: "",
+        og_title: "",
+        og_description: "",
+        og_image_asset_id: null,
+        og_image_generated_at: null,
+        status: "draft",
+        publish_at: null,
+        sanity_document_id: null,
+        sanity_revision: null,
+        sanity_type: "page",
+        last_error: null,
+        page_blocks: JSON.stringify([
+          { type: "hero-1", title: "Hero with Image", text: "Desc", image: "https://example.com/photo.png", alt: "Photo alt" },
+          { type: "hero-2", title: "Hero without image", text: "No image" },
+        ]),
+        ai_rewrite_content_md: null,
+        ai_rewrite_excerpt: null,
+        ai_rewrite_seo_title: null,
+        ai_rewrite_seo_description: null,
+        ai_rewrite_seo_keywords: null,
+        ai_rewrite_og_title: null,
+        ai_rewrite_og_description: null,
+        ai_rewrite_updated_at: null,
+        created_at: "2026-06-22T00:00:00.000Z",
+        updated_at: "2026-06-22T00:00:00.000Z",
+      },
+      categoryIds: [],
+      projectId: "test-project",
+      dataset: "test-dataset",
+      apiVersion: "2026-03-29",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+      sanityType: "page",
+    });
+
+    // Call 4 is the Sanity mutation
+    const callBody = JSON.parse(mockFetch.mock.calls[3][1].body as string);
+    const blocks = callBody.mutations[0].createOrReplace.blocks;
+    expect(blocks).toHaveLength(2);
+
+    // hero-1: image URL was uploaded → Sanity image object
+    expect(blocks[0]._type).toBe("hero-1");
+    expect(blocks[0].image).toEqual({
+      _type: "image",
+      asset: { _type: "reference", _ref: "image-uploaded-123-png" },
+      alt: "Photo alt",
+    });
+
+    // hero-2: no image field → no image in output
+    expect(blocks[1]._type).toBe("hero-2");
+    expect(blocks[1].image).toBeUndefined();
+  });
+
   it("lists sanity posts for browser table", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

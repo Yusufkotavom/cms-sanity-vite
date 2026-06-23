@@ -21,11 +21,14 @@ const DESCRIPTION_BLOCKS = new Set([
   "highlights-block",
 ]);
 
-function pageBlocksToSanityBody(blocksJson: string | null) {
+async function pageBlocksToSanityBody(
+  blocksJson: string | null,
+  uploadImage?: ({ url, alt }: { url: string; alt?: string }) => Promise<{ assetId: string }>,
+) {
   if (!blocksJson) return [];
   const blocks: PageBlock[] = JSON.parse(blocksJson);
-  return blocks.map((block) => {
-    const { type, text, features, items, tagline, ...rest } = block;
+  return Promise.all(blocks.map(async (block) => {
+    const { type, text, features, items, tagline, image, alt, ...rest } = block;
 
     const parsedFeatures = features
       ? features.split("|").map((s) => s.trim()).filter(Boolean).map((item) => {
@@ -52,6 +55,11 @@ function pageBlocksToSanityBody(blocksJson: string | null) {
       ? { description: String(text) }
       : {};
 
+    // Upload image field if it's a URL and uploadImage is available
+    const imageAssetId = image && typeof image === "string" && image.startsWith("http") && uploadImage
+      ? (await uploadImage({ url: image, alt: alt as string | undefined })).assetId
+      : null;
+
     return {
       _type: type,
       _key: crypto.randomUUID().slice(0, 12),
@@ -59,10 +67,11 @@ function pageBlocksToSanityBody(blocksJson: string | null) {
       ...(tagline !== undefined ? { tagLine: tagline } : {}),
       ...bodyField,
       ...descriptionField,
+      ...(imageAssetId ? { image: { _type: "image", asset: { _type: "reference", _ref: imageAssetId }, alt: alt ? String(alt) : undefined } } : {}),
       ...(parsedFeatures ? { features: parsedFeatures } : {}),
       ...(parsedItems ? { items: parsedItems } : {}),
     };
-  });
+  }));
 }
 
 
@@ -550,7 +559,11 @@ export async function patchNoteToSanity({
           }),
       });
 
-  const blocks = usePageBlocks ? pageBlocksToSanityBody(note.page_blocks) : undefined;
+  const blocks = usePageBlocks
+    ? await pageBlocksToSanityBody(note.page_blocks, ({ url: imageUrl, alt }) =>
+        uploadImageToSanity({ projectId, dataset, apiVersion, token, imageUrl, alt, fetchImpl }),
+      )
+    : undefined;
 
   const metaImage =
     ogImageAssetId
@@ -782,7 +795,11 @@ export async function publishNoteToSanity({
           }),
       });
 
-  const blocks = usePageBlocks ? pageBlocksToSanityBody(note.page_blocks) : undefined;
+  const blocks = usePageBlocks
+    ? await pageBlocksToSanityBody(note.page_blocks, ({ url: imageUrl, alt }) =>
+        uploadImageToSanity({ projectId, dataset, apiVersion, token, imageUrl, alt, fetchImpl }),
+      )
+    : undefined;
 
   const metaImage =
     ogImageAssetId
