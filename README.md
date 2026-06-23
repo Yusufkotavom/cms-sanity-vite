@@ -137,9 +137,11 @@ Authorization: Bearer <AUTH_INTEGRATION_TOKEN>
 
 ## Markdown Support
 
-Worker mengubah markdown ke Portable Text Sanity, bukan menyimpan raw markdown di `post.body`.
+Worker mengubah markdown ke Portable Text Sanity untuk dokumen tipe `post`, `service`, `product`, dan `project`. Markdown TIDAK disimpan mentah di Sanity — semua dikonversi ke struktur block Portable Text.
 
-Support saat ini:
+### Markdown → Portable Text
+
+Support markdown saat ini:
 
 - heading `h1` sampai `h4`
 - paragraph
@@ -154,10 +156,115 @@ Support saat ini:
 - fenced code block
 - markdown table
 - markdown image upload ke Sanity asset image
+- block shortcode (`[block:block-name key="value" /]`) — lihat [`docs/sanity-block-shortcodes.md`](docs/sanity-block-shortcodes.md)
 
-File converter utama:
+Pipeline:
 
-- `apps/worker/src/markdown-to-portable-text.ts`
+```
+note.content_md (markdown) → markdownToPortableText() → Sanity post.body (Portable Text)
+```
+
+File konverter:
+- `apps/worker/src/markdown-to-portable-text.ts` — markdown parser + shortcode parser + image upload
+- `apps/worker/src/portable-text-to-markdown.ts` — reverse (Sanity → markdown, untuk open-in-editor)
+
+### Page Blocks JSON
+
+Untuk dokumen tipe `page`, konten dikelola lewat **page blocks JSON** — array block terstruktur yang disimpan di `note.page_blocks`.
+
+Pipeline:
+
+```
+note.page_blocks (JSON array) → pageBlocksToSanityBody() → Sanity page.blocks (Portable Text blocks)
+```
+
+Format JSON page blocks:
+
+```json
+[
+  {
+    "type": "hero-1",
+    "tagline": "Layanan IT Terpadu",
+    "title": "Solusi IT & Digital",
+    "text": "Fokus pada bisnis Anda.",
+    "primaryTitle": "Jelajahi Layanan",
+    "primaryHref": "/services"
+  },
+  {
+    "type": "section-header",
+    "tagline": "Layanan",
+    "title": "Solusi Sesuai Kebutuhan",
+    "description": "Pilih layanan berdasarkan prioritas."
+  }
+]
+```
+
+Setiap block punya:
+- `type` (required) — nama block type (cocok dengan Sanity schema `_type`)
+- `text` — untuk DESCRIPTION_BLOCKS (`hero-vercel`, `stats-hero-block`, `section-header`, `eeat-block`, `highlights-block`) → field `description` (string). Untuk block lain → field `body` (Portable Text single paragraph).
+- `tagline` → otomatis dikonversi ke field `tagLine`
+- `features` — pipe-delimited `icon::title::description::badge|...`
+- `items` — untuk metrics-rail-block: pipe-delimited `value::label::brand|...`
+- `image` (URL string) + `alt` → otomatis diupload ke Sanity asset → `{_type: "image", asset: {_ref: assetId}}`
+
+Block types yang available (semua tipe yang ada di Sanity schema `page-blocks.ts`):
+
+| Block Type | Description |
+|---|---|
+| `hero-1` | Hero with tagline, title, body, image, links (max 2) |
+| `hero-2` | Hero variant 2 |
+| `hero-vercel` | Vercel-style hero with feature cards |
+| `section-header` | Section header with description |
+| `split-row` | Split columns (content/cards/info) |
+| `grid-row` | Grid cards |
+| `carousel-1` | Image carousel |
+| `carousel-2` | Testimonial carousel |
+| `timeline-row` | Timeline items |
+| `cta-1` | Call to action |
+| `whatsapp-cta` | WhatsApp CTA |
+| `logo-cloud-1` | Logo cloud |
+| `faqs` | FAQ reference |
+| `form-newsletter` | Newsletter form |
+| `all-posts` | Dynamic post listing |
+| `stats-hero-block` | Stats/SEO hero |
+| `company-info` | Company info |
+| `testimonials-block` | Testimonial listing |
+| `pricing-block` | Pricing table |
+| `faq-block` | FAQ content |
+| `benefits-block` | Benefits list |
+| `features-package-block` | Feature package |
+| `service-types-block` | Service types |
+| `problem-solution-block` | Problem/solution |
+| `value-props-block` | Value propositions |
+| `eeat-block` | EEAT signals |
+| `metrics-rail-block` | Metrics rail |
+| `highlights-block` | Highlights |
+| `reviews-block` | Reviews |
+| `quote-spotlight-block` | Quote spotlight |
+| `micro-badges-block` | Micro badges |
+| `related-links-block` | Related links |
+| `process-faq-block` | Process + FAQ |
+| `legacy-rich-content` | Legacy markdown content |
+
+File konverter:
+- `apps/worker/src/services/publish.ts` — fungsi `pageBlocksToSanityBody()`
+
+### Untuk Post / Service / Product / Project
+
+Semua tipe non-page via markdown normal:
+
+```
+note.content_md → markdownToPortableText() → Sanity {post,service,product,project}.body
+```
+
+Block shortcode (`[block:... /]`) bisa disisipkan di markdown untuk menyelipkan block kaya di tengah konten.
+
+### Untuk Page
+
+```
+note.page_blocks (JSON) → pageBlocksToSanityBody() → Sanity page.blocks
+note.content_md diabaikan untuk page (body = [])
+```
 
 ## Jalankan Lokal
 

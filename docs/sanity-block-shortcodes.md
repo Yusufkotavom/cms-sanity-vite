@@ -1,8 +1,10 @@
 # Sanity Block Shortcodes
 
-Source of truth: `/home/kotacom/projects/Sanity-clean/studio/schemas/blocks/shared/page-blocks.ts`
-Last sync: 2026-06-13
-Target project parser: `apps/worker/src/markdown-to-portable-text.ts`
+Source of truth: Sanity-clean `studio/schemas/blocks/`
+Last sync: 2026-06-23
+Target parsers:
+- `apps/worker/src/markdown-to-portable-text.ts` — shortcode `[block:... /]` in markdown (for post/service/product/project)
+- `apps/worker/src/services/publish.ts` — `pageBlocksToSanityBody()` for JSON page blocks (for page type)
 
 ## Rules
 
@@ -30,7 +32,7 @@ Rules:
 | `colorVariant="background"` | `colorVariant` | schema option value |
 | `sectionWidth="default"` | `sectionWidth` | `default`, `narrow` |
 | `stackAlign="left"` | `stackAlign` | `left`, `center` |
-| `tagline="..."` | `tagLine` | shortcode uses lowercase `tagline` |
+| `tagline="..."` | `tagLine` | shortcode & JSON page blocks: `tagline` → `tagLine` otomatis |
 | `uiIcon="..."` | `uiIcon` | icon name/string |
 | `title="..."` | `title` | string |
 | `description="..."` | `description` | text |
@@ -485,6 +487,180 @@ Shortcode:
 [block:value-props-block paddingTop="true" paddingBottom="true" colorVariant="background" title="Mengapa Memilih Kami" description="Nilai utama yang kami jaga." valueProps="zap::Responsif::Komunikasi cepat dan jelas|shield::Aman::Solusi dibuat defensif|wallet::Transparan::Scope dan biaya dijelaskan di awal" /]
 ```
 
+### `hero-vercel` = Hero Vercel
+
+Schema fields:
+
+- `tagLine`
+- `title`
+- `description`
+- `ctaPrimary`, `ctaSecondary`
+- `cards` structured: `icon::title::description|...`
+- `image` Studio-only
+
+Shortcode:
+
+```markdown
+[block:hero-vercel tagline="Platform Digital Terpadu" title="Solusi IT untuk Bisnis Anda" description="Lengkap dari website hingga IT support." ctaPrimaryTitle="Mulai" ctaPrimaryHref="/contact" ctaPrimaryVariant="default" cards="zap::Cepat::Eksekusi cepat|shield::Aman::Data terlindungi" /]
+```
+
+### `split-content` = Split Content (standalone)
+
+Standalone split-content block (not wrapped in split-row).
+
+Schema fields:
+
+- `colorVariant`
+- `sticky`
+- `tagLine`
+- `title`
+- `body` (`text`)
+- `link` (`linkHref`, `linkTitle`, `linkVariant`)
+
+Shortcode:
+
+```markdown
+[block:split-content colorVariant="background" tagline="Detail" title="Pendekatan Kami" text="Kami membantu dari perencanaan hingga eksekusi." linkTitle="Pelajari" linkHref="/approach" linkVariant="default" /]
+```
+
+### `split-card` = Split Card (standalone)
+
+```markdown
+[block:split-card tagline="Keunggulan" uiIcon="star" title="Kualitas Terjamin" text="Hasil kerja yang rapi dan terukur." /]
+```
+
+### `split-cards-list` = Split Cards List
+
+```markdown
+[block:split-cards-list items="Konsultasi|Eksekusi|Support" /]
+```
+
+### `split-image` = Split Image
+
+```markdown
+[block:split-image image="https://placehold.co/600x400" alt="Ilustrasi" /]
+```
+
+### `split-info` = Split Info
+
+```markdown
+[block:split-info uiIcon="info" title="Informasi" text="Detail lengkap." tags="SEO,Analytics" /]
+```
+
+### `split-info-list` = Split Info List
+
+```markdown
+[block:split-info-list items="Layanan|Harga|Kontak" /]
+```
+
+### `grid-card` = Grid Card (standalone)
+
+```markdown
+[block:grid-card uiIcon="monitor" title="Website" excerpt="Company profile dan landing page." linkTitle="Lihat" linkHref="/services/website" /]
+```
+
+### `pricing-card` = Pricing Card (standalone)
+
+```markdown
+[block:pricing-card title="Paket Dasar" tagline="Mulai" price="1000000" period="/bulan" features="Feature A|Feature B|Feature C" excerpt="Cocok untuk bisnis kecil." linkTitle="Pilih" linkHref="/order" /]
+```
+
+### `timeline-item` / `timelines-1` = Timeline Item (standalone)
+
+```markdown
+[block:timeline-item title="Tahap 1" tagline="Analisis" text="Memahami kebutuhan bisnis." /]
+```
+
+---
+
+### Blocks baru (post-June 2026)
+
+### `eeat-block` = EEAT Block
+
+Schema fields:
+
+- `colorVariant`
+- `eyebrow`
+- `title`
+- `description`
+- `points`: `|` delimited strings
+
+Shortcode:
+
+```markdown
+[block:eeat-block colorVariant="background" eyebrow="Mengapa Kami" title="Experience, Expertise, Authoritativeness, Trustworthiness" description="Kami bangun kredibilitas melalui pengalaman dan portofolio." points="10+ tahun pengalaman|Tim tersertifikasi|Portofolio 200+ proyek" /]
+```
+
+### `metrics-rail-block` = Metrics Rail Block
+
+Schema fields:
+
+- `colorVariant`
+- `items`: `value::label::brand|...`
+
+Shortcode:
+
+```markdown
+[block:metrics-rail-block colorVariant="background" items="500+::Klien::|50+::Tim::KOTACOM|10::Tahun Pengalaman::" /]
+```
+
+### `highlights-block` = Highlights Block
+
+```markdown
+[block:highlights-block paddingTop="true" paddingBottom="true" colorVariant="background" eyebrow="Sorotan" title="Apa yang Membedakan Kami" description="Nilai lebih yang kami tawarkan." items="Response cepat|Garansi kepuasan|Support 24/7" /]
+```
+
+### `reviews-block` = Reviews Block
+
+Structured `reviews` format: `reviewerName::reviewerRole::rating::reviewBody::datePublished::source::sourceUrl`
+
+```markdown
+[block:reviews-block paddingTop="true" paddingBottom="true" colorVariant="background" title="Testimoni" reviews="Budi::CEO::5::Kerjasama yang sangat baik::2026-01-15::Google::https://google.com|Siti::Manager::4::Profesional dan responsif::2026-02-20::" /]
+```
+
+### `quote-spotlight-block` = Quote Spotlight Block
+
+```markdown
+[block:quote-spotlight-block paddingTop="true" paddingBottom="true" colorVariant="background" eyebrow="Testimoni" quote="Mereka benar-benar memahami kebutuhan bisnis kami." author="Budi Santoso" role="CEO, PT Maju Jaya" highlights="Profesional|Tepat waktu" /]
+```
+
+### `micro-badges-block` = Micro Badges Block
+
+Badges format: `label:description`
+
+```markdown
+[block:micro-badges-block paddingTop="true" paddingBottom="true" colorVariant="background" badges="Terpercaya:Sudah dipercaya sejak 2008|Berkualitas:Standar tinggi|Tepat waktu:Tenggat selalu dipenuhi" /]
+```
+
+### `related-links-block` = Related Links Block
+
+Links format: `title:href`
+
+```markdown
+[block:related-links-block paddingTop="true" paddingBottom="true" colorVariant="background" title="Link Terkait" links="Tentang Kami:/about|Layanan:/services|Kontak:/contact" /]
+```
+
+### `process-faq-block` = Process + FAQ Block
+
+Process steps via `processSteps`, FAQ via `faqs` (format `question:answer`).
+
+```markdown
+[block:process-faq-block paddingTop="true" paddingBottom="true" colorVariant="background" processTitle="Cara Kerja" processSteps="Konsultasi|Analisis|Eksekusi|Support" faqTitle="Pertanyaan Umum" faqs="Berapa lama proses?:Rata-rata 2-4 minggu|Ada garansi?:Ya, 1 bulan support" /]
+```
+
+---
+
+## Image Support
+
+Shortcode blocks with `image="URL"` attribute:
+
+- `hero-1`, `hero-2` — `image` + `alt` → `image` field (Sanity asset reference when published via markdown pipeline)
+- `split-image` — `image` + `alt` → `image` field
+
+Untuk **JSON page blocks**, semua block dengan field `image` (URL string) + `alt` otomatis diupload ke Sanity asset oleh `pageBlocksToSanityBody()`.
+
+Untuk **markdown shortcode**, gambar di inline markdown `![alt](url)` diupload ke Sanity asset oleh `markdownToPortableText()` via `resolveImages()`. Shortcode attribute `image="URL"` tidak diupload secara otomatis — hanya `_url` yang disimpan.
+
 ## AI-safe recommended blocks
 
 Use these first in AI-generated articles:
@@ -499,8 +675,8 @@ Use these first in AI-generated articles:
 
 ## Known limitations
 
-- Image asset fields are not created from shortcode block attributes.
-- Internal Sanity references are not created from shortcode block attributes.
-- Complex nested rich text in nested cards is simplified to strings.
-- Shortcode must stand alone in one paragraph line.
-- Docs bless only block types registered in `Sanity-clean` page blocks.
+- Shortcode `image="URL"` attribute tidak diupload ke Sanity asset — hanya `_url` disimpan. Gunakan markdown image `![alt](url)` untuk auto-upload di konten post/service/product/project, atau JSON page blocks `image` field untuk page.
+- Internal Sanity references (faqs, testimonial, carousel-2) tidak bisa dibuat dari shortcode — hanya reference key disimpan.
+- Complex nested rich text dalam nested cards / columns disederhanakan ke string.
+- Shortcode harus di satu baris paragraph, tidak bisa di tengah paragraph biasa.
+- Image upload dari shortcode blocks hanya support di page blocks JSON pipeline (`pageBlocksToSanityBody`), bukan di markdown shortcode pipeline (`markdownToPortableText`).

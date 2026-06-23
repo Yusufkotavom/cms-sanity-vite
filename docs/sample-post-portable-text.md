@@ -76,6 +76,26 @@ export function scoreContent(row: AuditRow) {
   - tambah schema
   - perbaiki CTA
 
+## Block Shortcodes dalam Post
+
+Block shortcode bisa disisipkan di markdown untuk menyelipkan komponen kaya di tengah artikel:
+
+```markdown
+[block:section-header paddingTop="true" paddingBottom="true" colorVariant="background" sectionWidth="narrow" stackAlign="left" tagline="Promo Spesial" title="Diskon 20% untuk Paket Website" description="Berlaku hingga akhir bulan. Hubungi tim kami untuk konsultasi gratis." /]
+```
+
+```markdown
+[block:cta-1 paddingTop="true" paddingBottom="true" colorVariant="primary" sectionWidth="default" stackAlign="center" tagline="Tertarik?" uiIcon="zap" title="Mulai optimasi SEO konten Anda sekarang" text="Dapatkan audit konten gratis untuk 3 halaman pertama." primaryTitle="Konsultasi Gratis" primaryHref="/contact" primaryVariant="default" /]
+```
+
+```markdown
+[block:benefits-block paddingTop="true" paddingBottom="true" colorVariant="background" title="Manfaat Audit Konten" description="Dengan audit rutin, Anda bisa:" benefits="Mengidentifikasi konten yang performanya kurang|Menemukan peluang keyword baru|Memperbaiki struktur internal link|Meningkatkan conversion rate halaman" /]
+```
+
+Block shortcode harus berdiri sendiri di satu baris paragraph, tidak bisa digabung dengan teks lain.
+
+Referensi lengkap: [`sanity-block-shortcodes.md`](sanity-block-shortcodes.md)
+
 ## Penutup
 
 Dokumen ini sengaja memuat heading, list, nested list, blockquote, tautan, **bold**, *italic*, dan code block agar hasil publish ke Sanity mudah dicek dari Studio maupun frontend.
