@@ -54,7 +54,7 @@ function serializeBlocks(blocks: Block[]): string {
   return JSON.stringify(blocks, null, 2);
 }
 
-const COMMON_FIELDS = ["title", "tagline", "text", "description", "subtitle"];
+const COMMON_FIELDS = ["title", "tagline", "text", "description", "subtitle", "image", "rawUrl", "alt"];
 const COLOR_FIELDS = ["colorVariant", "sectionWidth", "stackAlign", "uiIcon"];
 
 function BlockEditDialog({

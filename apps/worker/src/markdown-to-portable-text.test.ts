@@ -88,7 +88,7 @@ describe("markdownToPortableText", () => {
     expect(blocks[0]).toMatchObject({
       _type: "hero-1",
       tagLine: "Layanan IT",
-      uiIcon: "monitor",
+      uiIcon: { provider: "lu", name: "monitor" },
       title: "Solusi Digital",
       links: [
         { _type: "link", title: "Lihat Layanan", href: "/services", buttonVariant: "default" },
@@ -98,12 +98,12 @@ describe("markdownToPortableText", () => {
 
     expect(blocks[1]).toMatchObject({
       _type: "whatsapp-cta",
-      padding: { _type: "sectionPadding", top: true, bottom: false },
+      padding: { _type: "section-padding", top: true, bottom: false },
       colorVariant: "primary",
       sectionWidth: "default",
       stackAlign: "left",
       tagLine: "Butuh Bantuan",
-      uiIcon: "message-circle",
+      uiIcon: { provider: "lu", name: "message-circle" },
       title: "Chat via WhatsApp",
       secondaryLink: { _type: "link", title: "Lihat Layanan", href: "/services", buttonVariant: "outline" },
     });
@@ -120,7 +120,7 @@ describe("markdownToPortableText", () => {
 
     expect(blocks[0]).toMatchObject({
       _type: "benefits-block",
-      padding: { _type: "sectionPadding", top: true, bottom: true },
+      padding: { _type: "section-padding", top: true, bottom: true },
       colorVariant: "muted",
       title: "Manfaat",
       description: "Alasan memilih kami",
@@ -157,7 +157,7 @@ describe("markdownToPortableText", () => {
 
     expect(blocks[0]).toMatchObject({
       _type: "split-row",
-      padding: { _type: "sectionPadding", top: true, bottom: true },
+      padding: { _type: "section-padding", top: true, bottom: true },
       colorVariant: "background",
       noGap: true,
       splitColumns: [
@@ -172,9 +172,9 @@ describe("markdownToPortableText", () => {
       textAlign: "center",
       cardStyle: "bordered",
       gridColumns: "grid-cols-3",
-      cards: [
-        { _type: "gridCard", uiIcon: "monitor", title: "Website Development", excerpt: "Company profile dan landing page" },
-        { _type: "gridCard", uiIcon: "server", title: "IT Support", excerpt: "Maintenance perangkat dan jaringan" },
+      columns: [
+        { _type: "grid-card", uiIcon: { provider: "lu", name: "monitor" }, title: "Website Development", excerpt: "Company profile dan landing page" },
+        { _type: "grid-card", uiIcon: { provider: "lu", name: "server" }, title: "IT Support", excerpt: "Maintenance perangkat dan jaringan" },
       ],
     });
 

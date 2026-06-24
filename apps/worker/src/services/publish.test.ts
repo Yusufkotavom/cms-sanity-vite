@@ -567,12 +567,13 @@ describe("publish service", () => {
     const blocks = callBody.mutations[0].createOrReplace.blocks;
     expect(blocks).toHaveLength(2);
 
-    // hero-1: image URL was uploaded → Sanity image object
+    // hero-1: image URL was uploaded → Sanity image object with _url fallback
     expect(blocks[0]._type).toBe("hero-1");
     expect(blocks[0].image).toEqual({
       _type: "image",
       asset: { _type: "reference", _ref: "image-uploaded-123-png" },
       alt: "Photo alt",
+      _url: "https://example.com/photo.png",
     });
 
     // hero-2: no image field → no image in output

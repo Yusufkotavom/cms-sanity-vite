@@ -55,10 +55,30 @@ async function pageBlocksToSanityBody(
       ? { description: String(text) }
       : {};
 
-    // Upload image field if it's a URL and uploadImage is available
-    const imageAssetId = image && typeof image === "string" && image.startsWith("http") && uploadImage
-      ? (await uploadImage({ url: image, alt: alt as string | undefined })).assetId
-      : null;
+    // Handle image field: support Sanity asset IDs, raw URLs, and uploads
+    let imageField: Record<string, unknown> | undefined;
+    if (image && typeof image === "string") {
+      if (image.startsWith("image-")) {
+        // Already a Sanity asset ID — use directly, no upload needed
+        imageField = { _type: "image", asset: { _type: "reference", _ref: image }, alt: alt ? String(alt) : undefined };
+      } else if (image.startsWith("http") && uploadImage) {
+        // ponytail: try upload, fall back to raw URL on timeout/error
+        try {
+          const result = await uploadImage({ url: image, alt: alt as string | undefined });
+          imageField = { _type: "image", asset: { _type: "reference", _ref: result.assetId }, alt: alt ? String(alt) : undefined, _url: image };
+        } catch {
+          imageField = { _type: "image", _url: image, alt: alt ? String(alt) : undefined };
+        }
+      } else if (image.startsWith("http")) {
+        // No uploadImage callback — keep as raw URL
+        imageField = { _type: "image", _url: image, alt: alt ? String(alt) : undefined };
+      }
+    }
+
+    // rawUrl field: passthrough from JSON page blocks (external image URL rendered directly by frontend)
+    const rawUrlField = block.rawUrl && typeof block.rawUrl === "string"
+      ? { rawUrl: block.rawUrl }
+      : {};
 
     return {
       _type: type,
@@ -67,7 +87,8 @@ async function pageBlocksToSanityBody(
       ...(tagline !== undefined ? { tagLine: tagline } : {}),
       ...bodyField,
       ...descriptionField,
-      ...(imageAssetId ? { image: { _type: "image", asset: { _type: "reference", _ref: imageAssetId }, alt: alt ? String(alt) : undefined } } : {}),
+      ...(imageField ? { image: imageField } : {}),
+      ...rawUrlField,
       ...(parsedFeatures ? { features: parsedFeatures } : {}),
       ...(parsedItems ? { items: parsedItems } : {}),
     };

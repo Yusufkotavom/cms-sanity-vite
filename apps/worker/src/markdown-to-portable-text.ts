@@ -1814,7 +1814,8 @@ async function resolveImages(blocks: PortableTextNode[], options: MarkdownToPort
          node.alt = uploaded.alt;
       }
     }
-    delete node._url;
+    // ponytail: keep _url as fallback even when upload succeeds, so frontend
+    // can render the external image when Sanity asset is not yet processed
   }
 }
 
