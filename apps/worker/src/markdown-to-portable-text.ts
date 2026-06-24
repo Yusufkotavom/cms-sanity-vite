@@ -945,7 +945,50 @@ async function convertBlockquote(
   return result;
 }
 
+const ALLOWED_SHORTCODES = new Set([
+  "hero-1",
+  "hero-2",
+  "hero-vercel",
+  "section-header",
+  "split-row",
+  "grid-row",
+  "carousel-1",
+  "carousel-2",
+  "timeline-row",
+  "cta-1",
+  "whatsapp-cta",
+  "logo-cloud-1",
+  "faqs",
+  "form-newsletter",
+  "all-posts",
+  "legacy-rich-content",
+  "rich-content",
+  "company-info",
+  "testimonials-block",
+  "pricing-block",
+  "faq-block",
+  "benefits-block",
+  "features-package-block",
+  "service-types-block",
+  "problem-solution-block",
+  "value-props-block",
+  "stats-hero-block",
+  "eeat-block",
+  "metrics-rail-block",
+  "highlights-block",
+  "reviews-block",
+  "quote-spotlight-block",
+  "micro-badges-block",
+  "related-links-block",
+  "process-faq-block",
+  "block-preset-ref",
+  "flexible-builder"
+]);
+
 function parseBlockShortcode(type: string, attrString: string): PortableTextNode | null {
+  if (!ALLOWED_SHORTCODES.has(type)) {
+    return null;
+  }
   const attrs: Record<string, string> = {};
   const attrRegex = /(\w+)="([^"]*)"/g;
   let m;
@@ -1164,72 +1207,6 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
   }
 
   // Split blocks
-  if (type === "split-content") {
-    return {
-      _type: "split-content",
-      _key: blockKey,
-      sticky: attrs.sticky === "true",
-      colorVariant: attrs.colorVariant || undefined,
-      tagLine: attrs.tagline || undefined,
-      title: attrs.title || undefined,
-      body: makeBody(attrs.text),
-      link: makeLink(),
-    };
-  }
-
-  if (type === "split-card") {
-    return {
-      _type: "split-card",
-      _key: blockKey,
-      tagLine: attrs.tagline || undefined,
-      uiIcon: makeUiIcon(attrs.uiIcon),
-      title: attrs.title || undefined,
-      body: makeBody(attrs.text),
-    };
-  }
-
-  if (type === "split-cards-list") {
-    return {
-      _type: "split-cards-list",
-      _key: blockKey,
-      list: attrs.items ? parseArray(attrs.items)?.map((item) => ({
-        _type: "split-card" as const,
-        _key: createKey(),
-        title: item,
-      })) : undefined,
-    };
-  }
-
-  if (type === "split-image") {
-    return {
-      _type: "split-image",
-      _key: blockKey,
-      image: attrs.image ? { _type: "image", _url: attrs.image, alt: attrs.alt || "Image" } : undefined,
-    };
-  }
-
-  if (type === "split-info") {
-    return {
-      _type: "split-info",
-      _key: blockKey,
-      uiIcon: makeUiIcon(attrs.uiIcon),
-      title: attrs.title || undefined,
-      body: makeBody(attrs.text),
-      tags: parseArray(attrs.tags),
-    };
-  }
-
-  if (type === "split-info-list") {
-    return {
-      _type: "split-info-list",
-      _key: blockKey,
-      list: attrs.items ? parseArray(attrs.items)?.map((item) => ({
-        _type: "split-info" as const,
-        _key: createKey(),
-        title: item,
-      })) : undefined,
-    };
-  }
 
   if (type === "split-row") {
     return {
@@ -1243,30 +1220,6 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
   }
 
   // Grid blocks
-  if (type === "grid-card") {
-    return {
-      _type: "grid-card",
-      _key: blockKey,
-      uiIcon: makeUiIcon(attrs.uiIcon),
-      title: attrs.title || undefined,
-      excerpt: attrs.excerpt || undefined,
-      link: makeLink(),
-    };
-  }
-
-  if (type === "pricing-card") {
-    return {
-      _type: "pricing-card",
-      _key: blockKey,
-      uiIcon: makeUiIcon(attrs.uiIcon),
-      title: attrs.title || undefined,
-      tagLine: attrs.tagline || undefined,
-      price: attrs.price ? { value: Number(attrs.price) || undefined, period: attrs.period } : undefined,
-      list: parseArray(attrs.features),
-      excerpt: attrs.excerpt || undefined,
-      link: makeLink(),
-    };
-  }
 
   if (type === "grid-row") {
     return {
@@ -1607,7 +1560,15 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
         rating: Number(rating) || 5,
         reviewBody: reviewBody || undefined,
         datePublished: datePublished || undefined,
-        source: source || undefined,
+        source: (() => {
+          if (!source) return undefined;
+          const l = source.toLowerCase();
+          if (l.includes("google")) return "google-maps";
+          if (l.includes("tokopedia")) return "tokopedia";
+          if (l.includes("shopee")) return "shopee";
+          if (l.includes("internal")) return "internal";
+          return "other";
+        })(),
         sourceUrl: sourceUrl || undefined,
       })),
     };
@@ -1721,9 +1682,9 @@ async function convertBlockNode(
       if (isStandaloneImageParagraph(node)) {
         return convertImageNode((node.children ?? [])[0], options);
       }
-      if (node.children?.length === 1 && node.children[0].type === "text") {
-        const textVal = (node.children[0].value ?? "").trim();
-        const blockMatch = textVal.match(/^\[block:([a-zA-Z0-9-]+)\s+([^\]]+)\]$/);
+      const plainText = toPlainText(node.children ?? []).trim();
+      if (plainText.startsWith("[block:") && plainText.endsWith("]")) {
+        const blockMatch = plainText.match(/^\[block:([a-zA-Z0-9-]+)\s+([\s\S]+)\]$/);
         if (blockMatch) {
           const parsed = parseBlockShortcode(blockMatch[1], blockMatch[2]);
           if (parsed) {

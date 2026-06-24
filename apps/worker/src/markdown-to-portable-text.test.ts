@@ -187,4 +187,36 @@ describe("markdownToPortableText", () => {
       ],
     });
   });
+
+  it("handles shortcodes with autolinks inside values and rejects child blocks", async () => {
+    const blocks = await markdownToPortableText(
+      [
+        '[block:reviews-block title="Ulasan" reviews="Budi::CEO::5::Bagus::2026-06-01::Google::https://google.com|Siti::Manager::4::Keren::2026-05-15::Clutch::https://clutch.co" /]',
+        '[block:split-content title="Child Block" /]',
+        '[block:invalid-random-type title="Invalid Block" /]'
+      ].join("\n\n")
+    );
+
+    // 1. The reviews-block has autolink-like structure (https://google.com|Siti), which remarkGfm parses as a link node.
+    // Our fix extracts text and processes it correctly.
+    expect(blocks[0]).toMatchObject({
+      _type: "reviews-block",
+      title: "Ulasan",
+      reviews: [
+        { reviewerName: "Budi", reviewerRole: "CEO", rating: 5, reviewBody: "Bagus", source: "google-maps", sourceUrl: "https://google.com" },
+        { reviewerName: "Siti", reviewerRole: "Manager", rating: 4, reviewBody: "Keren", source: "other", sourceUrl: "https://clutch.co" },
+      ],
+    });
+
+    // 2. Child blocks and unrecognized blocks are not allowed to be parsed as standalone block shortcodes.
+    // They fallback to normal paragraphs.
+    expect(blocks[1]).toMatchObject({
+      _type: "block",
+      style: "normal"
+    });
+    expect(blocks[2]).toMatchObject({
+      _type: "block",
+      style: "normal"
+    });
+  });
 });
