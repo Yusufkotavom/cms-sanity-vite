@@ -1099,7 +1099,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
           _key: createKey(),
           title: title || undefined,
           body: makeBody(description),
-          link: extra ? { _type: "link" as const, _key: createKey(), isExternal: isExternalHref(extra), title: title || extra, href: extra } : undefined,
+          link: extra ? { _type: "link" as const, _key: createKey(), isExternal: true, title: title || extra, href: extra, target: isExternalHref(extra) } : undefined,
         };
       }
       if (kind === "cards") {
@@ -1134,7 +1134,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       uiIcon: makeUiIcon(uiIcon),
       title: title || undefined,
       excerpt: excerpt || undefined,
-      link: href ? { _type: "link" as const, _key: createKey(), isExternal: isExternalHref(href), title: title || href, href } : undefined,
+      link: href ? { _type: "link" as const, _key: createKey(), isExternal: true, title: title || href, href, target: isExternalHref(href) } : undefined,
     }));
 
   const parseTimelines = (val?: string) =>
@@ -1179,7 +1179,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       tagLine: attrs.tagline || undefined,
       title: attrs.title || "",
       description: attrs.description || undefined,
-      ctaPrimary: makeLink("ctaPrimary") || makeLink() || { _type: "link", _key: createKey(), isExternal: false, title: "Learn More" },
+      ctaPrimary: makeLink("ctaPrimary") || makeLink() || { _type: "link", _key: createKey(), isExternal: true, title: "Learn More" },
       ctaSecondary: makeLink("ctaSecondary"),
       cards: parseFeatures(attrs.cards)?.map(f => ({
         _type: "hero-feature-card" as const,
@@ -1188,6 +1188,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
         title: f.title,
         description: f.description,
       })),
+      image: attrs.image ? { _type: "image", _url: attrs.image, alt: attrs.alt || "Image" } : undefined,
     };
   }
 
@@ -1463,7 +1464,7 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
         timeline: timeline || undefined,
         badge: badge || undefined,
         price: price || undefined,
-        link: link ? { _type: "link" as const, _key: createKey(), isExternal: isExternalHref(link), title: title || link, href: link } : undefined,
+        link: link ? { _type: "link" as const, _key: createKey(), isExternal: true, title: title || link, href: link, target: isExternalHref(link) } : undefined,
       })),
     };
   }
@@ -1552,11 +1553,12 @@ function parseBlockShortcode(type: string, attrString: string): PortableTextNode
       padding: makePadding(),
       colorVariant: attrs.colorVariant || undefined,
       title: attrs.title || undefined,
-      reviews: parseStructured(attrs.reviews)?.map(([reviewerName, reviewerRole, rating, reviewBody, datePublished, source, sourceUrl]) => ({
+      reviews: parseStructured(attrs.reviews)?.map(([reviewerName, reviewerRole, rating, reviewBody, datePublished, source, sourceUrl, reviewerImage]) => ({
         _type: "reviewItem" as const,
         _key: createKey(),
         reviewerName: reviewerName || "Reviewer",
         reviewerRole: reviewerRole || undefined,
+        reviewerImage: reviewerImage ? { _type: "image", _url: reviewerImage, alt: reviewerName || "Reviewer" } : undefined,
         rating: Number(rating) || 5,
         reviewBody: reviewBody || undefined,
         datePublished: datePublished || undefined,
