@@ -153,7 +153,7 @@ function parseServices(val?: string): Array<Record<string, unknown>> | undefined
     _key: ck(),
     title: title || "Service",
     description: description || "",
-    features: parseArray(features),
+    features: features ? features.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
     timeline: timeline || undefined,
     badge: badge || undefined,
     price: price || undefined,
