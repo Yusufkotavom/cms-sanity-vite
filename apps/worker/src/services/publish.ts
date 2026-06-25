@@ -1215,18 +1215,28 @@ export async function publishNoteToSanityAsPage({
 }) {
   const sanityDocumentId = note.sanity_document_id || createSanityPageDocumentId(note.id);
 
-  const body = await markdownToPortableText(note.content_md, {
-    uploadImage: ({ url: imageUrl, alt }) =>
-      uploadImageToSanity({
-        projectId,
-        dataset,
-        apiVersion,
-        token,
-        imageUrl,
-        alt,
-        fetchImpl,
-      }),
-  });
+  const usePageBlocks = Boolean(note.page_blocks);
+
+  const body = usePageBlocks
+    ? []  // page-block pages don't have markdown content
+    : await markdownToPortableText(note.content_md, {
+        uploadImage: ({ url: imageUrl, alt }) =>
+          uploadImageToSanity({
+            projectId,
+            dataset,
+            apiVersion,
+            token,
+            imageUrl,
+            alt,
+            fetchImpl,
+          }),
+      });
+
+  const blocks = usePageBlocks
+    ? await pageBlocksToSanityBody(note.page_blocks, ({ url: imageUrl, alt }) =>
+        uploadImageToSanity({ projectId, dataset, apiVersion, token, imageUrl, alt, fetchImpl }),
+      )
+    : undefined;
 
   const metaImage =
     ogImageAssetId
@@ -1261,6 +1271,7 @@ export async function publishNoteToSanityAsPage({
           excerpt: note.excerpt || undefined,
           ...(metaImage ? { thumbnail: metaImage } : {}),
           body,
+          ...(blocks ? { blocks } : {}),
           meta: {
             title: note.seo_title || note.title,
             description: note.seo_description || note.excerpt || undefined,
@@ -1508,18 +1519,28 @@ export async function publishNoteToSanityAsProduct({
 }) {
   const sanityDocumentId = note.sanity_document_id || createSanityProductDocumentId(note.id);
 
-  const body = await markdownToPortableText(note.content_md, {
-    uploadImage: ({ url: imageUrl, alt }) =>
-      uploadImageToSanity({
-        projectId,
-        dataset,
-        apiVersion,
-        token,
-        imageUrl,
-        alt,
-        fetchImpl,
-      }),
-  });
+  const usePageBlocks = Boolean(note.page_blocks);
+
+  const body = usePageBlocks
+    ? []  // page-block pages don't have markdown content
+    : await markdownToPortableText(note.content_md, {
+        uploadImage: ({ url: imageUrl, alt }) =>
+          uploadImageToSanity({
+            projectId,
+            dataset,
+            apiVersion,
+            token,
+            imageUrl,
+            alt,
+            fetchImpl,
+          }),
+      });
+
+  const blocks = usePageBlocks
+    ? await pageBlocksToSanityBody(note.page_blocks, ({ url: imageUrl, alt }) =>
+        uploadImageToSanity({ projectId, dataset, apiVersion, token, imageUrl, alt, fetchImpl }),
+      )
+    : undefined;
 
   const metaImage =
     ogImageAssetId
@@ -1809,18 +1830,28 @@ export async function publishNoteToSanityAsService({
 }) {
   const sanityDocumentId = note.sanity_document_id || createSanityServiceDocumentId(note.id);
 
-  const body = await markdownToPortableText(note.content_md, {
-    uploadImage: ({ url: imageUrl, alt }) =>
-      uploadImageToSanity({
-        projectId,
-        dataset,
-        apiVersion,
-        token,
-        imageUrl,
-        alt,
-        fetchImpl,
-      }),
-  });
+  const usePageBlocks = Boolean(note.page_blocks);
+
+  const body = usePageBlocks
+    ? []  // page-block pages don't have markdown content
+    : await markdownToPortableText(note.content_md, {
+        uploadImage: ({ url: imageUrl, alt }) =>
+          uploadImageToSanity({
+            projectId,
+            dataset,
+            apiVersion,
+            token,
+            imageUrl,
+            alt,
+            fetchImpl,
+          }),
+      });
+
+  const blocks = usePageBlocks
+    ? await pageBlocksToSanityBody(note.page_blocks, ({ url: imageUrl, alt }) =>
+        uploadImageToSanity({ projectId, dataset, apiVersion, token, imageUrl, alt, fetchImpl }),
+      )
+    : undefined;
 
   const metaImage =
     ogImageAssetId
@@ -2110,18 +2141,28 @@ export async function publishNoteToSanityAsProject({
 }) {
   const sanityDocumentId = note.sanity_document_id || createSanityProjectDocumentId(note.id);
 
-  const body = await markdownToPortableText(note.content_md, {
-    uploadImage: ({ url: imageUrl, alt }) =>
-      uploadImageToSanity({
-        projectId,
-        dataset,
-        apiVersion,
-        token,
-        imageUrl,
-        alt,
-        fetchImpl,
-      }),
-  });
+  const usePageBlocks = Boolean(note.page_blocks);
+
+  const body = usePageBlocks
+    ? []  // page-block pages don't have markdown content
+    : await markdownToPortableText(note.content_md, {
+        uploadImage: ({ url: imageUrl, alt }) =>
+          uploadImageToSanity({
+            projectId,
+            dataset,
+            apiVersion,
+            token,
+            imageUrl,
+            alt,
+            fetchImpl,
+          }),
+      });
+
+  const blocks = usePageBlocks
+    ? await pageBlocksToSanityBody(note.page_blocks, ({ url: imageUrl, alt }) =>
+        uploadImageToSanity({ projectId, dataset, apiVersion, token, imageUrl, alt, fetchImpl }),
+      )
+    : undefined;
 
   const metaImage =
     ogImageAssetId
