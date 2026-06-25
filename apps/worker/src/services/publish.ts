@@ -9,6 +9,25 @@ type PageBlock = {
   features?: string;
   items?: string;
   tagline?: string;
+  cards?: string;
+  splitColumns?: string;
+  timelines?: string;
+  valueProps?: string;
+  services?: string;
+  problems?: string;
+  points?: string;
+  badges?: string;
+  processSteps?: string;
+  faqs?: string;
+  highlights?: string;
+  links?: string;
+  primaryTitle?: string;
+  primaryHref?: string;
+  secondaryTitle?: string;
+  secondaryHref?: string;
+  secondaryLink?: string;
+  ctaTitle?: string;
+  ctaHref?: string;
   [key: string]: unknown;
 };
 
@@ -21,48 +40,229 @@ const DESCRIPTION_BLOCKS = new Set([
   "highlights-block",
 ]);
 
+// ─── Helper functions ──────────────────────────────────────────────────────────
+
+function ck(): string {
+  return crypto.randomUUID().slice(0, 12);
+}
+
+function isExternalHref(href: string) {
+  return /^(https?:\/\/|mailto:|tel:)/i.test(href);
+}
+
+/** Split pipe-delimited string into array */
+function parseArray(val?: string): string[] | undefined {
+  if (!val) return undefined;
+  const items = val.split("|").map((s) => s.trim()).filter(Boolean);
+  return items.length > 0 ? items : undefined;
+}
+
+/** Split pipe-delimited string into array of :: delimited arrays */
+function parseStructured(val?: string): string[][] | undefined {
+  const rows = parseArray(val)?.map((item) => item.split("::").map((part) => part.trim()));
+  return rows && rows.length > 0 ? rows : undefined;
+}
+
+/** Parse features (pipe-delimited, :: separated) */
+function parseFeatures(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([icon, title, description, badge]) => ({
+    _type: "feature",
+    _key: ck(),
+    icon: icon || undefined,
+    title: title || "Feature",
+    description: description || undefined,
+    badge: badge || undefined,
+  })) ?? parseArray(val)?.map((title) => ({ _type: "feature", _key: ck(), title }));
+}
+
+/** Parse grid cards (pipe-delimited, :: separated) → columns[] of grid-card */
+function parseGridCards(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([uiIcon, title, excerpt, href]) => ({
+    _type: "grid-card",
+    _key: ck(),
+    uiIcon: uiIcon ? { provider: "lu", name: uiIcon } : undefined,
+    title: title || undefined,
+    excerpt: excerpt || undefined,
+    link: href ? { _type: "link", _key: ck(), isExternal: true, title: title || href, href, target: isExternalHref(href) } : undefined,
+  }));
+}
+
+/** Parse split columns (pipe-delimited, :: separated) → splitColumns[] */
+function parseSplitColumns(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([kind, title, description, extra]) => {
+    if (kind === "content") {
+      return {
+        _type: "split-content",
+        _key: ck(),
+        title: title || undefined,
+        body: [{ _type: "block", _key: ck(), style: "normal", markDefs: [], children: [{ _type: "span", _key: ck(), marks: [] as string[], text: description || "" }] }],
+        link: extra ? { _type: "link", _key: ck(), isExternal: true, title: title || extra, href: extra, target: isExternalHref(extra) } : undefined,
+      };
+    }
+    if (kind === "cards") {
+      return {
+        _type: "split-cards-list",
+        _key: ck(),
+        list: [title, extra || description].filter(Boolean).map((item) => ({ _type: "split-card", _key: ck(), title: item })),
+      };
+    }
+    if (kind === "info") {
+      return {
+        _type: "split-info-list",
+        _key: ck(),
+        list: [
+          {
+            _type: "split-info",
+            _key: ck(),
+            title: title || undefined,
+            body: [{ _type: "block", _key: ck(), style: "normal", markDefs: [], children: [{ _type: "span", _key: ck(), marks: [] as string[], text: description || "" }] }],
+            tags: extra ? extra.split(",").map((tag) => tag.trim()).filter(Boolean) : undefined,
+          },
+        ],
+      };
+    }
+    return undefined;
+  }).filter(Boolean);
+}
+
+/** Parse timelines (pipe-delimited, :: separated) → timelines[] of timelines-1 */
+function parseTimelines(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([title, text]) => ({
+    _type: "timelines-1",
+    _key: ck(),
+    title: title || undefined,
+    body: text ? [{ _type: "block", _key: ck(), style: "normal", markDefs: [], children: [{ _type: "span", _key: ck(), marks: [] as string[], text }] }] : undefined,
+  })) ?? parseArray(val)?.map((title) => ({ _type: "timelines-1", _key: ck(), title }));
+}
+
+/** Parse valueProps (pipe-delimited, :: separated) → valueProps[] of valueProp */
+function parseValueProps(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([icon, title, description]) => ({
+    _type: "valueProp",
+    _key: ck(),
+    icon: icon || undefined,
+    title: title || undefined,
+    description: description || undefined,
+  }));
+}
+
+/** Parse services (pipe-delimited, :: separated) → services[] of serviceType */
+function parseServices(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([title, description, features, timeline, badge, price, link]) => ({
+    _type: "serviceType",
+    _key: ck(),
+    title: title || "Service",
+    description: description || "",
+    features: parseArray(features),
+    timeline: timeline || undefined,
+    badge: badge || undefined,
+    price: price || undefined,
+    link: link ? { _type: "link", _key: ck(), isExternal: true, title: title || link, href: link, target: isExternalHref(link) } : undefined,
+  }));
+}
+
+/** Parse badges (pipe-delimited, :: separated) → badges[] */
+function parseBadges(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([label, description]) => ({
+    _type: "microBadge",
+    _key: ck(),
+    label: label || undefined,
+    description: description || undefined,
+  }));
+}
+
+/** Parse faqs (pipe-delimited, :: separated) → faqs[] */
+function parseFaqs(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([question, answer]) => ({
+    _type: "faqItem",
+    _key: ck(),
+    question: question || undefined,
+    answer: answer || undefined,
+  }));
+}
+
+/** Parse eeat points → points[] of {title} */
+function parsePoints(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseArray(val)?.map((title) => ({ _type: "point", _key: ck(), title }));
+}
+
+/** Parse related-links → links[] of {title, href} */
+function parseRelatedLinks(val?: string): Array<Record<string, unknown>> | undefined {
+  return parseStructured(val)?.map(([title, href]) => ({
+    _type: "relatedLink",
+    _key: ck(),
+    title: title || undefined,
+    href: href || undefined,
+  }));
+}
+
+/** Build SanityLink from primaryTitle/primaryHref/secondaryTitle/secondaryHref */
+function buildLinks(block: Record<string, unknown>): Array<Record<string, unknown>> | undefined {
+  const links: Array<Record<string, unknown>> = [];
+  const addLink = (prefix: string) => {
+    const title = block[prefix + "Title"] as string | undefined;
+    const href = block[prefix + "Href"] as string | undefined;
+    if (title || href) {
+      links.push({
+        _type: "link",
+        _key: ck(),
+        isExternal: href ? isExternalHref(href) : false,
+        title: title || href || "",
+        href: href || undefined,
+        target: href ? isExternalHref(href) : false,
+      });
+    }
+  };
+  addLink("primary");
+  addLink("secondary");
+  return links.length > 0 ? links : undefined;
+}
+
+/** Build SanityLink from secondaryLink string */
+function buildSecondaryLink(val?: unknown): Record<string, unknown> | undefined {
+  if (!val || typeof val !== "string") return undefined;
+  return { _type: "link", _key: ck(), isExternal: isExternalHref(val), title: val, href: val, target: isExternalHref(val) };
+}
+
+// ─── Main conversion function ──────────────────────────────────────────────────
+
 async function pageBlocksToSanityBody(
   blocksJson: string | null,
   uploadImage?: ({ url, alt }: { url: string; alt?: string }) => Promise<{ assetId: string }>,
 ) {
   if (!blocksJson) return [];
   const blocks: PageBlock[] = JSON.parse(blocksJson);
+
   return Promise.all(blocks.map(async (block) => {
-    const { type, text, features, items, tagline, image, alt, ...rest } = block;
+    const {
+      type, text, features, items, tagline, image, alt,
+      // Structured fields to parse
+      cards, splitColumns, timelines, valueProps, services,
+      problems, points, badges, processSteps, faqs, highlights, links,
+      // Link fields
+      primaryTitle, primaryHref, secondaryTitle, secondaryHref,
+      secondaryLink, ctaTitle, ctaHref,
+      ...rest
+    } = block;
 
-    const parsedFeatures = features
-      ? features.split("|").map((s) => s.trim()).filter(Boolean).map((item) => {
-          const p = item.split("::").map((x) => x.trim());
-          return { _type: "feature", _key: crypto.randomUUID().slice(0, 12), icon: p[0] || undefined, title: p[1] || item, description: p[2] || undefined, badge: p[3] || undefined };
-        })
-      : undefined;
-
-    const parsedItems = items
-      ? items.split("|").map((s) => s.trim()).filter(Boolean).map((item) => {
-          if (type === "metrics-rail-block") {
-            const p = item.split("::").map((x) => x.trim());
-            return { _key: crypto.randomUUID().slice(0, 12), value: p[0] || "", label: p[1] || "", brand: p[2] || undefined };
-          }
-          return item;
-        })
-      : undefined;
-
+    // ── 1. Text / Body / Description ───────────────────────────────────────────
     const isDescriptionBlock = DESCRIPTION_BLOCKS.has(type);
     const bodyField = !isDescriptionBlock && text
-      ? { body: [{ _type: "block", _key: crypto.randomUUID().slice(0, 12), style: "normal", markDefs: [], children: [{ _type: "span", _key: crypto.randomUUID().slice(0, 12), marks: [] as string[], text: String(text) }] }] }
+      ? { body: [{ _type: "block", _key: ck(), style: "normal", markDefs: [], children: [{ _type: "span", _key: ck(), marks: [] as string[], text: String(text) }] }] }
       : {};
     const descriptionField = isDescriptionBlock && text
       ? { description: String(text) }
       : {};
 
-    // Handle image field: support Sanity asset IDs, raw URLs, and uploads
+    // ── 2. Tagline → tagLine ───────────────────────────────────────────────────
+    const tagLineField = tagline !== undefined ? { tagLine: tagline } : {};
+
+    // ── 3. Image field ─────────────────────────────────────────────────────────
     let imageField: Record<string, unknown> | undefined;
     if (image && typeof image === "string") {
       if (image.startsWith("image-")) {
-        // Already a Sanity asset ID — use directly, no upload needed
         imageField = { _type: "image", asset: { _type: "reference", _ref: image }, alt: alt ? String(alt) : undefined };
       } else if (image.startsWith("http") && uploadImage) {
-        // ponytail: try upload, fall back to raw URL on timeout/error
         try {
           const result = await uploadImage({ url: image, alt: alt as string | undefined });
           imageField = { _type: "image", asset: { _type: "reference", _ref: result.assetId }, alt: alt ? String(alt) : undefined, _url: image };
@@ -70,27 +270,117 @@ async function pageBlocksToSanityBody(
           imageField = { _type: "image", _url: image, alt: alt ? String(alt) : undefined };
         }
       } else if (image.startsWith("http")) {
-        // No uploadImage callback — keep as raw URL
         imageField = { _type: "image", _url: image, alt: alt ? String(alt) : undefined };
       }
     }
-
-    // rawUrl field: passthrough from JSON page blocks (external image URL rendered directly by frontend)
     const rawUrlField = block.rawUrl && typeof block.rawUrl === "string"
       ? { rawUrl: block.rawUrl }
       : {};
 
+    // ── 4. Features (already parsed) ───────────────────────────────────────────
+    const parsedFeatures = parseFeatures(features);
+
+    // ── 5. Items (already parsed, with metrics-rail special case) ──────────────
+    const parsedItems = items
+      ? items.split("|").map((s) => s.trim()).filter(Boolean).map((item) => {
+          if (type === "metrics-rail-block") {
+            const p = item.split("::").map((x) => x.trim());
+            return { _key: ck(), value: p[0] || "", label: p[1] || "", brand: p[2] || undefined };
+          }
+          return item;
+        })
+      : undefined;
+
+    // ── 6. Grid cards → columns[] ──────────────────────────────────────────────
+    const parsedCards = cards ? { columns: parseGridCards(cards) } : {};
+
+    // ── 7. Split columns → splitColumns[] ──────────────────────────────────────
+    const parsedSplitColumns = splitColumns ? { splitColumns: parseSplitColumns(splitColumns) } : {};
+
+    // ── 8. Timelines → timelines[] ─────────────────────────────────────────────
+    const parsedTimelines = timelines ? { timelines: parseTimelines(timelines) } : {};
+
+    // ── 9. Value Props → valueProps[] ───────────────────────────────────────────
+    const parsedValueProps = valueProps ? { valueProps: parseValueProps(valueProps) } : {};
+
+    // ── 10. Services → services[] ──────────────────────────────────────────────
+    const parsedServices = services ? { services: parseServices(services) } : {};
+
+    // ── 11. Problems → problems[] ──────────────────────────────────────────────
+    const parsedProblems = problems ? { problems: parseArray(problems) } : {};
+
+    // ── 12. Points → points[] ──────────────────────────────────────────────────
+    const parsedPoints = points ? { points: parsePoints(points) } : {};
+
+    // ── 13. Badges → badges[] ──────────────────────────────────────────────────
+    const parsedBadges = badges ? { badges: parseBadges(badges) } : {};
+
+    // ── 14. Process Steps → processSteps[] ─────────────────────────────────────
+    const parsedProcessSteps = processSteps ? { processSteps: parseArray(processSteps) } : {};
+
+    // ── 15. FAQs → faqs[] ──────────────────────────────────────────────────────
+    const parsedFaqs = faqs ? { faqs: parseFaqs(faqs) } : {};
+
+    // ── 16. Highlights → highlights[] ──────────────────────────────────────────
+    const parsedHighlights = highlights ? { highlights: parseArray(highlights) } : {};
+
+    // ── 17. Related links → links[] ────────────────────────────────────────────
+    const parsedRelatedLinks = links ? { links: parseRelatedLinks(links) } : {};
+
+    // ── 18. Hero/CTA links (primaryTitle/primaryHref/secondaryTitle/secondaryHref)
+    const heroLinksField = ["hero-1", "hero-2", "cta-1"].includes(type)
+      ? { links: buildLinks(block) }
+      : {};
+
+    // ── 19. WhatsApp secondary link ────────────────────────────────────────────
+    const whatsappLinkField = type === "whatsapp-cta"
+      ? { secondaryLink: buildSecondaryLink(secondaryLink) }
+      : {};
+
+    // ── 20. Features-package CTA link ──────────────────────────────────────────
+    const ctaLinkField = type === "features-package-block" && (ctaTitle || ctaHref)
+      ? { cta: { _type: "link", _key: ck(), isExternal: ctaHref ? isExternalHref(ctaHref as string) : false, title: ctaTitle || ctaHref || "", href: ctaHref || undefined, target: ctaHref ? isExternalHref(ctaHref as string) : false } }
+      : {};
+
+    // ── 21. Hero-vercel cards → hero-feature-card[] ────────────────────────────
+    const heroVercelCards = type === "hero-vercel" && (rest as Record<string, unknown>).cards
+      ? { cards: parseFeatures((rest as Record<string, unknown>).cards as string)?.map((f) => ({
+          _type: "hero-feature-card",
+          _key: f._key,
+          uiIcon: f.icon ? { provider: "lu", name: f.icon } : undefined,
+          title: f.title,
+          description: f.description,
+        })) }
+      : {};
+
+    // ── Assemble ───────────────────────────────────────────────────────────────
     return {
       _type: type,
-      _key: crypto.randomUUID().slice(0, 12),
+      _key: ck(),
       ...rest,
-      ...(tagline !== undefined ? { tagLine: tagline } : {}),
+      ...tagLineField,
       ...bodyField,
       ...descriptionField,
       ...(imageField ? { image: imageField } : {}),
       ...rawUrlField,
       ...(parsedFeatures ? { features: parsedFeatures } : {}),
       ...(parsedItems ? { items: parsedItems } : {}),
+      ...parsedCards,
+      ...parsedSplitColumns,
+      ...parsedTimelines,
+      ...parsedValueProps,
+      ...parsedServices,
+      ...parsedProblems,
+      ...parsedPoints,
+      ...parsedBadges,
+      ...parsedProcessSteps,
+      ...parsedFaqs,
+      ...parsedHighlights,
+      ...parsedRelatedLinks,
+      ...heroLinksField,
+      ...whatsappLinkField,
+      ...ctaLinkField,
+      ...heroVercelCards,
     };
   }));
 }
